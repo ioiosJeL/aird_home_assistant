@@ -627,6 +627,12 @@ sections:
               event: weekly_digest
           - type: custom:button-card
             template: notify_row
+            name: Birthdays & anniversaries (8:00)
+            icon: mdi:cake-variant
+            variables:
+              event: birthday
+          - type: custom:button-card
+            template: notify_row
             name: Something odd reported
             icon: mdi:alert-circle-check-outline
             variables:

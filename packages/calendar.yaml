@@ -98,6 +98,36 @@ template:
           events: "{{ events }}"
 
 automation:
+  # Morning birthday push (added 21 Nov 2026): every birthday in
+  # calendar.birthdays today, plus anniversaries from calendar.household.
+  # Who gets it: notify_birthday_* on the Notifications admin page.
+  - id: birthday_morning_reminder
+    alias: Birthday Morning Reminder
+    description: 8am push for today's birthdays and anniversaries (packages/calendar.yaml)
+    mode: single
+    triggers:
+      - trigger: time
+        at: "08:00:00"
+    actions:
+      - action: calendar.get_events
+        target:
+          entity_id: [calendar.birthdays, calendar.household]
+        data:
+          start_date_time: "{{ today_at().isoformat() }}"
+          end_date_time: "{{ (today_at() + timedelta(days=1)).isoformat() }}"
+        response_variable: cal
+      - variables:
+          today: >-
+            {% set ns = namespace(e=[]) %}
+            {% for ev in cal['calendar.birthdays'].events %}{% set ns.e = ns.e + [ev.summary] %}{% endfor %}
+            {% for ev in cal['calendar.household'].events if 'anniversary' in ev.summary | lower %}{% set ns.e = ns.e + [ev.summary] %}{% endfor %}
+            {{ ns.e }}
+      - condition: "{{ today | count > 0 }}"
+      - action: script.notify_dispatch
+        data:
+          event: birthday
+          title: "🎂 {{ 'Birthday' if today | count == 1 else 'Birthdays' }} today"
+          message: "{{ today | join(', ') }}"
   # Clock change reminder (18 Nov 2026): 7pm the evening before the UK
   # clocks change. The dates are also in calendar.household (2027-2036).
   - id: clock_change_reminder

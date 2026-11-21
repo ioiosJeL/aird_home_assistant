@@ -310,6 +310,18 @@ input_boolean:
     name: "Weekly Digest: Kitchen Speaker"
     icon: mdi:speaker-message
 
+  # Birthdays / anniversaries on the morning (calendar.yaml). Default:
+  # John's devices on, set by hand 21 Nov 2026.
+  notify_birthday_johns_devices:
+    name: "Birthday: John's Devices"
+    icon: mdi:cellphone
+  notify_birthday_elizabeth:
+    name: "Birthday: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_birthday_kitchen_tts:
+    name: "Birthday: Kitchen Speaker"
+    icon: mdi:speaker-message
+
   # "That was weird" button (lights_insight.yaml). Default: John's devices
   # on, set by hand 17 Nov 2026.
   notify_oddity_report_johns_devices:
