@@ -1,0 +1,91 @@
+substitutions:
+  deviceName: workshop_far_sensor
+  deviceUpper: Workshop Far Sensor
+  ipAddress: 192.168.40.9
+
+  # WIFI AND OTHER CREDENTIALS. USE SECRETS WHERE POSSIBLE
+  wifiPass: !secret wifiPassESP
+  wifiSSID: !secret wifiSSIDESP
+  passOTA: !secret passOTA
+  
+  # ESP DECLARATION
+  boardPlatform: ESP8266
+  boardName: d1_mini
+  
+  # PIN MAPPING.
+  i2cData: D3
+  i2cClock: D4
+  pirPin: D0
+  irPin: D7
+
+<<: !include includes/sensor_8266.yaml
+
+remote_transmitter:
+  pin: 
+    number: ${irPin}
+    inverted: true
+  # Infrared remotes use a 50% carrier signal
+  carrier_duty_percent: 50%
+
+button:
+  - platform: template
+    name: Power Toggle
+    on_press:
+      - remote_transmitter.transmit_rc5:
+          address: 0x01
+          command: 0x0C
+  - platform: template
+    name: Mute Toggle
+    on_press:
+      - remote_transmitter.transmit_rc5:
+          address: 0x01
+          command: 0x0D
+  - platform: template
+    name: Source Select
+    on_press:
+      - remote_transmitter.transmit_rc5:
+          address: 0x01
+          command: 0x38
+  - platform: template
+    name: Volume Up
+    on_press:
+      - remote_transmitter.transmit_rc5:
+          address: 0x01
+          command: 0x10
+  - platform: template
+    name: Volume Down
+    on_press:
+      - remote_transmitter.transmit_rc5:
+          address: 0x01
+          command: 0x11
+
+  - platform: template
+    name: Nav OK
+    on_press:
+      - remote_transmitter.transmit_rc5:
+          address: 0x01
+          command: 0x35
+  - platform: template
+    name: Nav Up
+    on_press:
+      - remote_transmitter.transmit_rc5:
+          address: 0x01
+          command: 0x14
+  - platform: template
+    name: Nav Down
+    on_press:
+      - remote_transmitter.transmit_rc5:
+          address: 0x01
+          command: 0x13
+  - platform: template
+    name: Nav Left
+    on_press:
+      - remote_transmitter.transmit_rc5:
+          address: 0x01
+          command: 0x15
+  - platform: template
+    name: Nav Right
+    on_press:
+      - remote_transmitter.transmit_rc5:
+          address: 0x01
+          command: 0x16

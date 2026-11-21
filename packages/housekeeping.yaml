@@ -1,0 +1,4 @@
+# Housekeeping/vacuum package removed — the Roomba/vacuum integration is being
+# uninstalled. This file is kept as an empty package stub so the packages/
+# directory include doesn't need to change; delete it outright once you're
+# comfortable it's no longer needed.

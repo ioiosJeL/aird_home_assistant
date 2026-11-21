@@ -1,0 +1,274 @@
+# HomeKit Bridge - curated so it stays under HomeKit's 150 accessory limit.
+#
+# This YAML adopts the existing "HASS Bridge" (matched on name and port), so the
+# pairing and accessory IDs are kept - nothing needs re-pairing in the Home app.
+# While this block exists the bridge's options are managed here, not in the UI.
+#
+# Exposed:
+#   - one light group per room (Siri: "turn off the kitchen lights")
+#   - room scene scripts, shown as switches (Siri: "turn on living room cosy"),
+#     including each room's Off scene (Siri: "turn on living room off")
+#   - room thermostats, the workshop power switch, the alarm panel and the
+#     kitchen Sonos
+
+homekit:
+  - name: HASS Bridge
+    port: 21064
+    mode: bridge
+    filter:
+      include_entities:
+        # Room lights
+        - light.bathroom_lights_master
+        - light.dining_room_lights_master
+        - light.double_bedroom_lights_master
+        - light.front_porch_lights_master
+        - light.hall_lights_master
+        - light.kitchen_lights_master
+        - light.landing_lights_master
+        - light.living_room_lights_master
+        - light.master_bedroom_lights_master
+        - light.shower_room_lights_master
+        - light.single_bedroom_lights_master
+        - light.sunroom_lights_master
+        - light.utility_room_lights_master
+        - light.workspace_lights_master
+        - light.triptych_master
+
+        # Room scenes
+        - script.bathroom_scene_bright
+        - script.bathroom_scene_relax
+        - script.bathroom_scene_cosy
+        - script.dining_room_scene_bright
+        - script.dining_room_scene_relax
+        - script.dining_room_scene_cosy
+        - script.dining_room_scene_music
+        - script.dining_room_scene_movie
+        - script.double_bedroom_scene_bright
+        - script.double_bedroom_scene_relax
+        - script.double_bedroom_scene_cosy
+        - script.front_porch_scene_bright
+        - script.hall_scene_bright
+        - script.hall_scene_relax
+        - script.hall_scene_cosy
+        - script.kitchen_scene_bright
+        - script.kitchen_scene_relax
+        - script.kitchen_scene_cosy
+        - script.landing_scene_bright
+        - script.landing_scene_relax
+        - script.living_room_scene_bright
+        - script.living_room_scene_relax
+        - script.living_room_scene_cosy
+        - script.living_room_scene_movie
+        - script.master_bedroom_scene_bright
+        - script.master_bedroom_scene_relax
+        - script.master_bedroom_scene_cosy
+        - script.master_bedroom_scene_special
+        - script.shower_room_scene_bright
+        - script.single_bedroom_scene_bright
+        - script.single_bedroom_scene_relax
+        - script.single_bedroom_scene_cosy
+        - script.sunroom_scene_bright
+        - script.sunroom_scene_relax
+        - script.sunroom_scene_cosy
+        - script.sunroom_scene_movie
+        - script.utility_room_scene_bright
+        - script.triptych_scene_bright
+        - script.triptych_scene_relax
+        - script.triptych_scene_cosy
+        - script.triptych_scene_music
+
+        # Room off scenes
+        - script.bathroom_scene_off
+        - script.dining_room_scene_off
+        - script.double_bedroom_scene_off
+        - script.front_porch_scene_off
+        - script.hall_scene_off
+        - script.kitchen_scene_off
+        - script.landing_scene_off
+        - script.living_room_scene_off
+        - script.master_bedroom_scene_off
+        - script.shower_room_scene_off
+        - script.single_bedroom_scene_off
+        - script.sunroom_scene_off
+        - script.utility_room_scene_off
+
+        # Heating
+        - climate.bathroom
+        - climate.dining_room
+        - climate.double_bedroom
+        - climate.kitchen
+        - climate.living_room
+        - climate.machine_room
+        - climate.master_bedroom
+        - climate.shower_room
+        - climate.sunroom
+        - climate.workshop
+
+        # Workshop power (Siri: "turn on/off the workshop")
+        - switch.workshop
+
+        # Security
+        - alarm_control_panel.aird_nvr_alarm_manager
+
+        # Media
+        - media_player.kitchen_sonos
+
+    entity_config:
+      # Sonos can't be powered on/off, so expose just play/pause and mute switches
+      media_player.kitchen_sonos:
+        name: Kitchen Sonos
+        feature_list:
+          - feature: play_pause
+          - feature: toggle_mute
+      light.bathroom_lights_master:
+        name: Bathroom Lights
+      light.dining_room_lights_master:
+        name: Dining Room Lights
+      light.double_bedroom_lights_master:
+        name: Double Bedroom Lights
+      light.front_porch_lights_master:
+        name: Front Porch Lights
+      light.hall_lights_master:
+        name: Hall Lights
+      light.kitchen_lights_master:
+        name: Kitchen Lights
+      light.landing_lights_master:
+        name: Landing Lights
+      light.living_room_lights_master:
+        name: Living Room Lights
+      light.master_bedroom_lights_master:
+        name: Master Bedroom Lights
+      light.shower_room_lights_master:
+        name: Shower Room Lights
+      light.single_bedroom_lights_master:
+        name: Single Bedroom Lights
+      light.sunroom_lights_master:
+        name: Sunroom Lights
+      light.utility_room_lights_master:
+        name: Utility Room Lights
+      light.workspace_lights_master:
+        name: Workspace Lights
+      light.triptych_master:
+        name: Triptych
+      switch.workshop:
+        name: Workshop
+      script.bathroom_scene_bright:
+        name: Bathroom Bright
+      script.bathroom_scene_relax:
+        name: Bathroom Relax
+      script.bathroom_scene_cosy:
+        name: Bathroom Cosy
+      script.dining_room_scene_bright:
+        name: Dining Room Bright
+      script.dining_room_scene_relax:
+        name: Dining Room Relax
+      script.dining_room_scene_cosy:
+        name: Dining Room Cosy
+      script.dining_room_scene_music:
+        name: Dining Room Music
+      script.dining_room_scene_movie:
+        name: Dining Room Movie
+      script.double_bedroom_scene_bright:
+        name: Double Bedroom Bright
+      script.double_bedroom_scene_relax:
+        name: Double Bedroom Relax
+      script.double_bedroom_scene_cosy:
+        name: Double Bedroom Cosy
+      script.front_porch_scene_bright:
+        name: Front Porch Bright
+      script.hall_scene_bright:
+        name: Hall Bright
+      script.hall_scene_relax:
+        name: Hall Relax
+      script.hall_scene_cosy:
+        name: Hall Cosy
+      script.kitchen_scene_bright:
+        name: Kitchen Bright
+      script.kitchen_scene_relax:
+        name: Kitchen Relax
+      script.kitchen_scene_cosy:
+        name: Kitchen Cosy
+      script.landing_scene_bright:
+        name: Landing Bright
+      script.landing_scene_relax:
+        name: Landing Relax
+      script.living_room_scene_bright:
+        name: Living Room Bright
+      script.living_room_scene_relax:
+        name: Living Room Relax
+      script.living_room_scene_cosy:
+        name: Living Room Cosy
+      script.living_room_scene_movie:
+        name: Living Room Movie
+      script.master_bedroom_scene_bright:
+        name: Master Bedroom Bright
+      script.master_bedroom_scene_relax:
+        name: Master Bedroom Relax
+      script.master_bedroom_scene_cosy:
+        name: Master Bedroom Cosy
+      script.master_bedroom_scene_special:
+        name: Master Bedroom Special
+      script.shower_room_scene_bright:
+        name: Shower Room Bright
+      script.single_bedroom_scene_bright:
+        name: Single Bedroom Bright
+      script.single_bedroom_scene_relax:
+        name: Single Bedroom Relax
+      script.single_bedroom_scene_cosy:
+        name: Single Bedroom Cosy
+      script.sunroom_scene_bright:
+        name: Sunroom Bright
+      script.sunroom_scene_relax:
+        name: Sunroom Relax
+      script.sunroom_scene_cosy:
+        name: Sunroom Cosy
+      script.sunroom_scene_movie:
+        name: Sunroom Movie
+      script.utility_room_scene_bright:
+        name: Utility Room Bright
+      script.triptych_scene_bright:
+        name: Triptych Bright
+      script.triptych_scene_relax:
+        name: Triptych Relax
+      script.triptych_scene_cosy:
+        name: Triptych Cosy
+      script.triptych_scene_music:
+        name: Triptych Music
+      script.bathroom_scene_off:
+        name: Bathroom Off
+      script.dining_room_scene_off:
+        name: Dining Room Off
+      script.double_bedroom_scene_off:
+        name: Double Bedroom Off
+      script.front_porch_scene_off:
+        name: Front Porch Off
+      script.hall_scene_off:
+        name: Hall Off
+      script.kitchen_scene_off:
+        name: Kitchen Off
+      script.landing_scene_off:
+        name: Landing Off
+      script.living_room_scene_off:
+        name: Living Room Off
+      script.master_bedroom_scene_off:
+        name: Master Bedroom Off
+      script.shower_room_scene_off:
+        name: Shower Room Off
+      script.single_bedroom_scene_off:
+        name: Single Bedroom Off
+      script.sunroom_scene_off:
+        name: Sunroom Off
+      script.utility_room_scene_off:
+        name: Utility Room Off
+
+  # HomeKit only accepts TVs as standalone accessories, not through a bridge,
+  # so the TV gets its own entry and is paired separately in the Home app.
+  - name: Dining Room TV
+    port: 21065
+    mode: accessory
+    filter:
+      include_entities:
+        - media_player.dining_room_tv
+    entity_config:
+      media_player.dining_room_tv:
+        name: Dining Room TV

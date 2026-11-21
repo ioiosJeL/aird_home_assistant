@@ -1,0 +1,605 @@
+# LEDs: WLED triptych (dining room) and the three mini squares.
+# Three fixed columns: the triptych's three controllers, the three mini
+# squares, then whole-group controls and globals. Each controller block is
+# the same: status chips (tap the arrow for the device page), power and
+# sync toggles, restart, then its preset and playlist.
+# Scripts and helpers live in packages/wled.yaml; the dining room scenes
+# that drive the triptych are in packages/lights/dining_room_scenes.yaml.
+path: leds
+title: LEDs
+icon: mdi:led-strip-variant
+type: sections
+max_columns: 3
+sections:
+  # =====================================================================
+  # Column 1: Triptych controllers
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: heading
+        heading: Triptych
+        icon: mdi:view-column
+      - type: custom:button-card
+        template: chip_row
+        variables:
+          label: Top
+          chips:
+            - entity: sensor.triptych_top_uptime
+              icon: mdi:clock-outline
+              color: red
+            - entity: sensor.triptych_top_wi_fi_signal
+              icon: mdi:wifi
+              color: green
+          device_url: /config/devices/device/73c0fb9984093a41fda3a10e1375eecc
+          ui_url: http://wled-triptych-top.local/
+        triggers_update:
+          - sensor.triptych_top_uptime
+          - sensor.triptych_top_wi_fi_signal
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            template: room_toggle
+            entity: light.triptych_top_main
+            name: Power
+            icon: mdi:power
+            variables:
+              color: '#6666FF'
+          - type: custom:button-card
+            template: [room_toggle, led_sync]
+            entity: switch.triptych_top_sync_send
+            name: Send
+            icon: mdi:upload-network-outline
+          - type: custom:button-card
+            template: [room_toggle, led_sync]
+            entity: switch.triptych_top_sync_receive
+            name: Receive
+            icon: mdi:download-network
+          - type: custom:button-card
+            template: room_pill
+            name: Restart
+            icon: mdi:restart
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.triptych_top_restart
+              confirmation:
+                text: Restart the Top WLED controller?
+      - type: tile
+        entity: select.triptych_top_preset
+        name: Preset
+        hide_state: true
+        features_position: bottom
+        features:
+          - type: select-options
+      - type: tile
+        entity: select.triptych_top_playlist
+        name: Playlist
+        hide_state: true
+        features_position: bottom
+        features:
+          - type: select-options
+      - type: custom:button-card
+        template: chip_row
+        variables:
+          label: Middle
+          chips:
+            - entity: sensor.triptych_wow_uptime
+              icon: mdi:clock-outline
+              color: red
+            - entity: sensor.triptych_wow_wi_fi_signal
+              icon: mdi:wifi
+              color: green
+          device_url: /config/devices/device/04c9ff789b426827055f812af8f01bc0
+          ui_url: http://wled-triptych-wow.local/
+        triggers_update:
+          - sensor.triptych_wow_uptime
+          - sensor.triptych_wow_wi_fi_signal
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            template: room_toggle
+            entity: light.triptych_wow_main
+            name: Power
+            icon: mdi:power
+            variables:
+              color: '#6666FF'
+          - type: custom:button-card
+            template: [room_toggle, led_sync]
+            entity: switch.triptych_wow_sync_send
+            name: Send
+            icon: mdi:upload-network-outline
+          - type: custom:button-card
+            template: [room_toggle, led_sync]
+            entity: switch.triptych_wow_sync_receive
+            name: Receive
+            icon: mdi:download-network
+          - type: custom:button-card
+            template: room_pill
+            name: Restart
+            icon: mdi:restart
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.triptych_wow_restart
+              confirmation:
+                text: Restart the Middle WLED controller?
+      - type: tile
+        entity: select.triptych_wow_preset
+        name: Preset
+        hide_state: true
+        features_position: bottom
+        features:
+          - type: select-options
+      - type: tile
+        entity: select.triptych_wow_playlist
+        name: Playlist
+        hide_state: true
+        features_position: bottom
+        features:
+          - type: select-options
+      - type: custom:button-card
+        template: chip_row
+        variables:
+          label: Bottom
+          chips:
+            - entity: sensor.triptych_bottom_uptime
+              icon: mdi:clock-outline
+              color: red
+            - entity: sensor.triptych_bottom_wi_fi_signal
+              icon: mdi:wifi
+              color: green
+          device_url: /config/devices/device/2e39287a248bd77a5795f66992e8cc5f
+          ui_url: http://wled-triptych-bottom.local/
+        triggers_update:
+          - sensor.triptych_bottom_uptime
+          - sensor.triptych_bottom_wi_fi_signal
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            template: room_toggle
+            entity: light.triptych_bottom_main
+            name: Power
+            icon: mdi:power
+            variables:
+              color: '#6666FF'
+          - type: custom:button-card
+            template: [room_toggle, led_sync]
+            entity: switch.triptych_bottom_sync_send
+            name: Send
+            icon: mdi:upload-network-outline
+          - type: custom:button-card
+            template: [room_toggle, led_sync]
+            entity: switch.triptych_bottom_sync_receive
+            name: Receive
+            icon: mdi:download-network
+          - type: custom:button-card
+            template: room_pill
+            name: Restart
+            icon: mdi:restart
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.triptych_bottom_restart
+              confirmation:
+                text: Restart the Bottom WLED controller?
+      - type: tile
+        entity: select.triptych_bottom_preset
+        name: Preset
+        hide_state: true
+        features_position: bottom
+        features:
+          - type: select-options
+      - type: tile
+        entity: select.triptych_bottom_playlist
+        name: Playlist
+        hide_state: true
+        features_position: bottom
+        features:
+          - type: select-options
+
+  # =====================================================================
+  # Column 2: Mini squares
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: heading
+        heading: Mini Squares
+        icon: mdi:apps
+      - type: custom:button-card
+        template: chip_row
+        variables:
+          label: Living Room
+          chips:
+            - entity: sensor.living_room_mini_square_estimated_current
+              icon: mdi:current-ac
+              color: orange
+            - entity: sensor.living_room_mini_square_ip
+              icon: mdi:ip-network
+              color: green
+          device_url: /config/devices/device/de31151c16d01db30782d08c2b4406ac
+        triggers_update:
+          - sensor.living_room_mini_square_estimated_current
+          - sensor.living_room_mini_square_ip
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            template: room_toggle
+            entity: light.living_room_mini_square
+            name: Power
+            icon: mdi:power
+            variables:
+              color: '#6666FF'
+          - type: custom:button-card
+            template: [room_toggle, led_sync]
+            entity: switch.living_room_mini_square_sync_send
+            name: Send
+            icon: mdi:upload-network-outline
+          - type: custom:button-card
+            template: [room_toggle, led_sync]
+            entity: switch.living_room_mini_square_sync_receive
+            name: Receive
+            icon: mdi:download-network
+          - type: custom:button-card
+            template: room_pill
+            name: Restart
+            icon: mdi:restart
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.living_room_mini_square_restart
+              confirmation:
+                text: Restart the Living Room WLED controller?
+      - type: tile
+        entity: select.living_room_mini_square_preset
+        name: Preset
+        hide_state: true
+        features_position: bottom
+        features:
+          - type: select-options
+      - type: tile
+        entity: select.living_room_mini_square_playlist
+        name: Playlist
+        hide_state: true
+        features_position: bottom
+        features:
+          - type: select-options
+      - type: custom:button-card
+        template: chip_row
+        variables:
+          label: Master Bedroom
+          chips:
+            - entity: sensor.master_bedroom_mini_square_estimated_current
+              icon: mdi:current-ac
+              color: orange
+            - entity: sensor.master_bedroom_mini_square_ip
+              icon: mdi:ip-network
+              color: green
+          device_url: /config/devices/device/83704532403cc6385e9ee324f32ac6f9
+        triggers_update:
+          - sensor.master_bedroom_mini_square_estimated_current
+          - sensor.master_bedroom_mini_square_ip
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            template: room_toggle
+            entity: light.master_bedroom_mini_square
+            name: Power
+            icon: mdi:power
+            variables:
+              color: '#6666FF'
+          - type: custom:button-card
+            template: [room_toggle, led_sync]
+            entity: switch.master_bedroom_mini_square_sync_send
+            name: Send
+            icon: mdi:upload-network-outline
+          - type: custom:button-card
+            template: [room_toggle, led_sync]
+            entity: switch.master_bedroom_mini_square_sync_receive
+            name: Receive
+            icon: mdi:download-network
+          - type: custom:button-card
+            template: room_pill
+            name: Restart
+            icon: mdi:restart
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.master_bedroom_mini_square_restart
+              confirmation:
+                text: Restart the Master Bedroom WLED controller?
+      - type: tile
+        entity: select.master_bedroom_mini_square_preset
+        name: Preset
+        hide_state: true
+        features_position: bottom
+        features:
+          - type: select-options
+      - type: tile
+        entity: select.master_bedroom_mini_square_playlist
+        name: Playlist
+        hide_state: true
+        features_position: bottom
+        features:
+          - type: select-options
+      - type: custom:button-card
+        template: chip_row
+        variables:
+          label: Workshop
+          chips:
+            - entity: sensor.workshop_mini_square_estimated_current
+              icon: mdi:current-ac
+              color: orange
+            - entity: sensor.workshop_mini_square_ip
+              icon: mdi:ip-network
+              color: green
+          device_url: /config/devices/device/8f2dbbc388b11808c34474e93a02817d
+        triggers_update:
+          - sensor.workshop_mini_square_estimated_current
+          - sensor.workshop_mini_square_ip
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            template: room_toggle
+            entity: light.workshop_mini_square
+            name: Power
+            icon: mdi:power
+            variables:
+              color: '#6666FF'
+          - type: custom:button-card
+            template: [room_toggle, led_sync]
+            entity: switch.workshop_mini_square_sync_send
+            name: Send
+            icon: mdi:upload-network-outline
+          - type: custom:button-card
+            template: [room_toggle, led_sync]
+            entity: switch.workshop_mini_square_sync_receive
+            name: Receive
+            icon: mdi:download-network
+          - type: custom:button-card
+            template: room_pill
+            name: Restart
+            icon: mdi:restart
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.workshop_mini_square_restart
+              confirmation:
+                text: Restart the Workshop WLED controller?
+      - type: tile
+        entity: select.workshop_mini_square_preset
+        name: Preset
+        hide_state: true
+        features_position: bottom
+        features:
+          - type: select-options
+      - type: tile
+        entity: select.workshop_mini_square_playlist
+        name: Playlist
+        hide_state: true
+        features_position: bottom
+        features:
+          - type: select-options
+
+  # =====================================================================
+  # Column 3: Group control and globals
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: heading
+        heading: Control
+        icon: mdi:tune-variant
+      # Mains supply to the triptych (Shelly) and what it is drawing
+      - type: tile
+        entity: light.dining_room_triptych
+        name: Triptych supply
+        icon: mdi:power-plug
+        features_position: bottom
+        features:
+          - type: light-brightness
+      - type: tile
+        entity: sensor.dining_room_triptych_power
+        name: Drawing
+        icon: mdi:flash
+      - type: heading
+        heading: Triptych
+        icon: mdi:view-column
+        heading_style: subtitle
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            template: room_pill
+            name: 'On'
+            icon: mdi:power-on
+            variables:
+              active: true
+              color: var(--green-color)
+            tap_action:
+              action: perform-action
+              perform_action: script.triptych_set_power
+              data:
+                turn_on: true
+          - type: custom:button-card
+            template: room_pill
+            name: 'Off'
+            icon: mdi:power-off
+            variables:
+              active: true
+              color: var(--red-color)
+            tap_action:
+              action: perform-action
+              perform_action: script.triptych_set_power
+              data:
+                turn_on: false
+          - type: custom:button-card
+            template: room_pill
+            name: Showoff
+            icon: mdi:play
+            variables:
+              active: true
+              color: var(--purple-color)
+            tap_action:
+              action: perform-action
+              perform_action: script.turn_on
+              data:
+                entity_id: script.triptych_showcase
+          - type: custom:button-card
+            template: room_pill
+            name: Unsync
+            icon: mdi:link-variant-off
+            variables:
+              active: true
+              color: var(--grey-color)
+            tap_action:
+              action: perform-action
+              perform_action: script.turn_on
+              data:
+                entity_id: script.triptych_sync_disable_all
+      - type: grid
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            template: room_pill
+            name: Bright
+            icon: mdi:brightness-7
+            variables:
+              active: true
+              color: var(--amber-color)
+            tap_action:
+              action: perform-action
+              perform_action: script.turn_on
+              data:
+                entity_id: script.triptych_scene_bright
+          - type: custom:button-card
+            template: room_pill
+            name: Relax
+            icon: mdi:sofa
+            variables:
+              active: true
+              color: var(--orange-color)
+            tap_action:
+              action: perform-action
+              perform_action: script.turn_on
+              data:
+                entity_id: script.triptych_scene_relax
+          - type: custom:button-card
+            template: room_pill
+            name: Cosy
+            icon: mdi:candle
+            variables:
+              active: true
+              color: var(--deep-orange-color)
+            tap_action:
+              action: perform-action
+              perform_action: script.turn_on
+              data:
+                entity_id: script.triptych_scene_cosy
+          - type: custom:button-card
+            template: room_pill
+            name: Music
+            icon: mdi:music
+            variables:
+              active: true
+              color: var(--pink-color)
+            tap_action:
+              action: perform-action
+              perform_action: script.turn_on
+              data:
+                entity_id: script.triptych_scene_music
+      - type: heading
+        heading: Mini Squares
+        icon: mdi:apps
+        heading_style: subtitle
+      - type: grid
+        columns: 3
+        square: false
+        cards:
+          - type: custom:button-card
+            template: room_pill
+            name: 'On'
+            icon: mdi:power-on
+            variables:
+              active: true
+              color: var(--green-color)
+            tap_action:
+              action: perform-action
+              perform_action: script.mini_squares_set_power
+              data:
+                turn_on: true
+          - type: custom:button-card
+            template: room_pill
+            name: 'Off'
+            icon: mdi:power-off
+            variables:
+              active: true
+              color: var(--red-color)
+            tap_action:
+              action: perform-action
+              perform_action: script.mini_squares_set_power
+              data:
+                turn_on: false
+          - type: custom:button-card
+            template: room_pill
+            name: Random
+            icon: mdi:dice-multiple
+            variables:
+              active: true
+              color: var(--purple-color)
+            tap_action:
+              action: perform-action
+              perform_action: input_select.random
+              data:
+                entity_id: input_select.mini_squares_presets
+      - type: tile
+        entity: input_select.mini_squares_presets
+        name: Preset (all squares)
+        icon: mdi:shape
+        hide_state: true
+        features_position: bottom
+        features:
+          - type: select-options
+      - type: grid
+        columns: 3
+        square: false
+        cards:
+          - type: custom:button-card
+            template: room_toggle
+            entity: input_boolean.mini_square_sync
+            name: Sync
+            icon: mdi:sync
+            variables:
+              color: var(--blue-color)
+          - type: custom:button-card
+            template: room_toggle
+            entity: input_boolean.mini_squares_notify_active
+            name: Notify
+            icon: mdi:bell
+            variables:
+              color: var(--blue-color)
+          - type: custom:button-card
+            template: room_pill
+            entity: sensor.perimeter_activity_today
+            icon: mdi:shape
+            name: '[[[ return `${entity?.state ?? ''—''} today`; ]]]'
+            tap_action:
+              action: more-info

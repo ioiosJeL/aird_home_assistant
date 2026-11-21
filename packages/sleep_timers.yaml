@@ -1,0 +1,39 @@
+timer:
+  sleep_master_bedroom_tv:
+    name: "Time Until Bedroom TV Sleeps"
+
+input_number:
+  sleep_master_bedroom_tv:
+    name: Bedroom TV Sleep Timer Minutes
+    min: 1
+    max: 90
+    mode: slider
+
+input_boolean:
+  sleep_active_master_bedroom_tv:
+    name: Bedroom TV Sleep Timer Active
+    icon: mdi:timer
+    initial: false
+
+automation:
+  - alias: Sleep Timer Expired Bedroom TV
+    triggers:
+      - trigger: event
+        event_type: timer.finished
+        event_data:
+          entity_id: timer.sleep_master_bedroom_tv
+        context: {}
+    actions:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.sleep_active_master_bedroom_tv
+
+script:
+  sleep_start_timer_master_bedroom_tv:
+    alias: Start Sleep Countdown Bedroom TV
+    use_blueprint:
+      path: media/sleep_timer_start.yaml
+      input:
+        sleep_active_boolean: input_boolean.sleep_active_master_bedroom_tv
+        sleep_timer: timer.sleep_master_bedroom_tv
+        sleep_minutes_number: input_number.sleep_master_bedroom_tv

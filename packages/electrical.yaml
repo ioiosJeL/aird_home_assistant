@@ -1,0 +1,356 @@
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      common: &common
+        package: "Electrical"
+
+    sensor.electrical_*:
+      <<: *common
+
+# Electrical supply overview - feeds the "Electrical" dashboard view.
+#
+# Area power: sensor.whole_house_power (Shelly 3EM in the electrical cabinet)
+# sees the whole supply, including the shower, water heater and the garage
+# sub-main, so each area below is a slice of it and "unmeasured" is the rest.
+
+template:
+  - sensor:
+      # --- Live power by area -------------------------------------------------
+      # Negative readings are meter noise, so they're dropped before summing.
+      - name: Electrical Shower Power
+        unique_id: electrical_shower_power
+        device_class: power
+        state_class: measurement
+        unit_of_measurement: W
+        icon: mdi:shower-head
+        state: "{{ [states('sensor.shower_power') | float(0), 0] | max | round(0) }}"
+
+      - name: Electrical Hot Water Power
+        unique_id: electrical_hot_water_power
+        device_class: power
+        state_class: measurement
+        unit_of_measurement: W
+        icon: mdi:water-boiler
+        state: "{{ [states('sensor.water_heater_power') | float(0), 0] | max | round(0) }}"
+
+      - name: Electrical Workspace Power
+        unique_id: electrical_workspace_power
+        device_class: power
+        state_class: measurement
+        unit_of_measurement: W
+        icon: mdi:garage-variant
+        # Shelly Pro 3EM on the garage sub-board: ring main, CNC, spare,
+        # plus the workshop and machine room heaters, which are fed separately
+        state: >
+          {{ ['sensor.garage_power_monitoring_phase_a_active_power',
+              'sensor.cnc_machine_power',
+              'sensor.garage_power_monitoring_phase_c_active_power',
+              'sensor.workshop_heater_power',
+              'sensor.machine_room_heater_power']
+             | map('states') | map('float', 0) | select('gt', 0) | sum | round(0) }}
+
+      - name: Electrical House Heating Power
+        unique_id: electrical_house_heating_power
+        device_class: power
+        state_class: measurement
+        unit_of_measurement: W
+        icon: mdi:radiator
+        state: >
+          {{ ['sensor.dining_room_heater_power',
+              'sensor.living_room_heater_power',
+              'sensor.kitchen_heater_power',
+              'sensor.bathroom_heater_power',
+              'sensor.shower_room_heater_power',
+              'sensor.sunroom_heater_power',
+              'sensor.master_bedroom_heater_power',
+              'sensor.double_bedroom_heater_power']
+             | map('states') | map('float', 0) | select('gt', 0) | sum | round(0) }}
+
+      - name: Electrical Kitchen Power
+        unique_id: electrical_kitchen_power
+        device_class: power
+        state_class: measurement
+        unit_of_measurement: W
+        icon: mdi:fridge-outline
+        state: >
+          {{ ['sensor.dishwasher_power',
+              'sensor.fridge_power',
+              'sensor.kitchen_counter_lights_power',
+              'sensor.kitchen_ceiling_lights_power']
+             | map('states') | map('float', 0) | select('gt', 0) | sum | round(0) }}
+
+      - name: Electrical Utility Power
+        unique_id: electrical_utility_power
+        device_class: power
+        state_class: measurement
+        unit_of_measurement: W
+        icon: mdi:washing-machine
+        state: >
+          {{ ['sensor.washing_machine_power',
+              'sensor.tumble_dryer_power',
+              'sensor.freezer_power',
+              'sensor.it_ups_power',
+              'sensor.utility_room_ceiling_lights_power']
+             | map('states') | map('float', 0) | select('gt', 0) | sum | round(0) }}
+
+      - name: Electrical Lighting Power
+        unique_id: electrical_lighting_power
+        device_class: power
+        state_class: measurement
+        unit_of_measurement: W
+        icon: mdi:lightbulb-group-outline
+        state: >
+          {{ ['sensor.living_room_dimmer_power',
+              'sensor.bathroom_dimmer_power',
+              'sensor.dining_room_ceiling_lights_power',
+              'sensor.dining_room_triptych_power',
+              'sensor.shower_room_lights_power',
+              'sensor.patio_light_power',
+              'sensor.external_sockets_power',
+              'sensor.christmas_tree_lights_power']
+             | map('states') | map('float', 0) | select('gt', 0) | sum | round(0) }}
+
+      # --- Biggest loads ------------------------------------------------------
+      # Every metered device drawing 2 W or more, ranked here so the
+      # Electrical dashboard doesn't rescan every state in the browser.
+      # Aggregates and sub-board meters are skipped: they'd double count the
+      # devices below them. Excluded from the recorder (changes constantly).
+      - name: Electrical Biggest Loads
+        unique_id: electrical_biggest_loads
+        icon: mdi:sort-descending
+        state: >
+          {%- set skip = ['sensor.whole_house_power', 'sensor.workspace_total_power'] -%}
+          {%- set ns = namespace(d=[]) -%}
+          {%- for s in states.sensor
+               if s.attributes.device_class == 'power' and s.entity_id not in skip
+               and not s.entity_id.startswith(('sensor.electrical_', 'sensor.garage_power_monitoring_'))
+               and s.state | is_number -%}
+            {%- set w = s.state | float * (1000 if s.attributes.unit_of_measurement == 'kW' else 1) -%}
+            {%- if w >= 2 -%}
+              {%- set ns.d = ns.d + [{'name': s.name | regex_replace('(?i)[ ]*power$', ''), 'w': w | round(1)}] -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ ns.d | count }}
+        attributes:
+          top: >
+            {%- set skip = ['sensor.whole_house_power', 'sensor.workspace_total_power'] -%}
+            {%- set ns = namespace(d=[]) -%}
+            {%- for s in states.sensor
+                 if s.attributes.device_class == 'power' and s.entity_id not in skip
+                 and not s.entity_id.startswith(('sensor.electrical_', 'sensor.garage_power_monitoring_'))
+                 and s.state | is_number -%}
+              {%- set w = s.state | float * (1000 if s.attributes.unit_of_measurement == 'kW' else 1) -%}
+              {%- if w >= 2 -%}
+                {%- set ns.d = ns.d + [{'name': s.name | regex_replace('(?i)[ ]*power$', ''), 'w': w | round(1)}] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {{ (ns.d | sort(attribute='w', reverse=true))[:10] }}
+
+  # --- Unmeasured power -------------------------------------------------------
+  # Whole-house minus every metered area. Recalculated once a minute rather than
+  # on every input change (it was ~17k recorder rows a day); the energy
+  # integration and live tiles are fine at that resolution.
+  - triggers:
+      - trigger: time_pattern
+        minutes: "/1"
+      - trigger: homeassistant
+        event: start
+    sensor:
+      - name: Electrical Unmeasured Power
+        unique_id: electrical_unmeasured_power
+        device_class: power
+        state_class: measurement
+        unit_of_measurement: W
+        icon: mdi:help-circle-outline
+        availability: "{{ has_value('sensor.whole_house_power') }}"
+        state: >
+          {% set measured = ['sensor.electrical_shower_power',
+                             'sensor.electrical_hot_water_power',
+                             'sensor.electrical_workspace_power',
+                             'sensor.electrical_house_heating_power',
+                             'sensor.electrical_kitchen_power',
+                             'sensor.electrical_utility_power',
+                             'sensor.electrical_lighting_power']
+                            | map('states') | map('float', 0) | sum %}
+          {{ [states('sensor.whole_house_power') | float(0) - measured, 0] | max | round(0) }}
+
+  # --- Daily highs and lows ---------------------------------------------------
+  # Reset at midnight to the live reading, then ratchet with each update.
+  - triggers:
+      - trigger: state
+        entity_id: sensor.whole_house_power
+      - trigger: time
+        at: "00:00:00"
+        id: reset
+    sensor:
+      - name: Electrical Peak Power Today
+        unique_id: electrical_peak_power_today
+        device_class: power
+        unit_of_measurement: W
+        icon: mdi:chart-bell-curve
+        state: >
+          {% set now_w = states('sensor.whole_house_power') | float(0) %}
+          {% set prev = this.state | float(0) if this is defined and this.state | is_number else 0 %}
+          {{ now_w | round(0) if trigger.id == 'reset' else [now_w, prev] | max | round(0) }}
+        attributes:
+          at: >
+            {% set now_w = states('sensor.whole_house_power') | float(0) %}
+            {% set prev = this.state | float(0) if this is defined and this.state | is_number else 0 %}
+            {{ now().isoformat() if trigger.id == 'reset' or now_w > prev else this.attributes.get('at', now().isoformat()) }}
+
+  - triggers:
+      - trigger: state
+        entity_id: sensor.whole_house_voltage
+      - trigger: time
+        at: "00:00:00"
+        id: reset
+    sensor:
+      - name: Electrical Min Voltage Today
+        unique_id: electrical_min_voltage_today
+        device_class: voltage
+        unit_of_measurement: V
+        availability: "{{ has_value('sensor.whole_house_voltage') }}"
+        state: >
+          {% set v = states('sensor.whole_house_voltage') | float %}
+          {% set prev = this.state | float(999) if this is defined and this.state | is_number else 999 %}
+          {{ v | round(1) if trigger.id == 'reset' else [v, prev] | min | round(1) }}
+      - name: Electrical Max Voltage Today
+        unique_id: electrical_max_voltage_today
+        device_class: voltage
+        unit_of_measurement: V
+        availability: "{{ has_value('sensor.whole_house_voltage') }}"
+        state: >
+          {% set v = states('sensor.whole_house_voltage') | float %}
+          {% set prev = this.state | float(0) if this is defined and this.state | is_number else 0 %}
+          {{ v | round(1) if trigger.id == 'reset' else [v, prev] | max | round(1) }}
+
+sensor:
+  # Always-on load: the 5th percentile of the last 24 h, so brief dips
+  # (e.g. a fridge compressor cycling off) don't drag it down.
+  - platform: statistics
+    name: Electrical Baseload
+    unique_id: electrical_baseload
+    entity_id: sensor.whole_house_power
+    state_characteristic: percentile
+    percentile: 5
+    max_age:
+      hours: 24
+    sampling_size: 50000
+    precision: 0
+
+  # Energy by area: integrate each area's power, then reset daily below.
+  # max_sub_interval keeps them ticking while a load holds steady.
+  - platform: integration
+    name: Electrical Shower Energy
+    unique_id: electrical_shower_energy
+    source: sensor.electrical_shower_power
+    unit_prefix: k
+    method: left
+    round: 3
+    max_sub_interval:
+      minutes: 5
+  - platform: integration
+    name: Electrical Hot Water Energy
+    unique_id: electrical_hot_water_energy
+    source: sensor.electrical_hot_water_power
+    unit_prefix: k
+    method: left
+    round: 3
+    max_sub_interval:
+      minutes: 5
+  - platform: integration
+    name: Electrical Workspace Energy
+    unique_id: electrical_workspace_energy
+    source: sensor.electrical_workspace_power
+    unit_prefix: k
+    method: left
+    round: 3
+    max_sub_interval:
+      minutes: 5
+  - platform: integration
+    name: Electrical House Heating Energy
+    unique_id: electrical_house_heating_energy
+    source: sensor.electrical_house_heating_power
+    unit_prefix: k
+    method: left
+    round: 3
+    max_sub_interval:
+      minutes: 5
+  - platform: integration
+    name: Electrical Kitchen Energy
+    unique_id: electrical_kitchen_energy
+    source: sensor.electrical_kitchen_power
+    unit_prefix: k
+    method: left
+    round: 3
+    max_sub_interval:
+      minutes: 5
+  - platform: integration
+    name: Electrical Utility Energy
+    unique_id: electrical_utility_energy
+    source: sensor.electrical_utility_power
+    unit_prefix: k
+    method: left
+    round: 3
+    max_sub_interval:
+      minutes: 5
+  - platform: integration
+    name: Electrical Lighting Energy
+    unique_id: electrical_lighting_energy
+    source: sensor.electrical_lighting_power
+    unit_prefix: k
+    method: left
+    round: 3
+    max_sub_interval:
+      minutes: 5
+  - platform: integration
+    name: Electrical Unmeasured Energy
+    unique_id: electrical_unmeasured_energy
+    source: sensor.electrical_unmeasured_power
+    unit_prefix: k
+    method: left
+    round: 3
+    max_sub_interval:
+      minutes: 5
+
+utility_meter:
+  electrical_shower_energy_today:
+    source: sensor.electrical_shower_energy
+    name: Electrical Shower Energy Today
+    unique_id: electrical_shower_energy_today
+    cycle: daily
+  electrical_hot_water_energy_today:
+    source: sensor.electrical_hot_water_energy
+    name: Electrical Hot Water Energy Today
+    unique_id: electrical_hot_water_energy_today
+    cycle: daily
+  electrical_workspace_energy_today:
+    source: sensor.electrical_workspace_energy
+    name: Electrical Workspace Energy Today
+    unique_id: electrical_workspace_energy_today
+    cycle: daily
+  electrical_house_heating_energy_today:
+    source: sensor.electrical_house_heating_energy
+    name: Electrical House Heating Energy Today
+    unique_id: electrical_house_heating_energy_today
+    cycle: daily
+  electrical_kitchen_energy_today:
+    source: sensor.electrical_kitchen_energy
+    name: Electrical Kitchen Energy Today
+    unique_id: electrical_kitchen_energy_today
+    cycle: daily
+  electrical_utility_energy_today:
+    source: sensor.electrical_utility_energy
+    name: Electrical Utility Energy Today
+    unique_id: electrical_utility_energy_today
+    cycle: daily
+  electrical_lighting_energy_today:
+    source: sensor.electrical_lighting_energy
+    name: Electrical Lighting Energy Today
+    unique_id: electrical_lighting_energy_today
+    cycle: daily
+  electrical_unmeasured_energy_today:
+    source: sensor.electrical_unmeasured_energy
+    name: Electrical Unmeasured Energy Today
+    unique_id: electrical_unmeasured_energy_today
+    cycle: daily

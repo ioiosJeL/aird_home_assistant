@@ -1,0 +1,115 @@
+# Comings and goings: who drove away or came home, when, and in which
+# vehicle. Shown on the Overview ("Comings & goings").
+#
+# How a trip is worked out:
+#   - A person leaving home or arriving home (person.*: phone GPS plus, for
+#     Elizabeth, her phone dropping off / rejoining the house Wi-Fi) starts it.
+#   - It counts as a drive if UniFi Protect saw a vehicle on the driveway or
+#     car port camera from 12 minutes before (leaving: phones are slow to
+#     notice they've gone, often 8-10 min after the camera sees the car) or
+#     6 minutes before (arriving) to 5 minutes after. When it matches, the
+#     camera's time is used as the trip time since it's the more accurate.
+#   - The same person repeating a leave/arrive within 10 minutes (GPS
+#     wobble at the edge of the home zone) is ignored.
+#   - Two people leaving or arriving within 10 minutes of each other are one
+#     trip together.
+#   - Protect only reports "vehicle" (no type or plate), so which vehicle:
+#       car port camera saw it          -> Van (the van usually parks there)
+#       otherwise John on his own       -> Van (John usually has the van)
+#       otherwise Elizabeth on her own  -> Car
+#       otherwise both together         -> Car
+#     No vehicle seen at all is still logged (lift, walk, missed by camera)
+#     but marked unseen, and the card shows the vehicle with a "?".
+#
+# sensor.household_trips keeps the last 40 trips (newest first) in its
+# `trips` attribute: {ts, dir: left|arrived, who: [..], vehicle, cam, seen}.
+# Fire event household_trip with {reset: true} to clear it.
+
+template:
+  - triggers:
+      - trigger: event
+        event_type: household_trip
+    sensor:
+      - name: Household Trips
+        unique_id: household_trips
+        icon: mdi:car-arrow-right
+        state: >-
+          {% set d = trigger.event.data %}
+          {{ 'Cleared' if d.reset is defined else d.who ~ ' ' ~ d.dir ~ (' in the ' ~ d.vehicle if d.seen else '') }}
+        attributes:
+          trips: >-
+            {% set d = trigger.event.data %}
+            {% if d.reset is defined %}[]{% else %}
+            {% set old = (this.attributes.trips if this.attributes is mapping and this.attributes.trips is defined else []) | list %}
+            {% set ns = namespace(out=[], merged=false) %}
+            {% set dup = old | selectattr('dir', 'eq', d.dir) | selectattr('who', 'contains', d.who)
+                 | selectattr('ts', '>', d.ts - 600) | selectattr('ts', '<', d.ts + 600) | list | count > 0 %}
+            {% if dup %}{% set ns.merged = true %}{% set ns.out = old %}{% endif %}
+            {% for t in old if not dup %}
+              {% if not ns.merged and t.dir == d.dir and (t.ts - d.ts) | abs < 600 and d.who not in t.who %}
+                {% set cams = [t.cam, d.cam] %}
+                {% set ns.out = ns.out + [dict(t,
+                    ts=[t.ts, d.ts] | min,
+                    who=t.who + [d.who],
+                    vehicle='Van' if 'car_port' in cams else 'Car',
+                    cam='car_port' if 'car_port' in cams else (t.cam or d.cam),
+                    seen=t.seen or d.seen)] %}
+                {% set ns.merged = true %}
+              {% else %}
+                {% set ns.out = ns.out + [t] %}
+              {% endif %}
+            {% endfor %}
+            {% if not ns.merged %}
+              {% set ns.out = ns.out + [{'ts': d.ts, 'dir': d.dir, 'who': [d.who], 'vehicle': d.vehicle, 'cam': d.cam, 'seen': d.seen}] %}
+            {% endif %}
+            {{ (ns.out | sort(attribute='ts', reverse=true))[:40] }}
+            {% endif %}
+
+automation:
+  - id: household_trip_detect
+    alias: Household Trip Detect
+    description: Pairs a person leaving or arriving home with a Protect vehicle detection (packages/vehicles.yaml)
+    mode: parallel
+    max: 6
+    triggers:
+      - trigger: state
+        entity_id: [person.john_lumley, person.elizabeth_munsie]
+        from: home
+        id: left
+      - trigger: state
+        entity_id: [person.john_lumley, person.elizabeth_munsie]
+        to: home
+        id: arrived
+    conditions:
+      - "{{ trigger.from_state.state not in ['unknown', 'unavailable'] and trigger.to_state.state not in ['unknown', 'unavailable'] }}"
+    actions:
+      - variables:
+          who: "{{ trigger.to_state.name.split(' ')[0] }}"
+          t0: "{{ as_timestamp(trigger.to_state.last_changed) }}"
+          since: "{{ as_timestamp(trigger.to_state.last_changed) - (720 if trigger.id == 'left' else 360) }}"
+      # Nothing seen yet: give the cameras up to 5 minutes
+      - if: >-
+          {{ as_timestamp(states('event.driveway_vehicle'), 0) < since
+             and as_timestamp(states('event.car_port_vehicle'), 0) < since }}
+        then:
+          - wait_for_trigger:
+              - trigger: state
+                entity_id: [event.driveway_vehicle, event.car_port_vehicle]
+                not_to: [unknown, unavailable]
+            timeout: "00:05:00"
+            continue_on_timeout: true
+      - variables:
+          car_port: "{{ as_timestamp(states('event.car_port_vehicle'), 0) >= since }}"
+          driveway: "{{ as_timestamp(states('event.driveway_vehicle'), 0) >= since }}"
+          cam: "{{ 'car_port' if car_port else 'driveway' if driveway else '' }}"
+          cam_ts: >-
+            {{ as_timestamp(states('event.car_port_vehicle'), 0) if car_port
+               else as_timestamp(states('event.driveway_vehicle'), 0) if driveway else t0 }}
+      - event: household_trip
+        event_data:
+          ts: "{{ cam_ts }}"
+          dir: "{{ trigger.id }}"
+          who: "{{ who }}"
+          cam: "{{ cam }}"
+          seen: "{{ cam != '' }}"
+          vehicle: "{{ 'Van' if car_port or who == 'John' else 'Car' }}"

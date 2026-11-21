@@ -1,0 +1,35 @@
+blueprint:
+  name: Media - Sleep Timer Start
+  description: >-
+    Start a media player's sleep countdown: mark it active and start the
+    timer for the configured number of minutes.
+  domain: script
+  input:
+    sleep_active_boolean:
+      name: Sleep Timer Active (input_boolean)
+      selector:
+        entity:
+          domain: input_boolean
+    sleep_timer:
+      name: Sleep Timer
+      selector:
+        entity:
+          domain: timer
+    sleep_minutes_number:
+      name: Sleep Duration, Minutes (input_number)
+      selector:
+        entity:
+          domain: input_number
+
+mode: single
+variables:
+  sleep_minutes_number: !input sleep_minutes_number
+
+sequence:
+  - action: input_boolean.turn_on
+    target:
+      entity_id: !input sleep_active_boolean
+  - action: timer.start
+    data:
+      entity_id: !input sleep_timer
+      duration: "{{ states(sleep_minutes_number) | int * 60 }}"

@@ -1,0 +1,43 @@
+blueprint:
+  name: Lights - Basic Motion On
+  description: >-
+    Turn a light on when motion is detected, if automatic lights are enabled
+    for that light and it isn't already on. No scene system, illuminance
+    check, or timers involved - for simple utility spaces.
+  domain: automation
+  input:
+    motion_sensor:
+      name: Motion Sensor
+      selector:
+        entity:
+          domain: binary_sensor
+    automatic_lights_boolean:
+      name: Automatic Lights Mode (input_boolean)
+      selector:
+        entity:
+          domain: input_boolean
+    light_target:
+      name: Light
+      selector:
+        entity:
+          domain: light
+
+mode: single
+triggers:
+  - trigger: state
+    entity_id: !input motion_sensor
+    to: "on"
+
+variables:
+  automatic_lights: !input automatic_lights_boolean
+  light_target: !input light_target
+
+conditions:
+  - condition: template
+    value_template: >-
+      {{ (states(automatic_lights) == 'on') and (states(light_target) == 'off') }}
+
+actions:
+  - action: light.turn_on
+    target:
+      entity_id: !input light_target

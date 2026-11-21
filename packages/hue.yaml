@@ -1,0 +1,124 @@
+# Fleet-health roll-ups for the Hue devices, used by the Hue admin page
+# (dashboards/admin-pages/hue.yaml) and available for automations.
+# Device classification and naming live in custom_templates/hue.jinja.
+
+template:
+  - sensor:
+      # Battery devices that have dropped off entirely
+      - default_entity_id: sensor.hue_devices_offline
+        name: Hue Devices Offline
+        icon: mdi:lan-disconnect
+        unit_of_measurement: devices
+        state: >-
+          {% from 'hue.jinja' import hue_offline %}
+          {% set off = hue_offline() %}
+          {{ off.split(', ') | count if off else 0 }}
+        attributes:
+          devices: >-
+            {% from 'hue.jinja' import hue_offline %}
+            {{ hue_offline() }}
+
+      # Below 20%, or the bridge itself flagging low/critical
+      - default_entity_id: sensor.hue_low_batteries
+        name: Hue Low Batteries
+        icon: mdi:battery-alert-variant-outline
+        unit_of_measurement: devices
+        state: >-
+          {{ integration_entities('hue') | select('match', 'sensor\.')
+             | select('is_state_attr', 'device_class', 'battery') | select('has_value')
+             | map('states') | map('float') | select('lt', 20) | list | count }}
+        attributes:
+          devices: >-
+            {% from 'hue.jinja' import hue_name %}
+            {% set ns = namespace(n=[]) %}
+            {% for e in integration_entities('hue') | select('match', 'sensor\.')
+                 | select('is_state_attr', 'device_class', 'battery') | select('has_value')
+                 if states(e) | float < 20 %}
+              {% set ns.n = ns.n + [{'n': hue_name(e), 'v': states(e) | int}] %}
+            {% endfor %}
+            {{ ns.n | sort(attribute='v') | map(attribute='n') | join(', ') }}
+
+      # Individual bulbs/plugs the bridge can't reach (usually switched off
+      # at the wall, so this is a warning rather than a fault)
+      - default_entity_id: sensor.hue_lights_unreachable
+        name: Hue Lights Unreachable
+        icon: mdi:lightbulb-alert-outline
+        unit_of_measurement: lights
+        state: >-
+          {{ integration_entities('hue') | select('match', 'light\.')
+             | reject('is_state_attr', 'is_hue_group', true)
+             | select('is_state', 'unavailable') | list | count }}
+        attributes:
+          devices: >-
+            {% from 'hue.jinja' import hue_name %}
+            {% set ns = namespace(n=[]) %}
+            {% for e in integration_entities('hue') | select('match', 'light\.')
+                 | reject('is_state_attr', 'is_hue_group', true)
+                 | select('is_state', 'unavailable') %}
+              {% set ns.n = ns.n + [hue_name(e)] %}
+            {% endfor %}
+            {{ ns.n | sort | join(', ') }}
+
+      - default_entity_id: sensor.hue_lights_on
+        name: Hue Lights On
+        icon: mdi:lightbulb-group
+        unit_of_measurement: lights
+        state: >-
+          {{ integration_entities('hue') | select('match', 'light\.')
+             | reject('is_state_attr', 'is_hue_group', true)
+             | select('is_state', 'on') | list | count }}
+        attributes:
+          devices: >-
+            {% from 'hue.jinja' import hue_name %}
+            {% set ns = namespace(n=[]) %}
+            {% for e in integration_entities('hue') | select('match', 'light\.')
+                 | reject('is_state_attr', 'is_hue_group', true)
+                 | select('is_state', 'on') %}
+              {% set ns.n = ns.n + [hue_name(e)] %}
+            {% endfor %}
+            {{ ns.n | sort | join(', ') }}
+
+      # Motion or light-sensing turned off on a sensor (the per-sensor
+      # enable switches), which silently breaks motion automations
+      - default_entity_id: sensor.hue_sensing_disabled
+        name: Hue Sensing Disabled
+        icon: mdi:motion-sensor-off
+        unit_of_measurement: switches
+        state: >-
+          {{ integration_entities('hue') | select('match', 'switch\.')
+             | select('is_state', 'off') | list | count }}
+        attributes:
+          devices: >-
+            {% from 'hue.jinja' import hue_name %}
+            {% set ns = namespace(n=[]) %}
+            {% for e in integration_entities('hue') | select('match', 'switch\.') | select('is_state', 'off') %}
+              {% set ns.n = ns.n + [hue_name(e) ~ (' light' if 'illuminance' in e or 'light_sensor' in e else ' motion')] %}
+            {% endfor %}
+            {{ ns.n | sort | join(', ') }}
+
+      # Indoor rooms only - the outdoor sensors and the porch would always win
+      - default_entity_id: sensor.hue_coldest_room
+        name: Hue Coldest Room
+        icon: mdi:thermometer-low
+        device_class: temperature
+        state_class: measurement
+        unit_of_measurement: "°C"
+        state: >-
+          {% from 'hue.jinja' import hue_devices %}
+          {% set ns = namespace(t=[]) %}
+          {% for d in hue_devices('sensor') | from_json if area_id(d) != 'front_porch' %}
+            {% set ns.t = ns.t + (device_entities(d) | select('match', 'sensor\..*_temperature$')
+                 | select('has_value') | map('states') | map('float') | list) %}
+          {% endfor %}
+          {{ ns.t | min if ns.t else none }}
+        attributes:
+          device: >-
+            {% from 'hue.jinja' import hue_devices %}
+            {% set ns = namespace(e=none, v=999) %}
+            {% for d in hue_devices('sensor') | from_json if area_id(d) != 'front_porch' %}
+              {% for e in device_entities(d) | select('match', 'sensor\..*_temperature$') | select('has_value')
+                   if states(e) | float < ns.v %}
+                {% set ns.e, ns.v = d, states(e) | float %}
+              {% endfor %}
+            {% endfor %}
+            {{ (area_name(ns.e) or device_attr(ns.e, 'name')) if ns.e else '' }}

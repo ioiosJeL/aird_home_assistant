@@ -1,0 +1,99 @@
+# Tide predictions for home from the Open-Meteo Marine API (free, no key).
+# sea_level_height_msl includes the astronomical tide; high/low times are
+# found from the 15-minute series, refined with a parabolic fit.
+# Note: the model's nearest sea cell is ~10 km SW of home (57.375, -6.458).
+
+homeassistant:
+  customize_glob:
+    sensor.tide_*:
+      package: "Tides"
+
+rest_command:
+  open_meteo_tides:
+    url: >-
+      https://marine-api.open-meteo.com/v1/marine?latitude={{ state_attr('zone.home','latitude') }}&longitude={{ state_attr('zone.home','longitude') }}&minutely_15=sea_level_height_msl&timeformat=unixtime&past_days=1&forecast_days=3&cell_selection=sea
+    method: GET
+    timeout: 20
+
+template:
+  - triggers:
+      - trigger: homeassistant
+        event: start
+      - trigger: time_pattern
+        minutes: "/15"
+    actions:
+      - action: rest_command.open_meteo_tides
+        response_variable: resp
+        continue_on_error: true
+      - variables:
+          ok: "{{ resp is defined and resp.status == 200 and resp.content.minutely_15 is defined }}"
+          tides: >-
+            {% if ok %}
+              {% set t = resp.content.minutely_15.time %}
+              {% set v = resp.content.minutely_15.sea_level_height_msl %}
+              {% set ns = namespace(events=[], height=none) %}
+              {% set nowts = now().timestamp() %}
+              {% for i in range(1, v | count - 1) %}
+                {% set a, b, c = v[i-1], v[i], v[i+1] %}
+                {% if a is number and b is number and c is number %}
+                  {% if (b >= a and b > c) or (b <= a and b < c) %}
+                    {% set den = a - 2*b + c %}
+                    {% set off = (0.5 * (a - c) / den) if den != 0 else 0 %}
+                    {% set ts = t[i] + off * 900 %}
+                    {% set h = b - 0.25 * (a - c) * off %}
+                    {% if ts > nowts - 43200 %}
+                      {% set ns.events = ns.events + [{'type': 'high' if b > c else 'low', 'ts': ts | int, 'time': ts | int | timestamp_local, 'height': h | round(2)}] %}
+                    {% endif %}
+                  {% endif %}
+                  {% if ns.height is none and t[i] <= nowts < t[i+1] %}
+                    {% set ns.height = b + (c - b) * (nowts - t[i]) / 900 %}
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+              {% set fut = ns.events | selectattr('ts', 'gt', nowts) | list %}
+              {{ {'height': ns.height | round(2) if ns.height is not none else none,
+                  'next': fut[:4],
+                  'last': (ns.events | selectattr('ts', 'le', nowts) | list | last) if ns.events | selectattr('ts', 'le', nowts) | list else none} }}
+            {% else %}
+              {{ none }}
+            {% endif %}
+    sensor:
+      - name: "Tide Height"
+        unique_id: tide_height
+        unit_of_measurement: "m"
+        device_class: distance
+        state_class: measurement
+        icon: >-
+          {% set n = (tides.next[0].type if tides else this.attributes.get('next_type')) %}
+          {{ 'mdi:wave-arrow-up' if n == 'high' else 'mdi:wave-arrow-down' }}
+        state: "{{ tides.height if tides and tides.height is not none else this.state }}"
+        attributes:
+          trend: >-
+            {% set n = (tides.next[0].type if tides and tides.next else this.attributes.get('next_type')) %}
+            {{ 'rising' if n == 'high' else 'falling' }}
+          next_type: "{{ tides.next[0].type if tides and tides.next else this.attributes.get('next_type') }}"
+          upcoming: "{{ tides.next if tides else this.attributes.get('upcoming', []) }}"
+
+      - name: "Tide Next High"
+        unique_id: tide_next_high
+        device_class: timestamp
+        icon: mdi:wave-arrow-up
+        state: >-
+          {% set e = (tides.next | selectattr('type','eq','high') | first) if tides else none %}
+          {{ (e.ts | timestamp_local) if e else this.state }}
+        attributes:
+          height: >-
+            {% set e = (tides.next | selectattr('type','eq','high') | first) if tides else none %}
+            {{ e.height if e else this.attributes.get('height') }}
+
+      - name: "Tide Next Low"
+        unique_id: tide_next_low
+        device_class: timestamp
+        icon: mdi:wave-arrow-down
+        state: >-
+          {% set e = (tides.next | selectattr('type','eq','low') | first) if tides else none %}
+          {{ (e.ts | timestamp_local) if e else this.state }}
+        attributes:
+          height: >-
+            {% set e = (tides.next | selectattr('type','eq','low') | first) if tides else none %}
+            {{ e.height if e else this.attributes.get('height') }}

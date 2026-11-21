@@ -1,0 +1,18 @@
+button_card_templates: !include ../button_card_templates.yaml
+
+title: Lovelace
+
+views:
+  - !include home.yaml
+  - !include overview.yaml
+  - !include electrical.yaml
+  - !include maritime.yaml
+  - !include extension.yaml
+  - !include ground_floor.yaml
+  - !include other_floors.yaml
+  - !include climates.yaml
+  - !include humidity.yaml
+  - !include leds.yaml
+  - !include light_control.yaml
+  - !include cctv.yaml
+  - !include camera_alert.yaml

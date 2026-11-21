@@ -1,0 +1,67 @@
+history:
+logger:
+  default: warning
+logbook:
+recorder:
+  db_url: !secret mariaDBsocket
+  purge_keep_days: 30
+  # commit_interval left at the default (5s) now that we're on an SSD; the old
+  # 60s value was an SD-card wear-reduction tweak from the Pi days.
+  exclude:
+    domains:
+      - device_tracker
+      - uptime
+      - time_date
+      - worldclock
+      - automation
+
+    entities:
+      - sensor.last_boot
+      - sensor.electrical_biggest_loads
+      - sensor.load_1m
+      - sensor.aird_network_cpu_utilisation
+      - sensor.aird_network_memory_utilisation
+      # UniFi gateway temperature, ~55k updates a day; only shown live
+      - sensor.aird_network_cpu_temperature
+      # Rolling logs kept in attributes (restored on restart without the DB)
+      - sensor.activity_feed
+      - sensor.notification_log
+      - sensor.dog_audio_log
+      # Per-plug Shelly mains voltage (~2,400 rows/day each, 17 Nov 2026):
+      # every plug reports the same supply that whole_house_voltage already
+      # records. Kept: whole_house, it_ups, garage phase A/B.
+      - sensor.garage_tv_voltage
+      - sensor.workshop_it_voltage
+      - sensor.kitchen_heater_voltage
+      - sensor.workspace_lights_monitor_voltage
+      - sensor.shower_room_lights_voltage
+      - sensor.shower_room_heater_voltage
+      - sensor.shed_counter_light_voltage
+      - sensor.fridge_voltage
+      - sensor.sunroom_heater_voltage
+      - sensor.kitchen_counter_lights_voltage
+      - sensor.double_bedroom_heater_voltage
+      - sensor.utility_room_ceiling_lights_voltage
+      - sensor.bathroom_heater_voltage
+      - sensor.lounge_heater_voltage
+      - sensor.master_bedroom_heater_voltage
+      - sensor.patio_lights_voltage
+      - sensor.external_sockets_voltage
+      - sensor.workshop_double_switch_voltage
+
+    entity_globs:
+      # Shelly device-temperature watchdogs (~300k rows/week across 31):
+      # alerts and the overview dashboard only read their live value
+      - sensor.*_temperature_watchdog
+      - input_boolean.interval_view_*
+      - sensor.date_time_*
+      - sensor.*_power_factor
+      - sensor.*_rssi
+      - sensor.*_esp_uptime
+      - sensor.*_wi_fi_signal
+      - sensor.*_free_memory
+
+      - sensor.john_lumleys_i*_distance
+      - sensor.john_lumleys_i*scended
+      - sensor.john_lumleys_i*_location
+      - sensor.john_lumleys_i*_steps

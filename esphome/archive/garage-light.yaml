@@ -1,0 +1,84 @@
+substitutions:
+  deviceName: garage-light
+  deviceUpper: Garage Light
+
+  # WIFI AND OTHER CREDENTIALS. USE SECRETS WHERE POSSIBLE
+  wifiPass: !secret wifiPassESP
+  wifiSSID: !secret wifiSSIDESP
+  passOTA: !secret passOTA
+  
+  # ESP DECLARATION
+  boardPlatform: ESP8266
+  boardName: esp01_1m
+  
+  
+###############################################################################
+# WHOA WHERE ARE YOU GOING? GO STEADY BEYOND HERE, THIS IS THE BREAKABLE BIT! #
+###############################################################################
+
+esphome:
+  name: ${deviceName}
+  friendly_name: ${deviceUpper}
+  platform: ${boardPlatform}
+  board: ${boardName}
+
+wifi:
+  ssid: ${wifiSSID}
+  password: ${wifiPass}
+  fast_connect: true
+
+captive_portal:
+logger:
+ota:
+  platform: esphome
+  password: ${passOTA}
+
+api:
+  encryption:
+    key: !secret api_key_archive_garage_light
+
+    
+# Device Specific Config
+output:
+  - platform: gpio
+    pin: GPIO15
+    id: shelly_1_relay
+
+light:
+  - platform: binary
+    name: "Relay"
+    output: shelly_1_relay
+    id: lightid
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO4
+      #mode: INPUT_PULLUP
+      #inverted: True
+    name: "Garage Light Switch"
+    on_press:
+      then:
+        - homeassistant.action:
+            action: light.toggle
+            data:
+              entity_id: light.garage_light
+    internal: True
+    id: switchid
+
+switch:
+  - platform: restart
+    name: "ESP Restart"
+
+sensor:
+  - platform: wifi_signal
+    name: ESP Signal
+    filters:
+      - or:
+          - throttle: 600s
+          - delta: 5.0
+    update_interval: 10s
+
+  - platform: uptime
+    name: ESP Uptime
+    update_interval: 60s

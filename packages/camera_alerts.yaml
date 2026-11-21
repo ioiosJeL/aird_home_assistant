@@ -1,0 +1,188 @@
+# Camera alerts on the companion apps (replaced Telegram, 21 Nov 2026).
+#
+# A camera detection push (script.camera_detection_notification,
+# unifi.yaml) carries:
+#   - a picture of the moment (camera_proxy, fetched with the app's login)
+#   - the live feed when expanded on iPhone/iPad (entity_id: camera.*)
+#   - tap -> /lovelace/camera-alert: the recorded clip of each recent
+#     detection (Protect event video), the live feed and quick actions
+#   - buttons: Mute 1 hour, Stop <type> alerts, Outside lights on
+#
+# Each detection type (person / vehicle / animal) is its own alert:
+#   input_boolean.camera_alerts_<type>   on/off for good (animals off)
+#   notify event camera_<type>           its phone/speaker choices and its
+#                                        own mute on the Notifications page
+#
+# Pieces here:
+#   sensor.notify_mutes    per-alert mutes ({event: until}); any event
+#                          key works, read by script.notify_dispatch
+#   script.notify_mute     mute/unmute one alert (minutes 0 = unmute)
+#   sensor.camera_alerts   the last 12 detections with Protect event ids
+#                          (fed by script.camera_detection, unifi.yaml)
+#   script.outside_lights_alert  floodlight + patio + front porch for 10 min
+#   automation: notification buttons MUTE__<event>__<minutes>,
+#               CAM_OFF__<type>, CAM_LIGHTS
+
+input_boolean:
+  camera_alerts_person:
+    name: Camera Alerts - People
+    icon: mdi:walk
+  camera_alerts_vehicle:
+    name: Camera Alerts - Vehicles
+    icon: mdi:car
+  camera_alerts_animal:
+    name: Camera Alerts - Animals
+    icon: mdi:paw
+
+template:
+  - triggers:
+      - trigger: event
+        event_type: notify_mute
+      # Drop expired mutes
+      - trigger: time_pattern
+        minutes: "/5"
+    sensor:
+      - default_entity_id: sensor.notify_mutes
+        name: Notification Mutes
+        unique_id: notify_mutes
+        icon: mdi:bell-sleep-outline
+        state: >-
+          {% if trigger.platform == 'event' %}
+            {{ trigger.event.data.event }} {{ 'muted ' ~ trigger.event.data.minutes ~ ' min' if trigger.event.data.minutes | int(0) > 0 else 'unmuted' }}
+          {% else %}
+            {{ this.state if this.state not in ['unknown', 'unavailable'] else 'none' }}
+          {% endif %}
+        attributes:
+          until: >-
+            {% set cur = this.attributes.get('until', {}) if this.attributes is mapping else {} %}
+            {% set n = as_timestamp(now()) %}
+            {% set ns = namespace(d={}) %}
+            {% for k, v in cur.items() if as_timestamp(v, 0) > n %}
+              {% set ns.d = dict(ns.d, **{k: v}) %}
+            {% endfor %}
+            {% if trigger.platform == 'event' %}
+              {% set e = trigger.event.data.event %}
+              {% set m = trigger.event.data.minutes | int(0) %}
+              {% if m > 0 %}
+                {% set ns.d = dict(ns.d, **{e: (now() + timedelta(minutes=m)).isoformat(timespec='seconds')}) %}
+              {% else %}
+                {% set keep = namespace(d={}) %}
+                {% for k, v in ns.d.items() if k != e %}{% set keep.d = dict(keep.d, **{k: v}) %}{% endfor %}
+                {% set ns.d = keep.d %}
+              {% endif %}
+            {% endif %}
+            {{ ns.d }}
+
+  - triggers:
+      - trigger: event
+        event_type: camera_alert
+    sensor:
+      - default_entity_id: sensor.camera_alerts
+        name: Camera Alerts
+        unique_id: camera_alerts
+        icon: mdi:cctv
+        state: >-
+          {% set d = trigger.event.data %}
+          {{ d.type | capitalize }} on the {{ d.camera | replace('_', ' ') }}
+        attributes:
+          alerts: >-
+            {% set d = trigger.event.data %}
+            {% set old = (this.attributes.alerts if this.attributes is mapping and this.attributes.alerts is defined else []) | list %}
+            {% set entry = {'ts': d.ts | default(as_timestamp(now()) | round(0)), 'camera': d.camera, 'type': d.type,
+                            'event_id': d.event_id | default(''), 'nvr': d.nvr | default('')} %}
+            {{ ([entry] + old | rejectattr('event_id', 'eq', entry.event_id) | list if entry.event_id else [entry] + old)[:12] }}
+
+script:
+  notify_mute:
+    alias: Notification Mute
+    description: Mute one alert (by its notify_dispatch event key) for a while; minutes 0 unmutes it
+    icon: mdi:bell-sleep
+    mode: queued
+    fields:
+      event:
+        description: Event key, e.g. camera_person
+        example: camera_person
+        selector:
+          text:
+      minutes:
+        description: How long to mute for (0 = unmute)
+        example: 30
+        selector:
+          number:
+            min: 0
+            max: 1440
+            unit_of_measurement: min
+    sequence:
+      - event: notify_mute
+        event_data:
+          event: "{{ event }}"
+          minutes: "{{ minutes | int(0) }}"
+      - action: logbook.log
+        data:
+          name: Notifications
+          message: >-
+            {{ event | replace('_', ' ') }} alerts {{ 'muted for ' ~ (minutes | int) ~ ' min' if minutes | int(0) > 0 else 'unmuted' }}
+          entity_id: sensor.notify_mutes
+
+  outside_lights_alert:
+    alias: Outside Lights On (Alert)
+    description: Car port floodlight, patio and front porch on for 10 minutes, then back off (only the ones this turned on)
+    icon: mdi:light-flood-down
+    mode: restart
+    sequence:
+      - variables:
+          lights: [switch.external_sockets, light.patio_light, light.front_porch]
+          were_off: "{{ lights | select('is_state', 'off') | list }}"
+      - action: homeassistant.turn_on
+        target:
+          entity_id: "{{ lights }}"
+      - action: logbook.log
+        data:
+          name: Camera alert
+          message: outside lights switched on for 10 minutes
+          entity_id: script.outside_lights_alert
+      - delay:
+          minutes: 10
+      - if: "{{ were_off | count > 0 }}"
+        then:
+          - action: homeassistant.turn_off
+            target:
+              entity_id: "{{ were_off }}"
+
+automation:
+  - id: notification_action_buttons
+    alias: Notification Action Buttons
+    description: Mute and outside-lights buttons on phone notifications (packages/camera_alerts.yaml)
+    mode: queued
+    triggers:
+      - trigger: event
+        event_type: mobile_app_notification_action
+    conditions:
+      - "{{ trigger.event.data.action is string and (trigger.event.data.action.startswith(('MUTE__', 'CAM_OFF__')) or trigger.event.data.action == 'CAM_LIGHTS') }}"
+    actions:
+      - choose:
+          - conditions: "{{ trigger.event.data.action.startswith('MUTE__') }}"
+            sequence:
+              - variables:
+                  parts: "{{ trigger.event.data.action.split('__') }}"
+              - action: script.notify_mute
+                data:
+                  event: "{{ parts[1] }}"
+                  minutes: "{{ parts[2] | int(60) }}"
+          - conditions: "{{ trigger.event.data.action.startswith('CAM_OFF__') }}"
+            sequence:
+              - variables:
+                  kind: "{{ trigger.event.data.action.split('__')[1] }}"
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: "input_boolean.camera_alerts_{{ kind }}"
+              - action: logbook.log
+                data:
+                  name: Notifications
+                  message: "{{ kind }} camera alerts switched off from a phone notification"
+                  entity_id: "input_boolean.camera_alerts_{{ kind }}"
+          - conditions: "{{ trigger.event.data.action == 'CAM_LIGHTS' }}"
+            sequence:
+              - action: script.turn_on
+                target:
+                  entity_id: script.outside_lights_alert

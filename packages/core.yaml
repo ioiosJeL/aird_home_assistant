@@ -1,0 +1,554 @@
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      common: &common
+        package: "Core"
+
+    input_boolean.debug_*_mode:
+      <<: *common
+      icon: mdi:bug-outline
+
+    sensor.speedtest_*:
+      <<: *common
+    input_select.*_core_mode:
+      <<: *common
+    input_boolean.mode_notify_*:
+      <<: *common
+    input_boolean.mode_override_*:
+      <<: *common
+    input_boolean.service_*_ha:
+      <<: *common
+
+  customize:
+    script.core_log_message:
+      <<: *common
+    script.core_info_message:
+      <<: *common
+
+    input_text.core_status_display:
+      <<: *common
+    binary_sensor.core_script_running:
+      <<: *common
+    sensor.disk_use_percent:
+      <<: *common
+      friendly_name: Percent Disk Used
+    sensor.memory_use_percent:
+      <<: *common
+      friendly_name: Percent Memory Used
+    sensor.load_1m:
+      <<: *common
+      friendly_name: 1m Load
+    sensor.processor_use_percent:
+      <<: *common
+      friendly_name: Processor Used
+    sensor.last_boot:
+      <<: *common
+      friendly_name: Last Boot
+      device_class: timestamp
+      icon: mdi:clock
+
+stream:
+browser:
+webhook:
+websocket_api:
+media_source:
+zone: !include ../custom/zones.yaml
+
+dhcp:
+ssdp:
+zeroconf:
+
+input_select:
+  house_mode:
+    name: House Mode
+    icon: mdi:badge-account
+    options:
+      - Night Time
+      - Occupied
+      - Away
+      - Welcome
+      - Housekeeping
+
+input_boolean:
+  service_refresh_ha:
+    name: "Refresh Lovelace & Themes"
+    icon: mdi:reload
+    initial: false
+
+  service_reload_ha:
+    name: "Reload HA Core & Services"
+    icon: mdi:reload-alert
+    initial: false
+
+  service_restart_ha:
+    name: "Restart HA"
+    icon: mdi:power-standby
+    initial: false
+
+  status_homewatch:
+    name: "Homewatch Status"
+    icon: mdi:lighthouse
+
+  status_nighttime:
+    name: "Nighttime Status"
+    icon: mdi:weather-night
+
+  status_guests:
+    name: "Guest Status"
+    icon: mdi:account-group
+
+  status_guest_double_bedroom:
+    name: "Guest Status: Double Bedroom"
+    icon: mdi:account-group
+
+  status_guest_single_bedroom:
+    name: "Guest Status: Single Bedroom"
+    icon: mdi:account
+
+  status_bedtime_master:
+    name: "Master Bedroom Bedtime Status"
+    icon: mdi:bed
+
+  status_bedtime_double:
+    name: "Double Bedroom Bedtime Status"
+    icon: mdi:bed-double
+
+  status_bedtime_single:
+    name: "Single Bedroom Bedtime Status"
+    icon: mdi:bed-single
+
+input_text:
+  core_status_display:
+    name: "Status Display"
+    icon: mdi:comma-circle
+    initial: " "
+
+template:
+  - binary_sensor:
+      - default_entity_id: binary_sensor.core_script_running
+        name: "Core Script Running"
+        state: >-
+          {{ is_state('input_boolean.service_refresh_ha', 'on')
+          or is_state('input_boolean.service_reload_ha', 'on') }}
+
+sensor:
+  - platform: websocket_api
+
+script:
+  core_log_message:
+    sequence:
+      - event: LOG_WRITE
+        event_data_template:
+          message: "{{ message }}"
+
+  core_info_message:
+    sequence:
+      - event: LOG_WRITE
+        event_data_template:
+          message: "{{ message }}"
+          channel: "info"
+      - event: LOG_WRITE
+        event_data_template:
+          message: "INFO: {{ message }}"
+
+  homewatch_pause:
+    alias: Pause Homewatch for given minutes
+    mode: single
+    fields:
+      mins:
+        description: "Minutes to pause for"
+        example: "2"
+    sequence:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.status_homewatch
+      - delay:
+          minutes: "{{ mins }}"
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.status_homewatch
+
+  house_mode_housekeeping:
+    alias: Enter Housekeeping Mode
+    mode: single
+    sequence:
+      - action: input_select.select_option
+        data:
+          entity_id: input_select.house_mode
+          option: "Housekeeping"
+
+      # TURN SMART SCREENS TO HOUSEKEEPING PAGE
+
+  house_mode_welcome:
+    alias: Enter Welcome Mode
+    mode: single
+    sequence:
+      - action: input_select.select_option
+        data:
+          entity_id: input_select.house_mode
+          option: "Welcome"
+
+  house_mode_occupied:
+    alias: Enter Occupied Mode
+    mode: single
+    sequence:
+      - action: input_select.select_option
+        data:
+          entity_id: input_select.house_mode
+          option: "Occupied"
+
+  house_mode_night_time:
+    alias: Enter Night Time Mode
+    mode: single
+    sequence:
+      - action: input_select.select_option
+        data:
+          entity_id: input_select.house_mode
+          option: "Night Time"
+
+  core_refresh_ha:
+    alias: Refreshing Core
+    mode: restart
+    description: "Refreshing Lovelace resources and custom themes"
+    sequence:
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.core_status_display
+          value: "Lovelace Resources"
+
+      - action: lovelace.reload_resources
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.core_status_display
+          value: "Lovelace Themes"
+      - action: frontend.reload_themes
+
+  core_reload_ha:
+    alias: Reloading Core
+    description: "Reload core config and all reloadable domains"
+    sequence:
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.core_status_display
+          value: "Templates"
+      - action: template.reload
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.core_status_display
+          value: "Groups"
+      - action: group.reload
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.core_status_display
+          value: "Timers"
+      - action: timer.reload
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.core_status_display
+          value: "Thermostats"
+      - action: generic_thermostat.reload
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.core_status_display
+          value: "Persons"
+      - action: person.reload
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.core_status_display
+          value: "Zones"
+      - action: zone.reload
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.core_status_display
+          value: "Input Booleans"
+      - action: input_boolean.reload
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.core_status_display
+          value: "Input Selects"
+      - action: input_select.reload
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.core_status_display
+          value: "Input Texts"
+      - action: input_text.reload
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.core_status_display
+          value: "Input Numbers"
+      - action: input_number.reload
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.core_status_display
+          value: "Input Datetimes"
+      - action: input_datetime.reload
+
+automation:
+  - alias: Refresh HA
+    description: Refresh Variables, Lovelace & Themes
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.service_refresh_ha
+        from: "off"
+        to: "on"
+    condition: []
+    actions:
+      - action: input_boolean.turn_on
+        entity_id: input_boolean.service_refresh_ha
+
+      - action: script.core_refresh_ha
+
+      - action: input_boolean.turn_off
+        entity_id: input_boolean.service_refresh_ha
+
+  - alias: Reload HA
+    description: Reload The Core
+    mode: single
+    trigger:
+      - trigger: state
+        entity_id: input_boolean.service_reload_ha
+        from: "off"
+        to: "on"
+    condition: []
+    actions:
+      - action: input_boolean.turn_on
+        entity_id: input_boolean.service_reload_ha
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.core_status_display
+          value: "HA Core"
+
+      - action: homeassistant.reload_core_config
+
+      - action: script.core_reload_ha
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.core_status_display
+          value: "Scripts"
+      - action: script.reload
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.core_status_display
+          value: "Automations"
+
+      - action: input_boolean.turn_off
+        entity_id: input_boolean.service_reload_ha
+      - action: automation.reload
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.core_status_display
+          value: "Successfully Reloaded"
+      - delay:
+          seconds: 2
+
+  - alias: Restart HA
+    description: Restart Home Assistant
+    mode: single
+    trigger:
+      - trigger: state
+        entity_id: input_boolean.service_restart_ha
+        from: "off"
+        to: "on"
+    condition: []
+    actions:
+      - delay:
+          seconds: 1
+      - action: input_boolean.turn_off
+        entity_id: input_boolean.service_restart_ha
+      - delay:
+          seconds: 3
+      - action: homeassistant.restart
+
+  - alias: "Enter Night Mode"
+    mode: single
+    trigger:
+      - trigger: time
+        at: "21:00:00"
+    actions:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.status_nighttime
+
+  - alias: "End Night Mode"
+    mode: single
+    trigger:
+      - trigger: time
+        at: "09:30:00"
+    actions:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.status_nighttime
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.status_bedtime_master
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.status_bedtime_double
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.status_bedtime_single
+
+  - alias: Homewatch On
+    mode: single
+    triggers:
+      trigger: state
+      entity_id: person.john_lumley
+      from: "home"
+    actions:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.status_homewatch
+
+  - alias: Homewatch Off
+    mode: single
+    triggers:
+      trigger: state
+      entity_id: person.john_lumley
+      to: "home"
+    actions:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.status_homewatch
+
+  - alias: House Mode Change
+    mode: single
+    triggers:
+      trigger: state
+      entity_id: input_select.house_mode
+    actions:
+      # Via the dispatcher so it follows the house_mode toggles (kitchen
+      # speaker by default) and the speaker's quiet hours
+      - action: script.notify_dispatch
+        data:
+          event: house_mode
+          message: "House is entering {{ trigger.to_state.state }} mode!"
+
+  - alias: House Mode Set Away
+    mode: single
+    triggers:
+      trigger: state
+      entity_id: input_select.house_mode
+      to: "Away"
+    actions:
+      - action: script.kitchen_scene_off
+      - action: script.sunroom_scene_off
+      - action: script.dining_room_scene_off
+      - action: script.living_room_scene_off
+      - action: script.master_bedroom_scene_off
+      - action: script.double_bedroom_scene_off
+      - action: script.hall_scene_off
+      - action: script.utility_room_scene_off
+
+  - alias: Everyone Away Sets House Mode
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id:
+          - person.john_lumley
+          - person.elizabeth_munsie
+        for:
+          minutes: 5
+      # Re-check once the house goes quiet, in case the motion guard below
+      # blocked the person trigger.
+      - trigger: state
+        entity_id: binary_sensor.inside_motion
+        to: "off"
+        for:
+          minutes: 15
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ states('person.john_lumley') != 'home'
+             and states('person.elizabeth_munsie') != 'home' }}
+      # Phones can report bogus locations; don't go Away while someone is
+      # clearly moving around inside.
+      - condition: state
+        entity_id: binary_sensor.inside_motion
+        state: "off"
+        for:
+          minutes: 15
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: input_select.house_mode
+            state:
+              - "Away"
+              - "Housekeeping"
+    actions:
+      - action: input_select.select_option
+        data:
+          entity_id: input_select.house_mode
+          option: "Away"
+
+  - alias: Someone Home Sets House Mode Welcome
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id:
+          - person.john_lumley
+          - person.elizabeth_munsie
+        to: "home"
+    conditions:
+      - condition: state
+        entity_id: input_select.house_mode
+        state: "Away"
+    actions:
+      - action: script.house_mode_welcome
+      # Welcome is a transient greeting state - settle into Occupied a few
+      # minutes later unless something else (e.g. Housekeeping) took over.
+      - delay:
+          minutes: 5
+      - if:
+          - condition: state
+            entity_id: input_select.house_mode
+            state: "Welcome"
+        then:
+          - action: script.house_mode_occupied
+
+  # The NVR's Alarm Manager only supports armed_away/disarmed (it's a
+  # UniFi Protect away-mode toggle for smart-detection zones, not a real
+  # security panel) - keep it in sync with House Mode, and set it once on
+  # startup too, since an unset target state is what caused the
+  # "SecuritySystemTargetState: value=0 is an invalid value" HomeKit
+  # error on every boot.
+  - alias: House Mode Arms NVR Alarm Manager
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: input_select.house_mode
+      - trigger: homeassistant
+        event: start
+    actions:
+      # Only send a command when the state actually needs to change -
+      # Protect rejects disarming an already-disarmed NVR with a 400,
+      # which used to log three errors on every restart.
+      - choose:
+          - conditions:
+              - "{{ is_state('input_select.house_mode', 'Away') }}"
+              - "{{ not is_state('alarm_control_panel.aird_nvr_alarm_manager', 'armed_away') }}"
+            sequence:
+              - action: alarm_control_panel.alarm_arm_away
+                target:
+                  entity_id: alarm_control_panel.aird_nvr_alarm_manager
+          - conditions:
+              - "{{ not is_state('input_select.house_mode', 'Away') }}"
+              - "{{ not is_state('alarm_control_panel.aird_nvr_alarm_manager', 'disarmed') }}"
+            sequence:
+              - action: alarm_control_panel.alarm_disarm
+                target:
+                  entity_id: alarm_control_panel.aird_nvr_alarm_manager

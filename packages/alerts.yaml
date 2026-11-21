@@ -1,0 +1,579 @@
+# Alerts, activity and notification history (added Nov 2026).
+#
+# - sensor.activity_feed: a rolling timeline of what happened in the house
+#   (arrivals, mode changes, appliances, CCTV, outages). Trigger-based, so it
+#   costs nothing between events and needs no recorder/history queries.
+# - sensor.notification_log: the last 25 notifications sent (or held back by
+#   snooze) by script.notify_dispatch, with the channels each one went to.
+# - New alert automations, all routed through script.notify_dispatch so the
+#   per-event toggles on the Notifications admin page control who hears them.
+#
+# Dashboards: dashboards/lovelace/overview.yaml and
+# dashboards/admin-pages/notifications.yaml.
+
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      common: &common
+        package: "Alerts"
+    input_boolean.alert_ack_network_offline:
+      <<: *common
+    input_boolean.alert_ack_electrical_fault:
+      <<: *common
+    input_boolean.alert_ack_backups_stale:
+      <<: *common
+
+input_boolean:
+  alert_ack_network_offline:
+    name: "Acknowledge: Network Device Offline"
+    icon: mdi:bell-off
+  alert_ack_electrical_fault:
+    name: "Acknowledge: Electrical Fault"
+    icon: mdi:bell-off
+  alert_ack_backups_stale:
+    name: "Acknowledge: Backups Stale"
+    icon: mdi:bell-off
+
+template:
+  # -------------------------------------------------------------------------
+  # Problem sensors for the new alerts
+  # -------------------------------------------------------------------------
+  - binary_sensor:
+      # UniFi infrastructure (gateway, switches, APs) not reporting connected.
+      # An explicit list keeps this template cheap (no domain-wide scan).
+      - name: "Network Device Offline"
+        unique_id: network_device_offline
+        device_class: problem
+        icon: mdi:lan-disconnect
+        delay_on:
+          minutes: 5
+        state: >-
+          {{ ['sensor.aird_network_state', 'sensor.garage_state', 'sensor.garage_poe_state',
+              'sensor.front_porch_switch_state', 'sensor.back_porch_state', 'sensor.greenhouse_switch_state',
+              'sensor.ap_front_porch_state', 'sensor.ap_back_door_state', 'sensor.ap_back_porch_state',
+              'sensor.ap_driveway_state', 'sensor.ap_patio_state']
+             | reject('is_state', 'connected') | list | count > 0 }}
+        attributes:
+          devices: >-
+            {{ expand('sensor.aird_network_state', 'sensor.garage_state', 'sensor.garage_poe_state',
+                      'sensor.front_porch_switch_state', 'sensor.back_porch_state', 'sensor.greenhouse_switch_state',
+                      'sensor.ap_front_porch_state', 'sensor.ap_back_door_state', 'sensor.ap_back_porch_state',
+                      'sensor.ap_driveway_state', 'sensor.ap_patio_state')
+               | rejectattr('state', 'eq', 'connected')
+               | map(attribute='name') | map('replace', ' State', '') | join(', ') }}
+
+      # Shelly overcurrent/overvoltage/overpower trips (fleet roll-up in
+      # packages/shelly.yaml). Overheating has its own alert already.
+      - name: "Electrical Fault"
+        unique_id: electrical_fault
+        device_class: problem
+        icon: mdi:flash-alert
+        state: "{{ states('sensor.shelly_safety_alerts') | int(0) > 0 }}"
+        delay_on:
+          seconds: 30
+        attributes:
+          alerts: "{{ state_attr('sensor.shelly_safety_alerts', 'alerts') }}"
+
+  # -------------------------------------------------------------------------
+  # Notification history: one entry per script.notify_dispatch call
+  # -------------------------------------------------------------------------
+  - triggers:
+      - trigger: event
+        event_type: aird_notification
+    sensor:
+      - name: "Notification Log"
+        unique_id: notification_log
+        icon: mdi:bell-ring-outline
+        state: "{{ trigger.event.data.message | string | truncate(250, true) }}"
+        attributes:
+          log: >-
+            {% set d = trigger.event.data %}
+            {% set entry = {
+                 't': now().isoformat(timespec='seconds'),
+                 'e': d.event, 'm': d.message | string | truncate(200, true),
+                 'c': d.channels | default([]), 'h': d.held | default(''),
+                 'x': d.critical | default(false) } %}
+            {{ ([entry] + (this.attributes.log | default([])))[:25] }}
+
+  # -------------------------------------------------------------------------
+  # Activity feed: the house's timeline
+  # -------------------------------------------------------------------------
+  - triggers:
+      - trigger: state
+        id: person
+        entity_id: [person.john_lumley, person.elizabeth_munsie]
+        to: ~
+        not_from: [unknown, unavailable]
+      - trigger: state
+        id: mode
+        entity_id: input_select.house_mode
+        to: ~
+        not_from: [unknown, unavailable]
+      - trigger: state
+        id: appliance
+        entity_id:
+          - binary_sensor.washing_machine_active
+          - binary_sensor.tumble_dryer_active
+          - binary_sensor.dishwasher_active
+        from: ["on", "off"]
+        to: ["on", "off"]
+      - trigger: state
+        id: print
+        entity_id: binary_sensor.octoprint_printing
+        from: ["on", "off"]
+        to: ["on", "off"]
+      - trigger: state
+        id: cnc
+        entity_id: binary_sensor.cnc_machine_cutting
+        from: ["on", "off"]
+        to: ["on", "off"]
+      - trigger: state
+        id: problem
+        entity_id:
+          - binary_sensor.house_power_cut
+          - binary_sensor.any_cctv_camera_offline
+          - binary_sensor.network_device_offline
+          - binary_sensor.water_heater_backup_active
+          - binary_sensor.device_overheating
+          - binary_sensor.electrical_fault
+        from: ["on", "off"]
+        to: ["on", "off"]
+      - trigger: state
+        id: aurora
+        entity_id: binary_sensor.aurora_visible
+        from: "off"
+        to: "on"
+      - trigger: state
+        id: alarm
+        entity_id: alarm_control_panel.aird_nvr_alarm_manager
+        to: ~
+        not_from: [unknown, unavailable]
+      # CCTV scripts in packages/unifi.yaml write logbook entries
+      - trigger: event
+        id: cctv
+        event_type: logbook_entry
+        event_data:
+          name: CCTV
+      - trigger: event
+        id: safety
+        event_type: logbook_entry
+        event_data:
+          name: CCTV Safety Alarm
+      - trigger: homeassistant
+        id: start
+        event: start
+      # Fire event aird_feed_reset to clear the timeline
+      - trigger: event
+        id: reset
+        event_type: aird_feed_reset
+    actions:
+      - variables:
+          entry: >-
+            {% set id = trigger.id %}
+            {% set e = {} %}
+            {% if trigger.to_state is defined and trigger.to_state
+                  and trigger.to_state.state in ['unknown', 'unavailable'] %}
+              {# skip devices dropping out #}
+            {% elif id == 'person' %}
+              {% set n = trigger.to_state.name.split(' ')[0] %}
+              {% set to = trigger.to_state.state %}
+              {% if to == 'home' %}
+                {% set e = {'k': 'person', 'i': 'mdi:home-import-outline', 'c': 'green', 'm': n ~ ' arrived home'} %}
+              {% elif trigger.from_state.state == 'home' %}
+                {% set e = {'k': 'person', 'i': 'mdi:home-export-outline', 'c': 'blue', 'm': n ~ ' left home'} %}
+              {% elif to != 'not_home' %}
+                {% set e = {'k': 'person', 'i': 'mdi:map-marker-outline', 'c': 'blue',
+                            'm': n ~ ' is at ' ~ (state_attr('zone.' ~ to, 'friendly_name') or to | replace('_', ' ') | title)} %}
+              {% endif %}
+            {% elif id == 'mode' %}
+              {% set e = {'k': 'mode', 'i': 'mdi:home-switch-outline', 'c': 'indigo', 'm': 'House mode: ' ~ trigger.to_state.state} %}
+            {% elif id == 'appliance' %}
+              {% set n = trigger.to_state.name | replace(' Active', '') %}
+              {% if trigger.to_state.state == 'on' %}
+                {% set e = {'k': 'appliance', 'i': 'mdi:play-circle-outline', 'c': 'blue', 'm': n ~ ' started'} %}
+              {% else %}
+                {% set mins = ((now() - trigger.from_state.last_changed).total_seconds() / 60) | round | int %}
+                {% set e = {'k': 'appliance', 'i': 'mdi:check-circle-outline', 'c': 'green',
+                            'm': n ~ ' finished · ran ' ~ (mins // 60 ~ 'h ' if mins >= 60 else '') ~ (mins % 60) ~ 'm'} %}
+              {% endif %}
+            {% elif id == 'print' %}
+              {% set f = states('sensor.octoprint_current_file') | replace('.gcode', '') %}
+              {% set e = {'k': 'print', 'i': 'mdi:printer-3d-nozzle', 'c': 'teal',
+                          'm': ('3D print started · ' if trigger.to_state.state == 'on' else '3D print ended · ') ~ f} %}
+            {% elif id == 'cnc' %}
+              {% set e = {'k': 'print', 'i': 'mdi:saw-blade', 'c': 'teal',
+                          'm': 'CNC started cutting' if trigger.to_state.state == 'on' else 'CNC finished cutting'} %}
+            {% elif id == 'problem' %}
+              {% set n = trigger.to_state.name %}
+              {% if trigger.to_state.state == 'on' %}
+                {% set e = {'k': 'problem', 'i': 'mdi:alert-circle-outline', 'c': 'red', 'm': n} %}
+              {% else %}
+                {% set e = {'k': 'problem', 'i': 'mdi:check-circle-outline', 'c': 'green', 'm': n ~ ' cleared'} %}
+              {% endif %}
+            {% elif id == 'aurora' %}
+              {% set e = {'k': 'sky', 'i': 'mdi:aurora', 'c': 'green',
+                          'm': 'Aurora may be visible · ' ~ states('sensor.home_aurora_visibility') ~ '%'} %}
+            {% elif id == 'alarm' %}
+              {% set e = {'k': 'mode', 'i': 'mdi:shield-home-outline', 'c': 'indigo',
+                          'm': 'NVR ' ~ trigger.to_state.state | replace('_', ' ')} %}
+            {% elif id in ['cctv', 'safety'] and (trigger.event.data.message | string).startswith('Motion on') %}
+              {# plain camera motion fires every minute or two - too noisy for a timeline #}
+            {% elif id in ['cctv', 'safety'] %}
+              {% set m = trigger.event.data.message | string %}
+              {% set e = {'k': 'cctv', 'c': 'red' if id == 'safety' else 'amber',
+                          'i': 'mdi:smoke-detector-alert' if id == 'safety'
+                               else 'mdi:walk' if m.startswith('Person') else 'mdi:car' if m.startswith('Vehicle')
+                               else 'mdi:paw' if m.startswith('Animal') else 'mdi:motion-sensor',
+                          'm': m | truncate(140, true)} %}
+            {% elif id == 'start' %}
+              {% set e = {'k': 'system', 'i': 'mdi:home-assistant', 'c': 'blue', 'm': 'Home Assistant started'} %}
+            {% endif %}
+            {{ e }}
+    sensor:
+      - name: "Activity Feed"
+        unique_id: activity_feed
+        icon: mdi:timeline-text-outline
+        state: >-
+          {{ entry.m if entry.m is defined else this.state | default('') }}
+        attributes:
+          log: >-
+            {% set old = [] if trigger.id == 'reset' else this.attributes.log | default([]) %}
+            {% set first = old[0] if old | count > 0 else none %}
+            {% if entry.m is defined and first and first.m == entry.m
+                  and (now() - as_datetime(first.t)).total_seconds() < 900 %}
+              {# same thing again within 15 min: bump the count instead of a new row #}
+              {{ ([dict(first, t=now().isoformat(timespec='seconds'), n=(first.n | default(1)) + 1)] + old[1:])[:40] }}
+            {% elif entry.m is defined %}
+              {{ ([dict(entry, t=now().isoformat(timespec='seconds'))] + old)[:40] }}
+            {% else %}
+              {{ old }}
+            {% endif %}
+
+automation:
+  # -------------------------------------------------------------------------
+  # 3D printer (restored: these were dropped from notifications.yaml while
+  # the print_error preference toggle stayed on the admin page)
+  # -------------------------------------------------------------------------
+  - id: "alert_print_error"
+    alias: "Alert: 3D Print Error"
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.octoprint_printing_error
+        to: "on"
+    actions:
+      - action: script.notify_dispatch
+        data:
+          event: print_error
+          title: "3D printer"
+          message: >-
+            3D print error ({{ states('sensor.octoprint_current_state') }}) on
+            {{ states('sensor.octoprint_current_file') | replace('.gcode', '') }}
+
+  - id: "alert_print_finished"
+    alias: "Alert: 3D Print Finished"
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.octoprint_printing
+        from: "on"
+        to: "off"
+    conditions:
+      - condition: state
+        entity_id: binary_sensor.octoprint_printing_error
+        state: "off"
+    actions:
+      - variables:
+          mins: "{{ ((now() - trigger.from_state.last_changed).total_seconds() / 60) | round | int }}"
+      - action: script.notify_dispatch
+        data:
+          event: print_finished
+          title: "3D printer"
+          message: >-
+            3D print finished: {{ states('sensor.octoprint_current_file') | replace('.gcode', '') }}
+            ({{ (mins // 60) ~ 'h ' if mins >= 60 else '' }}{{ mins % 60 }}m)
+
+  # -------------------------------------------------------------------------
+  # Appliances: the TV toast (blueprint automations in notifications.yaml)
+  # only reaches people when the TV is on - this reaches phones/speaker too
+  # -------------------------------------------------------------------------
+  - id: "alert_appliance_finished"
+    alias: "Alert: Appliance Finished"
+    mode: queued
+    triggers:
+      - trigger: state
+        entity_id:
+          - binary_sensor.washing_machine_active
+          - binary_sensor.tumble_dryer_active
+          - binary_sensor.dishwasher_active
+        from: "on"
+        to: "off"
+    conditions:
+      # Ignore blips: a real cycle runs for at least 10 minutes
+      - condition: template
+        value_template: "{{ (now() - trigger.from_state.last_changed).total_seconds() > 600 }}"
+    actions:
+      - variables:
+          mins: "{{ ((now() - trigger.from_state.last_changed).total_seconds() / 60) | round | int }}"
+      - action: script.notify_dispatch
+        data:
+          event: appliance_finished
+          message: >-
+            {{ trigger.to_state.name | replace(' Active', '') }} finished
+            ({{ (mins // 60) ~ 'h ' if mins >= 60 else '' }}{{ mins % 60 }}m)
+
+  # -------------------------------------------------------------------------
+  # Infrastructure
+  # -------------------------------------------------------------------------
+  - alias: "Alert: Network Device Offline"
+    id: "alert_network_device_offline"
+    use_blueprint:
+      path: notifications/repeating_alert.yaml
+      input:
+        watched_entity: binary_sensor.network_device_offline
+        acknowledge_boolean: input_boolean.alert_ack_network_offline
+        event: network_offline
+        message: >-
+          UniFi device offline: {{ state_attr('binary_sensor.network_device_offline', 'devices')
+          or 'check the Network admin page' }}
+        done_message: "All UniFi network devices back online"
+        repeat_minutes: [30, 120]
+
+  - alias: "Alert: Electrical Fault"
+    id: "alert_electrical_fault"
+    use_blueprint:
+      path: notifications/repeating_alert.yaml
+      input:
+        watched_entity: binary_sensor.electrical_fault
+        acknowledge_boolean: input_boolean.alert_ack_electrical_fault
+        event: electrical_fault
+        message: >-
+          Electrical fault reported by Shelly: {{ state_attr('binary_sensor.electrical_fault', 'alerts')
+          or 'check the Shelly admin page' }}
+        done_message: "Electrical fault cleared"
+        repeat_minutes: [10, 60]
+
+  - alias: "Alert: Backups Stale"
+    id: "alert_backups_stale"
+    use_blueprint:
+      path: notifications/repeating_alert.yaml
+      input:
+        watched_entity: binary_sensor.backups_stale
+        acknowledge_boolean: input_boolean.alert_ack_backups_stale
+        event: backups_stale
+        message: >-
+          Backups are stale - last good backup
+          {{ relative_time(as_datetime(states('sensor.backup_last_successful_automatic_backup'))) }} ago
+        done_message: "Backups are up to date again"
+        repeat_minutes: [1440]
+
+  # New Hue low battery (count went up) - names the devices to replace
+  - id: "alert_battery_low"
+    alias: "Alert: Battery Low"
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: sensor.hue_low_batteries
+        not_from: [unknown, unavailable]
+        not_to: [unknown, unavailable]
+    conditions:
+      - condition: template
+        value_template: "{{ trigger.to_state is not none and trigger.from_state is not none and trigger.to_state.state | int(0) > trigger.from_state.state | int(0) }}"
+    actions:
+      - action: script.notify_dispatch
+        data:
+          event: battery_low
+          title: "Batteries"
+          message: >-
+            Battery low - replace soon: {{ state_attr('sensor.hue_low_batteries', 'devices') }}
+
+  # -------------------------------------------------------------------------
+  # Weather
+  # -------------------------------------------------------------------------
+  - id: "alert_frost_warning"
+    alias: "Alert: Frost Warning"
+    mode: single
+    triggers:
+      - trigger: time
+        at: "18:00:00"
+    actions:
+      - action: weather.get_forecasts
+        target:
+          entity_id: weather.portree
+        data:
+          type: hourly
+        response_variable: fc
+      - variables:
+          hours: "{{ fc['weather.portree'].forecast[:15] }}"
+          low: "{{ hours | map(attribute='temperature') | min if hours else 99 }}"
+          low_at: >-
+            {% set h = hours | selectattr('temperature', 'eq', low) | first %}
+            {{ as_timestamp(h.datetime) | timestamp_custom('%H:%M') if h else '' }}
+      - condition: template
+        value_template: "{{ low | float(99) <= 1 }}"
+      - action: script.notify_dispatch
+        data:
+          event: frost_warning
+          title: "Frost tonight"
+          message: >-
+            Frost likely tonight - down to {{ low }}°C around {{ low_at }}.
+            Outside now {{ states('sensor.outside_average_temperature') }}°C.
+
+  # -------------------------------------------------------------------------
+  # Presence
+  # -------------------------------------------------------------------------
+  # House Mode Set Away (core.yaml) runs the room "off" scenes; 10 minutes on,
+  # list anything still on and offer a one-tap "turn it all off".
+  - id: "alert_left_on_away"
+    alias: "Alert: Left On While Away"
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: input_select.house_mode
+        to: "Away"
+        for:
+          minutes: 10
+    variables:
+      lights: >-
+        {{ expand('light.house_lights') | selectattr('state', 'eq', 'on')
+           | map(attribute='name') | list }}
+      heating: "{{ state_attr('sensor.heaters_running', 'devices') or '' }}"
+    conditions:
+      - condition: template
+        value_template: "{{ lights | count > 0 }}"
+    actions:
+      - action: script.notify_dispatch
+        data:
+          event: left_on_away
+          title: "Nobody home"
+          message: >-
+            Still on: {{ lights | join(', ') }}{{ '. Heating: ' ~ heating if heating else '' }}
+          push_actions:
+            - action: AIRD_LIGHTS_OFF
+              title: "Turn lights off"
+              destructive: true
+
+  - id: "alert_left_on_away_action"
+    alias: "Alert: Left On While Away - Turn Lights Off"
+    mode: single
+    triggers:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: AIRD_LIGHTS_OFF
+    actions:
+      - action: light.turn_off
+        target:
+          entity_id: light.house_lights
+      - action: logbook.log
+        data:
+          name: "Notifications"
+          message: "House lights turned off from a phone notification"
+
+  # "While you were out": on arrival after 2h+ away, summarise the activity
+  # feed since the house went Away.
+  - id: "alert_away_summary"
+    alias: "Alert: While You Were Out"
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: input_select.house_mode
+        from: "Away"
+    conditions:
+      - condition: template
+        value_template: "{{ (now() - trigger.from_state.last_changed).total_seconds() > 7200 }}"
+    actions:
+      - variables:
+          since: "{{ trigger.from_state.last_changed.isoformat() }}"
+          feed: >-
+            {{ (state_attr('sensor.activity_feed', 'log') or [])
+               | selectattr('t', 'gt', since) | list }}
+          cctv: "{{ feed | selectattr('k', 'eq', 'cctv') | list }}"
+          people: "{{ cctv | selectattr('m', 'search', '^Person') | list | count }}"
+          vehicles: "{{ cctv | selectattr('m', 'search', '^Vehicle') | list | count }}"
+          animals: "{{ cctv | selectattr('m', 'search', '^Animal') | list | count }}"
+          problems: "{{ feed | selectattr('k', 'eq', 'problem') | selectattr('c', 'eq', 'red') | map(attribute='m') | list }}"
+          away_h: "{{ ((now() - trigger.from_state.last_changed).total_seconds() / 3600) | round(1) }}"
+      - action: script.notify_dispatch
+        data:
+          event: away_summary
+          title: "Welcome back"
+          message: >-
+            While you were out ({{ away_h }}h):
+            {{ people }} people, {{ vehicles }} vehicles, {{ animals }} animals on camera{{
+            '. Problems: ' ~ problems | unique | join(', ') if problems else '. No problems.' }}
+
+  # -------------------------------------------------------------------------
+  # Weekly digest - Sunday morning health check of the whole install
+  # -------------------------------------------------------------------------
+  - id: "alert_weekly_digest"
+    alias: "Alert: Weekly Digest"
+    mode: single
+    triggers:
+      - trigger: time
+        at: "10:00:00"
+    conditions:
+      - condition: time
+        weekday: sun
+    actions:
+      - variables:
+          kwh: "{{ states('sensor.weekly_energy_usage') | float(0) }}"
+          rooms: >-
+            {% set ns = namespace(r=[]) %}
+            {% for r in ['living_room', 'dining_room', 'kitchen', 'sunroom', 'hall', 'landing', 'master_bedroom',
+                         'double_bedroom', 'single_bedroom', 'bathroom', 'shower_room', 'utility_room'] %}
+              {% set h = states('sensor.' ~ r ~ '_average_humidity') | float(0) %}
+              {% if h >= 85 %}{% set ns.r = ns.r + [r | replace('_', ' ') | title ~ ' ' ~ h | round ~ '%'] %}{% endif %}
+            {% endfor %}
+            {{ ns.r }}
+          last_backup: "{{ states('sensor.backup_last_successful_automatic_backup') }}"
+          # Lights health (packages/lights_insight.yaml), counted since last Sunday
+          lh: "{{ state_attr('sensor.lights_health', 'rooms') or {} }}"
+          lights_section: >-
+            {% set rows = lh.items() | list %}
+            {% set tot = namespace(o=0, r=0, f=0, p=0, m=0, fr=[], pr=[]) %}
+            {% for r, c in rows %}
+              {% set tot.o = tot.o + c.offs %}{% set tot.r = tot.r + c.rescued %}
+              {% set tot.f = tot.f + c.false_offs %}{% set tot.p = tot.p + c.overrides %}
+              {% set tot.m = tot.m + c.manual_offs %}
+              {% if c.false_offs > 0 %}{% set tot.fr = tot.fr + [r | replace('_', ' ') | title ~ ' ' ~ c.false_offs] %}{% endif %}
+              {% if c.overrides > 0 %}{% set tot.pr = tot.pr + [r | replace('_', ' ') | title ~ ' ' ~ c.overrides] %}{% endif %}
+            {% endfor %}
+            {% set drops = state_attr('sensor.lights_health', 'drops') or {} %}
+            {% set flaky = drops.items() | sort(attribute='1', reverse=true) | list %}
+            {% set odd = state_attr('sensor.lights_health', 'odd_reports') | int(0) %}
+            💡 Lights: {{ tot.o }} auto-offs, {{ tot.r }} saved by the dim warning,
+            {{ tot.f }} went off on someone{{ ' (' ~ tot.fr | join(', ') ~ ')' if tot.fr else '' }},
+            {{ tot.p }} paused by changes outside HA{{ ' (' ~ tot.pr | join(', ') ~ ')' if tot.pr else '' }},
+            {{ tot.m }} switched off by hand.
+            {{ '📶 Dropped off the network: ' ~ (flaky[:5] | map('join', ' ×') | join(', ')) if flaky else '📶 No lights dropped off the network.' }}
+            {{ '🔌 Unreachable now: ' ~ state_attr('sensor.lights_unreachable', 'lights') | join(', ')
+               if states('sensor.lights_unreachable') | int(0) > 0 else '' }}
+            {{ '🤔 Odd reports: ' ~ odd ~ ' (details in the Oddity Log)' if odd else '🤔 No odd reports.' }}
+      - action: script.notify_dispatch
+        data:
+          event: weekly_digest
+          title: "Weekly home report"
+          message: >-
+            Weekly home report
+
+            ⚡ {{ kwh | round(1) }} kWh this week (~£{{ (kwh * 0.2604) | round(2) }}); yesterday
+            {{ state_attr('sensor.daily_energy_usage', 'last_period') | float(0) | round(1) }} kWh
+
+            🔋 Low batteries: {{ state_attr('sensor.hue_low_batteries', 'devices') or 'none' }}
+
+            📡 Offline: Hue {{ states('sensor.hue_devices_offline') }}, Shelly {{ states('sensor.shelly_devices_offline') }}{{
+            ', network: ' ~ state_attr('binary_sensor.network_device_offline', 'devices')
+              if is_state('binary_sensor.network_device_offline', 'on') else '' }}
+
+            ⬆️ Updates: {{ state_attr('sensor.updates_pending', 'devices') or 'all up to date' }}
+
+            💧 Damp rooms (85%+): {{ rooms | join(', ') if rooms else 'none' }}
+
+            💾 Last backup: {{ relative_time(as_datetime(last_backup)) ~ ' ago' if last_backup not in ['unknown', 'unavailable'] else 'unknown' }}
+
+            🎥 Camera detections today: {{ states('sensor.perimeter_activity_today') }}
+
+            {{ lights_section }}
+      # Start next week's lights counters from zero
+      - event: lights_health_reset

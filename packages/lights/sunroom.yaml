@@ -1,0 +1,231 @@
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      double: &double
+        package: "Lights"
+        room: "Sunroom"
+
+    input_number.sunroom_lights_*:
+      <<: *double
+    light.sunroom_*:
+      <<: *double
+    timer.sunroom_scene_*:
+      <<: *double
+    sensor.sunroom_*_warmth:
+      <<: *double
+    sensor.sunroom_*_brightness:
+      <<: *double
+
+  customize:
+    input_select.sunroom_scenes:
+      <<: *double
+    input_text.sunroom_last_action:
+      <<: *double
+    input_text.sunroom_previous_scene:
+      <<: *double
+    input_boolean.sunroom_scene_changing:
+      <<: *double
+    sensor.sunroom_active_light_count:
+      <<: *double
+
+light:
+  # Ceiling Lights
+  - platform: group
+    name: Sunroom Ceiling Lights
+    entities:
+      - light.sunroom_ceiling_ambience
+      - light.sunroom_ceiling_spot_1
+      - light.sunroom_ceiling_spot_2
+
+  # All lights
+  - platform: group
+    name: Sunroom Lights Master
+    entities:
+      - light.sunroom_ceiling_ambience
+      - light.sunroom_ceiling_spot_1
+      - light.sunroom_ceiling_spot_2
+
+input_select:
+  # All scenes
+  sunroom_scenes:
+    name: Sunroom Scenes
+    options:
+      - "Bright"
+      - "Relax"
+      - "Cosy"
+      - "Movie"
+      - "Off"
+    icon: mdi:palette-outline
+
+input_text:
+  # The last action performed
+  sunroom_last_action:
+    name: "Last Action: Sunroom"
+    icon: mdi:gesture-tap-button
+    initial: "None: Boot"
+
+  # Previous scene before current
+  sunroom_previous_scene:
+    name: Previous Sunroom Scene
+    icon: mdi:palette
+    initial: "Reboot"
+
+input_number:
+  # Lux level below which brings on the auto lights
+  sunroom_lights_on_threshold:
+    name: Sunroom Threshold On
+    min: 1
+    max: 70
+
+input_boolean:
+  # On when the lights were changed outside HA (e.g. Hue app); motion
+  # leaves the room alone until it clears (see Manual Override Detection)
+  sunroom_manual_override:
+    name: Sunroom Manual Override
+    icon: mdi:hand-back-right
+
+  # Boolean which is on during scene change
+  sunroom_scene_changing:
+    name: Sunroom Scene Change In Progress
+    icon: mdi:repeat-once
+    initial: false
+
+  # Boolean which is on when lights are in auto mode
+  sunroom_auto_mode_active:
+    name: Sunroom Auto Mode
+    icon: mdi:refresh-auto
+
+  # Auto mode active
+  sunroom_automatic_lights:
+    name: Sunroom Automatic Lights Mode
+    icon: mdi:refresh-auto
+
+timer:
+  # Running after the lights went (or nearly went) off on someone who was
+  # still here; the motion timeout is doubled while it runs
+  sunroom_motion_extended:
+    name: Sunroom Motion Timeout Extended
+    icon: mdi:timer-plus-outline
+    duration: "00:30:00"
+
+  # Timer set during each scene on script for transitions
+  sunroom_scene_changing:
+    name: Time For Scene Change
+    icon: mdi:timer-sand-empty
+
+  # Timer to prevent lights from waiting for light sensor to update
+  sunroom_auto_off_override:
+    name: Timer To Prevent Waiting For Lux Sensor
+    icon: mdi:timer-sand-empty
+
+template:
+  - sensor:
+      # Determine if any lights in any group is currently on
+      - default_entity_id: sensor.sunroom_active_light_count
+        name: "Sunroom Active Light Count"
+        unit_of_measurement: Lights
+        state: >-
+          {{ expand('light.sunroom_lights_master') | selectattr('state', 'ne', 'off') | list | count }}
+
+automation:
+  - alias: Sunroom Lights Manual Override Detection
+    use_blueprint:
+      path: lights/manual_override_detection.yaml
+      input:
+        lights:
+          - light.sunroom_ceiling_ambience
+          - light.sunroom_ceiling_spot_1
+          - light.sunroom_ceiling_spot_2
+        lights_master: light.sunroom_lights_master
+        manual_boolean: input_boolean.sunroom_manual_override
+        scene_changing_boolean: input_boolean.sunroom_scene_changing
+        scenes_select: input_select.sunroom_scenes
+        auto_mode_boolean: input_boolean.sunroom_auto_mode_active
+        last_action_text: input_text.sunroom_last_action
+
+  - alias: Sunroom Lights Auto On
+    use_blueprint:
+      path: lights/motion_auto_on.yaml
+      input:
+        previous_scene_text: input_text.sunroom_previous_scene
+        room_prefix: sunroom
+        extend_timer: timer.sunroom_motion_extended
+        manual_override_boolean: input_boolean.sunroom_manual_override
+        motion_sensor: binary_sensor.sunroom_motion
+        automatic_lights_boolean: input_boolean.sunroom_automatic_lights
+        scenes_select: input_select.sunroom_scenes
+        illuminance_sensor: sensor.hms_sunroom_illuminance
+        threshold_number: input_number.sunroom_lights_on_threshold
+        override_timer: timer.sunroom_auto_off_override
+        last_action_text: input_text.sunroom_last_action
+        auto_mode_boolean: input_boolean.sunroom_auto_mode_active
+        daytime_script: script.sunroom_scene_bright
+        nighttime_script: script.sunroom_scene_relax
+
+  - alias: Sunroom Lights Auto Off
+    use_blueprint:
+      path: lights/motion_auto_off.yaml
+      input:
+        extend_timer: timer.sunroom_motion_extended
+        warning_lights:
+          - light.sunroom_ceiling_ambience
+          - light.sunroom_ceiling_spot_1
+          - light.sunroom_ceiling_spot_2
+        motion_sensor: binary_sensor.sunroom_motion
+        motion_timeout_number: input_number.sunroom_motion_timeout
+        automatic_lights_boolean: input_boolean.sunroom_automatic_lights
+        auto_mode_boolean: input_boolean.sunroom_auto_mode_active
+        off_script: script.sunroom_scene_off
+        last_action_text: input_text.sunroom_last_action
+        override_timer: timer.sunroom_auto_off_override
+
+  - alias: Sunroom Lights Manual Off Detection
+    use_blueprint:
+      path: lights/manual_off_detection.yaml
+      input:
+        manual_override_boolean: input_boolean.sunroom_manual_override
+        lights_master: light.sunroom_lights_master
+        scenes_select: input_select.sunroom_scenes
+        off_script: script.sunroom_scene_off
+        last_action_text: input_text.sunroom_last_action
+        auto_mode_boolean: input_boolean.sunroom_auto_mode_active
+
+  - alias: Sunroom Scene Select Changed
+    use_blueprint:
+      path: lights/scene_select_changed.yaml
+      input:
+        scenes_select: input_select.sunroom_scenes
+        scene_changing_boolean: input_boolean.sunroom_scene_changing
+        room_prefix: sunroom
+
+  - alias: Sunroom Light Toggle
+    use_blueprint:
+      path: lights/physical_toggle.yaml
+      input:
+        trigger:
+          - trigger: event
+            event_type: shelly.click
+            event_data:
+              click_type: single_push
+              device: shellyplus1pm-a8032ab9c2f4
+              channel: 1
+        changing_timer: timer.sunroom_scene_changing
+        scenes_select: input_select.sunroom_scenes
+        on_script: script.sunroom_scene_bright
+        off_script: script.sunroom_scene_quickly_off
+        auto_mode_boolean: input_boolean.sunroom_auto_mode_active
+
+  - alias: Sunroom Scene Scroll
+    use_blueprint:
+      path: lights/scene_scroll.yaml
+      input:
+        trigger:
+          - trigger: event
+            event_type: shelly.click
+            event_data:
+              click_type: long_push
+              device: shellyplus1pm-a8032ab9c2f4
+              channel: 1
+        changing_timer: timer.sunroom_scene_changing
+        scroll_script: script.sunroom_scene_scroll
+        auto_mode_boolean: input_boolean.sunroom_auto_mode_active

@@ -1,0 +1,614 @@
+# Network admin: UniFi gateway, access points, switches, Wi-Fi networks,
+# PoE cameras and the Protect NVR. Device tiles use the unifi_device
+# template (tap: details, hold: restart with confirmation). The offline
+# alert behind this page is binary_sensor.network_device_offline in
+# packages/alerts.yaml.
+path: network
+title: Network
+icon: mdi:lan
+type: sections
+max_columns: 4
+sections:
+  # =====================================================================
+  # Column 1: internet and gateway
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: heading
+        heading: Internet
+        icon: mdi:web
+        badges:
+          - type: entity
+            entity: binary_sensor.network_device_offline
+            show_state: true
+            show_icon: true
+            color: red
+            visibility:
+              - condition: state
+                entity: binary_sensor.network_device_offline
+                state: "on"
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.aird_network_cloudflare_wan_latency
+        name: WAN latency
+        icon: mdi:timer-outline
+        custom_fields:
+          value: |
+            [[[
+              const v = parseFloat(entity?.state);
+              return isNaN(v) ? '—' : `${Math.round(v)}<span style="font-size:0.65em;font-weight:500;margin-left:1px">ms</span>`;
+            ]]]
+        styles:
+          icon:
+            - color: |
+                [[[ const v = parseFloat(entity?.state);
+                    return isNaN(v) ? 'var(--disabled-text-color)' : v > 150 ? 'var(--red-color)' : v > 80 ? 'var(--amber-color)' : 'var(--green-color)'; ]]]
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.speedtest_download
+        name: Speed test
+        icon: mdi:speedometer
+        triggers_update:
+          - sensor.speedtest_upload
+        custom_fields:
+          value: |
+            [[[
+              const d = parseFloat(entity?.state), up = parseFloat(states['sensor.speedtest_upload']?.state);
+              const u = x => `<span style="font-size:0.65em;font-weight:500;margin-left:1px">${x}</span>`;
+              return isNaN(d) ? '—' : `${Math.round(d)}${u('↓')} ${isNaN(up) ? '' : Math.round(up) + u('↑')}`;
+            ]]]
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:mini-graph-card
+        grid_options:
+          columns: full
+          rows: auto
+        name: Latency · 24h
+        icon: mdi:chart-line
+        hours_to_show: 24
+        points_per_hour: 4
+        line_width: 2
+        update_interval: 300
+        entities:
+          - entity: sensor.aird_network_cloudflare_wan_latency
+            name: Cloudflare
+            color: var(--blue-color)
+        show:
+          fill: fade
+          legend: false
+          labels: false
+      - type: custom:mini-graph-card
+        grid_options:
+          columns: full
+          rows: auto
+        name: Speed tests · 7 days
+        icon: mdi:speedometer
+        hours_to_show: 168
+        points_per_hour: 0.5
+        line_width: 2
+        update_interval: 900
+        entities:
+          - entity: sensor.speedtest_download
+            name: Down
+            color: var(--green-color)
+          - entity: sensor.speedtest_upload
+            name: Up
+            color: var(--amber-color)
+        show:
+          legend: true
+          labels: false
+
+      - type: heading
+        heading: Gateway
+        icon: mdi:router-network
+      - type: custom:button-card
+        template: unifi_device
+        entity: sensor.aird_network_state
+        name: Aird Network
+        icon: mdi:router-network
+        grid_options:
+          columns: full
+          rows: auto
+        triggers_update:
+          - sensor.aird_network_clients
+          - sensor.aird_network_uptime_2
+          - sensor.aird_network_cpu_temperature
+        variables:
+          clients: sensor.aird_network_clients
+          uptime: sensor.aird_network_uptime_2
+          extra: sensor.aird_network_cpu_temperature
+          extra_icon: mdi:thermometer
+          restart: button.aird_network_restart
+      - type: grid
+        grid_options:
+          columns: full
+          rows: auto
+        columns: 2
+        square: false
+        cards:
+          - type: custom:button-card
+            template: stat_tile
+            entity: sensor.aird_network_cpu_utilisation
+            name: CPU
+            icon: mdi:cpu-64-bit
+          - type: custom:button-card
+            template: stat_tile
+            entity: sensor.aird_network_memory_utilisation
+            name: Memory
+            icon: mdi:memory
+            variables:
+              warn: 80
+              crit: 90
+
+  # =====================================================================
+  # Column 2: access points
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: heading
+        heading: Access points
+        icon: mdi:access-point
+        badges:
+          - type: entity
+            entity: sensor.jelbynet
+            show_state: true
+            show_icon: true
+            icon: mdi:wifi
+      # Where the Wi-Fi clients are: one bar per AP
+      - type: custom:button-card
+        grid_options:
+          columns: full
+          rows: auto
+        show_icon: false
+        show_state: false
+        name: Clients by access point
+        tap_action:
+          action: none
+        triggers_update:
+          - sensor.ap_garage_clients
+          - sensor.ap_front_porch_clients
+          - sensor.ap_back_door_clients
+          - sensor.ap_back_porch_clients
+          - sensor.ap_driveway_clients
+          - sensor.ap_patio_clients
+        variables:
+          aps:
+            - [ap_garage, Workshop]
+            - [ap_back_porch, Back Porch]
+            - [ap_front_porch, Front Porch]
+            - [ap_driveway, Driveway]
+            - [ap_patio, Patio]
+            - [ap_back_door, Back Door]
+        custom_fields:
+          bars: |
+            [[[
+              const rows = variables.aps.map(([k, n]) => ({ n, v: parseInt(states[`sensor.${k}_clients`]?.state) || 0 }));
+              const max = Math.max(1, ...rows.map(r => r.v));
+              const total = rows.reduce((t, r) => t + r.v, 0);
+              return `<div class="tot">${total} wireless clients</div>` + rows.sort((a, b) => b.v - a.v).map(r =>
+                `<div class="b"><span class="n">${r.n}</span><span class="tr"><span style="width:${(r.v / max * 100).toFixed(0)}%"></span></span><span class="v">${r.v}</span></div>`).join('');
+            ]]]
+        styles:
+          card:
+            - padding: 14px 16px 10px
+            - cursor: default
+          grid:
+            - grid-template-areas: '"n" "bars"'
+          name:
+            - justify-self: start
+            - font-size: 0.95rem
+            - font-weight: 700
+          custom_fields:
+            bars:
+              - justify-self: stretch
+        extra_styles: |
+          #bars .tot { text-align: left; font-size: 0.78rem; color: var(--secondary-text-color); margin: 2px 0 8px; }
+          #bars .b { display: grid; grid-template-columns: 90px 1fr 28px; align-items: center; gap: 8px; padding: 3px 0; font-size: 0.82rem; }
+          #bars .n { text-align: left; }
+          #bars .tr { height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); overflow: hidden; }
+          #bars .tr span { display: block; height: 100%; border-radius: 3px; background: var(--blue-color); }
+          #bars .v { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+      - type: custom:button-card
+        template: unifi_device
+        entity: sensor.garage_state
+        name: Workshop
+        icon: mdi:access-point
+        grid_options:
+          columns: 6
+          rows: auto
+        triggers_update: [sensor.ap_garage_clients, sensor.garage_uptime]
+        variables:
+          clients: sensor.ap_garage_clients
+          uptime: sensor.garage_uptime
+          restart: button.ap_garage_restart
+      - type: custom:button-card
+        template: unifi_device
+        entity: sensor.ap_back_porch_state
+        name: Back Porch
+        icon: mdi:access-point
+        grid_options:
+          columns: 6
+          rows: auto
+        triggers_update: [sensor.ap_back_porch_clients, sensor.ap_back_porch_uptime]
+        variables:
+          clients: sensor.ap_back_porch_clients
+          uptime: sensor.ap_back_porch_uptime
+          restart: button.ap_back_porch_restart
+      - type: custom:button-card
+        template: unifi_device
+        entity: sensor.ap_front_porch_state
+        name: Front Porch
+        icon: mdi:access-point
+        grid_options:
+          columns: 6
+          rows: auto
+        triggers_update: [sensor.ap_front_porch_clients, sensor.ap_front_porch_uptime]
+        variables:
+          clients: sensor.ap_front_porch_clients
+          uptime: sensor.ap_front_porch_uptime
+          restart: button.ap_front_porch_restart
+      - type: custom:button-card
+        template: unifi_device
+        entity: sensor.ap_driveway_state
+        name: Driveway
+        icon: mdi:access-point
+        grid_options:
+          columns: 6
+          rows: auto
+        triggers_update: [sensor.ap_driveway_clients, sensor.ap_driveway_uptime]
+        variables:
+          clients: sensor.ap_driveway_clients
+          uptime: sensor.ap_driveway_uptime
+          restart: button.ap_driveway_restart
+      - type: custom:button-card
+        template: unifi_device
+        entity: sensor.ap_patio_state
+        name: Patio
+        icon: mdi:access-point
+        grid_options:
+          columns: 6
+          rows: auto
+        triggers_update: [sensor.ap_patio_clients, sensor.ap_patio_uptime]
+        variables:
+          clients: sensor.ap_patio_clients
+          uptime: sensor.ap_patio_uptime
+          restart: button.ap_patio_restart
+      - type: custom:button-card
+        template: unifi_device
+        entity: sensor.ap_back_door_state
+        name: Back Door
+        icon: mdi:access-point
+        grid_options:
+          columns: 6
+          rows: auto
+        triggers_update: [sensor.ap_back_door_clients, sensor.ap_back_door_uptime]
+        variables:
+          clients: sensor.ap_back_door_clients
+          uptime: sensor.ap_back_door_uptime
+          restart: button.ap_back_door_restart
+      - type: markdown
+        grid_options:
+          columns: full
+          rows: auto
+        content: <sub>Tap a tile for details · hold to restart (asks first)</sub>
+
+  # =====================================================================
+  # Column 3: switches and PoE cameras
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: heading
+        heading: Switches
+        icon: mdi:switch
+      - type: custom:button-card
+        template: unifi_device
+        entity: sensor.front_porch_switch_state
+        name: Front Porch
+        icon: mdi:switch
+        grid_options:
+          columns: 6
+          rows: auto
+        triggers_update: [sensor.front_porch_switch_uptime, sensor.front_porch_switch_switch_temperature_watchdog]
+        variables:
+          uptime: sensor.front_porch_switch_uptime
+          extra: sensor.front_porch_switch_switch_temperature_watchdog
+          extra_icon: mdi:thermometer
+          restart: button.front_porch_switch_restart
+      - type: custom:button-card
+        template: unifi_device
+        entity: sensor.back_porch_state
+        name: Back Porch
+        icon: mdi:switch
+        grid_options:
+          columns: 6
+          rows: auto
+        triggers_update: [sensor.back_porch_uptime]
+        variables:
+          uptime: sensor.back_porch_uptime
+          restart: button.back_porch_restart
+      - type: custom:button-card
+        template: unifi_device
+        entity: sensor.garage_poe_state
+        name: Garage PoE
+        icon: mdi:switch
+        grid_options:
+          columns: 6
+          rows: auto
+        triggers_update: [sensor.garage_poe_uptime]
+        variables:
+          uptime: sensor.garage_poe_uptime
+          restart: button.garage_poe_restart
+      - type: custom:button-card
+        template: unifi_device
+        entity: sensor.greenhouse_switch_state
+        name: Greenhouse Flex
+        icon: mdi:switch
+        grid_options:
+          columns: 6
+          rows: auto
+        triggers_update: [sensor.greenhouse_switch_uptime]
+        variables:
+          uptime: sensor.greenhouse_switch_uptime
+          restart: button.greenhouse_switch_restart
+
+      - type: heading
+        heading: PoE cameras
+        icon: mdi:cctv
+        badges:
+          - type: entity
+            entity: binary_sensor.any_cctv_camera_offline
+            show_state: true
+            show_icon: true
+            color: red
+            visibility:
+              - condition: state
+                entity: binary_sensor.any_cctv_camera_offline
+                state: "on"
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.back_porch_car_port_cam_poe_power
+        name: Car port
+        icon: mdi:cctv
+        grid_options:
+          columns: 4
+          rows: auto
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.back_porch_patio_cam_poe_power
+        name: Patio
+        icon: mdi:cctv
+        grid_options:
+          columns: 4
+          rows: auto
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.front_porch_switch_driveway_camera_poe_power
+        name: Driveway
+        icon: mdi:cctv
+        grid_options:
+          columns: 4
+          rows: auto
+      # Power-cycle a frozen camera. Only ports whose label matches the
+      # camera are listed (the driveway camera's port labels disagree).
+      - type: grid
+        grid_options:
+          columns: full
+          rows: auto
+        columns: 3
+        square: false
+        cards:
+          - type: custom:button-card
+            template: room_pill
+            entity: button.back_porch_car_port_cam_power_cycle
+            name: Reboot car port
+            icon: mdi:restart
+            variables:
+              color: var(--red-color)
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.back_porch_car_port_cam_power_cycle
+              confirmation:
+                text: Power-cycle the car port camera's PoE port?
+          - type: custom:button-card
+            template: room_pill
+            entity: button.back_porch_patio_cam_power_cycle
+            name: Reboot patio
+            icon: mdi:restart
+            variables:
+              color: var(--red-color)
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.back_porch_patio_cam_power_cycle
+              confirmation:
+                text: Power-cycle the patio camera's PoE port?
+          - type: custom:button-card
+            template: room_pill
+            entity: button.garage_poe_port_3_power_cycle
+            name: Reboot house view
+            icon: mdi:restart
+            variables:
+              color: var(--red-color)
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.garage_poe_port_3_power_cycle
+              confirmation:
+                text: Power-cycle the house view camera's PoE port?
+
+  # =====================================================================
+  # Column 4: Wi-Fi networks and the NVR
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: heading
+        heading: Wi-Fi networks
+        icon: mdi:wifi
+      # Clients per SSID; tap the toggle row below to enable/disable an SSID
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.jelbynet
+        name: jelbynet
+        icon: mdi:wifi
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.iot
+        name: IoT
+        icon: mdi:chip
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.espnet
+        name: espnet
+        icon: mdi:memory
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.airdguests
+        name: Guests
+        icon: mdi:account-group
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: grid
+        grid_options:
+          columns: full
+          rows: auto
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            template: room_toggle
+            entity: switch.jelbynet
+            name: jelbynet
+            icon: mdi:wifi
+            variables:
+              color: var(--green-color)
+            confirmation:
+              text: Turn the main Wi-Fi network on/off? Devices on it will drop.
+          - type: custom:button-card
+            template: room_toggle
+            entity: switch.iot
+            name: IoT
+            icon: mdi:chip
+            variables:
+              color: var(--green-color)
+            confirmation:
+              text: Turn the IoT Wi-Fi on/off? Smart devices on it will drop.
+          - type: custom:button-card
+            template: room_toggle
+            entity: switch.espnet
+            name: espnet
+            icon: mdi:memory
+            variables:
+              color: var(--green-color)
+            confirmation:
+              text: Turn espnet on/off? ESPHome devices on it will drop.
+          - type: custom:button-card
+            template: room_toggle
+            entity: switch.airdguests
+            name: Guests
+            icon: mdi:account-group
+            variables:
+              color: var(--green-color)
+      - type: picture-entity
+        grid_options:
+          columns: 6
+          rows: auto
+        entity: image.airdguests_qr_code
+        name: Guest Wi-Fi
+        show_state: false
+        aspect_ratio: "1"
+      - type: markdown
+        grid_options:
+          columns: 6
+          rows: auto
+        content: >-
+          **Guest Wi-Fi**
+
+
+          Guests scan the code to join **airdguests**. It shows here only, so
+          the password never needs reading out.
+
+      - type: heading
+        heading: Protect NVR
+        icon: mdi:nas
+      - type: custom:button-card
+        template: stat_tile
+        entity: sensor.aird_nvr_storage_utilisation
+        name: Storage
+        icon: mdi:harddisk
+        variables:
+          warn: 97
+          crit: 99
+        grid_options:
+          columns: 4
+          rows: auto
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.aird_nvr_recording_capacity
+        name: Footage kept
+        icon: mdi:history
+        custom_fields:
+          value: |
+            [[[
+              const s = parseFloat(entity?.state);
+              return isNaN(s) ? '—' : `${Math.round(s / 86400)}<span style="font-size:0.65em;font-weight:500;margin-left:1px">days</span>`;
+            ]]]
+        grid_options:
+          columns: 4
+          rows: auto
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.aird_nvr_cpu_temperature_watchdog
+        name: CPU temp
+        icon: mdi:thermometer
+        grid_options:
+          columns: 4
+          rows: auto
+      - type: grid
+        grid_options:
+          columns: full
+          rows: auto
+        columns: 3
+        square: false
+        cards:
+          - type: custom:button-card
+            template: room_toggle
+            entity: alarm_control_panel.aird_nvr_alarm_manager
+            name: Away arm
+            icon: mdi:shield-home
+            variables:
+              color: var(--red-color)
+              active: "[[[ return entity?.state === 'armed_away'; ]]]"
+            tap_action:
+              action: more-info
+          - type: custom:button-card
+            template: room_toggle
+            entity: switch.aird_nvr_analytics_enabled
+            name: Analytics
+            icon: mdi:chart-box-outline
+            variables:
+              color: var(--blue-color)
+          - type: custom:button-card
+            template: room_toggle
+            entity: switch.aird_nvr_insights_enabled
+            name: Insights
+            icon: mdi:lightbulb-on-outline
+            variables:
+              color: var(--blue-color)

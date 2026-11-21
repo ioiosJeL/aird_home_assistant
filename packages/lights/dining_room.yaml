@@ -1,0 +1,313 @@
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      double: &double
+        package: "Lights"
+        room: "Dining Room"
+
+    input_number.dining_room_lights_*:
+      <<: *double
+    light.dining_room_*:
+      <<: *double
+    timer.dining_room_scene_*:
+      <<: *double
+    sensor.dining_room_*_warmth:
+      <<: *double
+    sensor.dining_room_*_brightness:
+      <<: *double
+
+  customize:
+    input_select.dining_room_scenes:
+      <<: *double
+    input_text.dining_room_last_action:
+      <<: *double
+    input_text.dining_room_previous_scene:
+      <<: *double
+    input_boolean.dining_room_scene_changing:
+      <<: *double
+    sensor.dining_room_active_light_count:
+      <<: *double
+
+input_select:
+  # All scenes
+  dining_room_scenes:
+    name: Dining Room Scenes
+    options:
+      - "Bright"
+      - "Relax"
+      - "Cosy"
+      - "Music"
+      - "Movie"
+      - "Off"
+    icon: mdi:palette-outline
+
+input_text:
+  # The last action performed
+  dining_room_last_action:
+    name: "Last Action: Dining Room"
+    icon: mdi:gesture-tap-button
+    initial: "None: Boot"
+
+  # Previous scene before current
+  dining_room_previous_scene:
+    name: Previous Dining Room Scene
+    icon: mdi:palette
+    initial: "Reboot"
+
+input_number:
+  # Lux level below which brings on the auto lights
+  dining_room_lights_on_threshold:
+    name: Dining Room Threshold On
+    min: 1
+    max: 70
+
+light:
+  - platform: group
+    name: Dining Room Ceiling Lights
+    entities:
+      - light.dining_room_ceiling_window
+      - light.dining_room_ceiling_door
+      - light.dining_room_ceiling_piano
+
+  - platform: group
+    name: Dining Room Lamps
+    entities:
+      - light.dining_room_lamp_left
+      - light.dining_room_lamp_right
+
+  - platform: group
+    name: Dining Room Lights Master
+    entities:
+      - light.dining_room_ceiling_window
+      - light.dining_room_ceiling_door
+      - light.dining_room_ceiling_piano
+      - light.dining_room_lamp_left
+      - light.dining_room_lamp_right
+
+input_boolean:
+  # On when the lights were changed outside HA (e.g. Hue app); motion
+  # leaves the room alone until it clears (see Manual Override Detection)
+  dining_room_manual_override:
+    name: Dining Room Manual Override
+    icon: mdi:hand-back-right
+
+  # Boolean which is on during scene change
+  dining_room_scene_changing:
+    name: Dining Room Scene Change In Progress
+    icon: mdi:repeat-once
+    initial: false
+
+  # Boolean which is on when lights are in auto mode
+  dining_room_auto_mode_active:
+    name: Dining Room Auto Mode
+    icon: mdi:refresh-auto
+
+  # Auto mode active
+  dining_room_automatic_lights:
+    name: Dining Room Automatic Lights Mode
+    icon: mdi:refresh-auto
+
+timer:
+  # Running after the lights went (or nearly went) off on someone who was
+  # still here; the motion timeout is doubled while it runs
+  dining_room_motion_extended:
+    name: Dining Room Motion Timeout Extended
+    icon: mdi:timer-plus-outline
+    duration: "00:30:00"
+
+  # Timer set during each scene on script for transitions
+  dining_room_scene_changing:
+    name: Time For Scene Change
+    icon: mdi:timer-sand-empty
+
+  # Timer to prevent lights from waiting for light sensor to update
+  dining_room_auto_off_override:
+    name: Timer To Prevent Waiting For Lux Sensor
+    icon: mdi:timer-sand-empty
+
+template:
+  - sensor:
+      # Determine if any lights in any group is currently on
+      - default_entity_id: sensor.dining_room_active_light_count
+        name: "Dining Room Active Light Count"
+        unit_of_measurement: Lights
+        state: >-
+          {{ expand('light.dining_room_lights_master') | selectattr('state', 'ne', 'off') | list | count }}
+
+      # Count all lights
+      - default_entity_id: sensor.dining_room_total_light_count
+        name: "Dining Room Total Light Count"
+        state: >-
+          {{ expand('light.dining_room_lights_master') | list | count }}
+
+automation:
+  - alias: Dining Room Lights Manual Override Detection
+    use_blueprint:
+      path: lights/manual_override_detection.yaml
+      input:
+        lights:
+          - light.dining_room_ceiling_window
+          - light.dining_room_ceiling_door
+          - light.dining_room_ceiling_piano
+          - light.dining_room_lamp_left
+          - light.dining_room_lamp_right
+        lights_master: light.dining_room_lights_master
+        manual_boolean: input_boolean.dining_room_manual_override
+        scene_changing_boolean: input_boolean.dining_room_scene_changing
+        scenes_select: input_select.dining_room_scenes
+        auto_mode_boolean: input_boolean.dining_room_auto_mode_active
+        last_action_text: input_text.dining_room_last_action
+
+  - alias: Dining Room Lights Auto On
+    use_blueprint:
+      path: lights/motion_auto_on.yaml
+      input:
+        # After House Shutdown, motion here wakes the house
+        wakes_house: true
+        previous_scene_text: input_text.dining_room_previous_scene
+        room_prefix: dining_room
+        extend_timer: timer.dining_room_motion_extended
+        # Movie also switches the kitchen/triptych off - never re-run it unasked
+        restorable_scenes: [Bright, Relax, Cosy, Music]
+        manual_override_boolean: input_boolean.dining_room_manual_override
+        motion_sensor: binary_sensor.dining_room_motion
+        automatic_lights_boolean: input_boolean.dining_room_automatic_lights
+        scenes_select: input_select.dining_room_scenes
+        illuminance_sensor: sensor.hms_dining_room_illuminance
+        threshold_number: input_number.dining_room_lights_on_threshold
+        override_timer: timer.dining_room_auto_off_override
+        last_action_text: input_text.dining_room_last_action
+        auto_mode_boolean: input_boolean.dining_room_auto_mode_active
+        daytime_script: script.dining_room_scene_bright
+        nighttime_script: script.dining_room_scene_relax
+
+  - alias: Dining Room Lights Auto Off
+    use_blueprint:
+      path: lights/motion_auto_off.yaml
+      input:
+        # Early off (17 Nov 2026): once it's quiet here and someone moves in
+        # another room, switch off after 10 min instead of the full timeout
+        early_minutes: 10
+        elsewhere_motion:
+          - binary_sensor.bathroom_motion
+          - binary_sensor.double_bedroom_motion
+          - binary_sensor.hall_motion
+          - binary_sensor.kitchen_motion
+          - binary_sensor.landing_motion
+          - binary_sensor.living_room_motion
+          - binary_sensor.master_bedroom_motion
+          - binary_sensor.shower_room_motion
+          - binary_sensor.single_bedroom_motion
+          - binary_sensor.sunroom_motion
+          - binary_sensor.utility_room_motion
+        extend_timer: timer.dining_room_motion_extended
+        warning_lights:
+          - light.dining_room_ceiling_window
+          - light.dining_room_ceiling_door
+          - light.dining_room_ceiling_piano
+          - light.dining_room_lamp_left
+          - light.dining_room_lamp_right
+        motion_sensor: binary_sensor.dining_room_motion
+        motion_timeout_number: input_number.dining_room_motion_timeout
+        automatic_lights_boolean: input_boolean.dining_room_automatic_lights
+        auto_mode_boolean: input_boolean.dining_room_auto_mode_active
+        off_script: script.dining_room_scene_off
+        last_action_text: input_text.dining_room_last_action
+        override_timer: timer.dining_room_auto_off_override
+        extra_condition: "{{ states('media_player.dining_room_tv') == 'off' }}"
+
+  - alias: Dining Room Lights Manual Off Detection
+    use_blueprint:
+      path: lights/manual_off_detection.yaml
+      input:
+        manual_override_boolean: input_boolean.dining_room_manual_override
+        lights_master: light.dining_room_lights_master
+        scenes_select: input_select.dining_room_scenes
+        off_script: script.dining_room_scene_off
+        last_action_text: input_text.dining_room_last_action
+        auto_mode_boolean: input_boolean.dining_room_auto_mode_active
+
+  - alias: Dining Room Scene Select Changed
+    use_blueprint:
+      path: lights/scene_select_changed.yaml
+      input:
+        scenes_select: input_select.dining_room_scenes
+        scene_changing_boolean: input_boolean.dining_room_scene_changing
+        room_prefix: dining_room
+
+  - alias: Dining Room Light Toggle
+    use_blueprint:
+      path: lights/physical_toggle.yaml
+      input:
+        trigger:
+          - trigger: event
+            event_type: shelly.click
+            event_data:
+              click_type: single
+              device: shellyswitch25-10A5DD
+              channel: 1
+        changing_timer: timer.dining_room_scene_changing
+        scenes_select: input_select.dining_room_scenes
+        on_script: script.dining_room_scene_bright
+        off_script: script.dining_room_scene_quickly_off
+        auto_mode_boolean: input_boolean.dining_room_auto_mode_active
+
+  - alias: Dining Room Scene Scroll
+    use_blueprint:
+      path: lights/scene_scroll.yaml
+      input:
+        trigger:
+          - trigger: event
+            event_type: shelly.click
+            event_data:
+              click_type: long
+              device: shellyswitch25-10A5DD
+              channel: 1
+        changing_timer: timer.dining_room_scene_changing
+        scroll_script: script.dining_room_scene_scroll
+        auto_mode_boolean: input_boolean.dining_room_auto_mode_active
+
+  - alias: Dining Room Secret Button Short Press
+    description: ""
+    mode: single
+    triggers:
+      - trigger: event
+        event_type: hue_event
+        event_data:
+          id: hsb_dining_room_button
+          type: short_release
+          subtype: 1
+    actions:
+      - choose:
+          - conditions: "{{ not is_state('input_select.dining_room_scenes', 'Movie') }}"
+            sequence:
+              - action: script.dining_room_scene_movie
+              - action: webostv.button
+                data:
+                  entity_id: media_player.dining_room_tv
+                  button: PLAY
+
+          - conditions: "{{ is_state('input_select.dining_room_scenes', 'Movie') }}"
+            sequence:
+              - action: webostv.button
+                data:
+                  entity_id: media_player.dining_room_tv
+                  button: PAUSE
+              - action: script.dining_room_scene_relax
+
+  - alias: Dining Room Secret Button Long Press
+    description: ""
+    mode: single
+    triggers:
+      - trigger: event
+        event_type: hue_event
+        event_data:
+          id: hsb_dining_room_button
+          type: long_release
+          subtype: 1
+    actions:
+      - action: webostv.button
+        data:
+          entity_id: media_player.dining_room_tv
+          button: PAUSE
+      - action: script.utility_room_welcome

@@ -1,0 +1,182 @@
+script:
+  living_room_scene_scroll:
+    alias: Living Room Scene Progression
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: "input_select.select_{{ 'next' if is_state('input_boolean.status_nighttime', 'on') else 'previous' }}"
+        target:
+          entity_id: input_select.living_room_scenes
+        data:
+          cycle: true
+      - action: script.turn_on
+        target:
+          entity_id: "script.living_room_scene_{{ states('input_select.living_room_scenes') | lower  }}"
+
+  living_room_scene_change:
+    alias: Living Room Scene Change
+    description: "Scene change functions"
+    fields:
+      scene_name:
+        description: "The title of the scene"
+        example: "Automatic"
+      scene_duration:
+        description: "The duration of scene change"
+        example: "5"
+    sequence:
+      - action: input_boolean.turn_on
+        data:
+          entity_id: input_boolean.living_room_scene_changing
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.living_room_previous_scene
+          value: "{{ states('input_select.living_room_scenes') | string }}"
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.living_room_last_action
+          value: "Scene Selected: {{ scene_name }}"
+
+      - action: input_select.select_option
+        data:
+          entity_id: input_select.living_room_scenes
+          option: "{{ scene_name }}"
+
+      - action: timer.start
+        data:
+          entity_id: timer.living_room_scene_changing
+          duration: "{{ scene_duration | int }}"
+
+      - wait_template: "{{ is_state('timer.living_room_scene_changing', 'idle') }}"
+
+      - action: input_boolean.turn_off
+        data:
+          entity_id: input_boolean.living_room_scene_changing
+
+  living_room_scene_bright:
+    alias: Living Room Bright Scene
+    description: "Scene functions & light settings"
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.living_room_scene_change
+        data:
+          variables:
+            scene_name: "Bright"
+            scene_duration: 1
+      - action: hue.activate_scene
+        entity_id: scene.living_room_blossom
+        data:
+          transition: 1
+      - action: light.turn_on
+        target:
+          entity_id: light.living_room_dimmer
+        data:
+          brightness: 255
+
+  living_room_scene_relax:
+    alias: Living Room Relax Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.living_room_scene_change
+        data:
+          variables:
+            scene_name: "Relax"
+            scene_duration: 4
+      - action: hue.activate_scene
+        entity_id: scene.living_room_tropical_twilight
+        data:
+          transition: 4
+      - action: light.turn_on
+        target:
+          entity_id: light.living_room_dimmer
+        data:
+          brightness: 255
+
+  living_room_scene_cosy:
+    alias: Living Room Cosy Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.living_room_scene_change
+        data:
+          variables:
+            scene_name: "Cosy"
+            scene_duration: 2
+      - action: hue.activate_scene
+        entity_id: scene.living_room_moonlight
+        data:
+          transition: 2
+      - action: light.turn_off
+        target:
+          entity_id: light.living_room_dimmer
+
+  living_room_scene_movie:
+    alias: Living Room Movie Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.living_room_scene_change
+        data:
+          variables:
+            scene_name: "Movie"
+            scene_duration: 5
+      - action: light.turn_on
+        data:
+          entity_id: light.living_room_lamps
+          effect: none
+          brightness: 255
+          transition: 5
+      - action: light.turn_off
+        target:
+          entity_id: light.living_room_dimmer
+
+  living_room_scene_off:
+    alias: Living Room Off Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.living_room_scene_change
+        data:
+          variables:
+            scene_name: "Off"
+            scene_duration: 5
+      - action: light.turn_on
+        data:
+          entity_id: light.living_room_lamps
+          brightness: 0
+          transition: 5
+      - action: light.turn_off
+        target:
+          entity_id: light.living_room_dimmer
+
+  living_room_scene_quickly_off:
+    alias: Living Room Off Quickly
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.living_room_scene_change
+        data:
+          variables:
+            scene_name: "Off"
+            scene_duration: 2
+      - action: light.turn_on
+        data:
+          entity_id: light.living_room_lamps
+          brightness: 0
+          transition: 1
+      - action: light.turn_off
+        target:
+          entity_id: light.living_room_dimmer

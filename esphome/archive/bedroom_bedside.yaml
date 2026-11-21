@@ -1,0 +1,88 @@
+substitutions:
+  deviceName: bedroom_bedside
+  deviceUpper: Bedroom Bedside
+
+  
+  # SWITCH MAPPING. SELECT THE SWITCH FOR EACH ACTION
+  switchMenu: ${sideSwitch}
+  switchAction: ${encoderSwitch}
+
+  # WIFI AND OTHER CREDENTIALS. USE SECRETS WHERE POSSIBLE
+  wifiPass: !secret wifiIoTPass
+  wifiSSID: !secret wifiIoTSSID
+  passOTA: !secret passOTA
+  passESPH: !secret passESPH
+  
+  # ESP DECLARATION
+  boardPlatform: ESP8266
+  boardName: d1_mini
+  
+  # PIN MAPPING. DEFAULTS TO ioios.io PITHY AND COUNTER DEVICES
+  encoderPinA: D5
+  encoderPinB: D6
+  encoderSwitch: D7
+  i2cData: D3
+  i2cClock: D4
+  pirSensor: D0
+  sideSwitch: D1
+  neoPixels: RX
+
+  # EXTRA SWITCHES
+  switchExtra: D4
+  
+###############################################################################
+# WHOA WHERE ARE YOU GOING? GO STEADY BEYOND HERE, THIS IS THE BREAKABLE BIT! #
+###############################################################################
+
+esphome:
+  name: ${deviceName}
+  platform: ${boardPlatform}
+  board: ${boardName}
+
+
+wifi:
+  ssid: ${wifiSSID}
+  password: ${wifiPass}
+  fast_connect: true
+  
+captive_portal:
+logger:
+ota:
+  password: ${passOTA}
+  
+i2c:
+  sda: ${i2cData}
+  scl: ${i2cClock}
+  scan: True
+  frequency: 200MHz
+  id: bus_a
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+    
+api:
+  password: ${passESPH} 
+
+switch:
+  - platform: restart
+    name: "ESP Restart ${deviceUpper}"
+
+sensor:
+  - platform: wifi_signal
+    name: ESP Signal ${deviceUpper}
+    update_interval: 60s
+
+  - platform: uptime
+    name: ESP Uptime ${deviceUpper}
+    update_interval: 60s
+              
+  - platform: sht3xd
+    temperature:
+      name: "${deviceUpper} Temperature"
+      id: ${deviceName}_temperature
+    humidity:
+      name: "${deviceUpper} Humidity"
+      id: ${deviceName}_humidity
+    address: 0x44
+    update_interval: 15s

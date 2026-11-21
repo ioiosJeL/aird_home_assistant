@@ -1,0 +1,226 @@
+script:
+  dining_room_scene_scroll:
+    alias: Dining Room Scene Progression
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: "input_select.select_{{ 'next' if is_state('input_boolean.status_nighttime', 'on') else 'previous' }}"
+        target:
+          entity_id: input_select.dining_room_scenes
+        data:
+          cycle: true
+      - action: script.turn_on
+        target:
+          entity_id: "script.dining_room_scene_{{ states('input_select.dining_room_scenes') | lower  }}"
+
+  dining_room_scene_change:
+    alias: Dining Room Scene Change
+    description: "Scene change functions"
+    mode: single
+    fields:
+      scene_name:
+        description: "The title of the scene"
+        example: "Automatic"
+      scene_duration:
+        description: "The duration of scene change"
+        example: "5"
+    sequence:
+      - action: input_boolean.turn_on
+        data:
+          entity_id: input_boolean.dining_room_scene_changing
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.dining_room_previous_scene
+          value: "{{ states('input_select.dining_room_scenes') | string }}"
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.dining_room_last_action
+          value: "Scene Selected: {{ scene_name }}"
+
+      - action: input_select.select_option
+        data:
+          entity_id: input_select.dining_room_scenes
+          option: "{{ scene_name }}"
+
+      - action: timer.start
+        data:
+          entity_id: timer.dining_room_scene_changing
+          duration: "{{ scene_duration | int }}"
+
+      - wait_template: "{{ is_state('timer.dining_room_scene_changing', 'idle') }}"
+
+      - action: input_boolean.turn_off
+        data:
+          entity_id: input_boolean.dining_room_scene_changing
+
+  dining_room_scene_bright:
+    alias: Dining Room Bright Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.dining_room_scene_change
+        data:
+          variables:
+            scene_name: "Bright"
+            scene_duration: 3
+      - action: hue.activate_scene
+        entity_id: scene.dining_room_blossom
+        data:
+          transition: 7
+      - action: script.triptych_scene_bright
+
+  dining_room_scene_relax:
+    alias: Dining Room Relax Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.dining_room_scene_change
+        data:
+          variables:
+            scene_name: "Relax"
+            scene_duration: 7
+      - action: hue.activate_scene
+        entity_id: scene.dining_room_silent_night
+        data:
+          transition: 7
+      - action: script.triptych_scene_relax
+
+  dining_room_scene_music:
+    alias: Dining Room Music Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.dining_room_scene_change
+        data:
+          variables:
+            scene_name: "Music"
+            scene_duration: 10
+      - action: hue.activate_scene
+        entity_id: scene.dining_room_starlight
+        data:
+          transition: 7
+      - action: script.triptych_scene_music
+
+  dining_room_scene_cosy:
+    alias: Dining Room Cosy Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.dining_room_scene_change
+        data:
+          variables:
+            scene_name: "Cosy"
+            scene_duration: 5
+      - action: hue.activate_scene
+        entity_id: scene.dining_room_ibiza
+        data:
+          transition: 1
+      - delay:
+          seconds: 1
+      - action: light.turn_on
+        data:
+          entity_id: light.dining_room_ceiling_lights
+          effect: candle
+          transition: 5
+      - action: script.triptych_scene_cosy
+
+  dining_room_scene_movie:
+    alias: "Dining Room Scene: Movie"
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.dining_room_scene_change
+        data:
+          variables:
+            scene_name: "Movie"
+            scene_duration: 5
+      - action: light.turn_on
+        data:
+          entity_id: light.dining_room_ceiling_piano
+          brightness: 50
+          color_temp_kelvin: 3100
+          transition: 5
+      - action: light.turn_on
+        data:
+          entity_id: light.dining_room_ceiling_window
+          brightness: 10
+          color_temp_kelvin: 3600
+          transition: 5
+      - action: light.turn_on
+        data:
+          entity_id: light.dining_room_ceiling_door
+          brightness: 110
+          color_temp_kelvin: 2600
+          transition: 5
+
+      - action: light.turn_off
+        data:
+          entity_id: light.dining_room_lamps
+
+      - action: light.turn_off
+        data:
+          entity_id:
+            - light.triptych_bottom_main
+            - light.triptych_top_main
+            - light.triptych_wow_main
+            - light.kitchen_lights_master
+
+  dining_room_scene_off:
+    alias: Dining Room Off Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.dining_room_scene_change
+        data:
+          variables:
+            scene_name: "Off"
+            scene_duration: 3
+      - action: light.turn_on
+        data:
+          entity_id: light.dining_room_lights_master
+          brightness: 0
+          transition: 3
+      - action: script.triptych_set_power
+        data:
+          turn_on: false
+
+  dining_room_scene_quickly_off:
+    alias: Dining Room Off Quickly
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.dining_room_scene_change
+        data:
+          variables:
+            scene_name: "Off"
+            scene_duration: 2
+      - action: light.turn_on
+        data:
+          entity_id: light.dining_room_lamps
+          brightness: 0
+          transition: 1
+      - wait_template: "{{ is_state('light.dining_room_lamps', 'off') }}"
+      - action: light.turn_on
+        data:
+          entity_id: light.dining_room_ceiling_lights
+          brightness: 0
+          transition: 1
+      - action: script.triptych_set_power
+        data:
+          turn_on: false

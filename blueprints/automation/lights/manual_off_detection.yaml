@@ -1,0 +1,85 @@
+blueprint:
+  name: Lights - Manual Off Detection
+  description: >-
+    Detect when a room's light group has been turned off by some means other
+    than the scene system (e.g. a smart-home app or a third-party
+    integration), and reconcile the room's scene state to "Off".
+  domain: automation
+  input:
+    lights_master:
+      name: Lights Master (light group)
+      selector:
+        entity:
+          domain: light
+    scenes_select:
+      name: Scenes (input_select)
+      selector:
+        entity:
+          domain: input_select
+    off_script:
+      name: Off Script
+      selector:
+        entity:
+          domain: script
+    last_action_text:
+      name: Last Action (input_text)
+      selector:
+        entity:
+          domain: input_text
+    auto_mode_boolean:
+      name: Auto Mode Active (input_boolean)
+      selector:
+        entity:
+          domain: input_boolean
+    manual_override_boolean:
+      name: Manual Override (input_boolean, optional)
+      description: When on, the room was changed outside HA - leave it alone.
+      default: ""
+      selector:
+        entity:
+          domain: input_boolean
+
+mode: single
+triggers:
+  - trigger: state
+    entity_id: !input lights_master
+    to: "off"
+    # Must stay off for 2s. When motion returns just as the auto-off fires,
+    # the lights report the off a moment after the scene is already back on
+    # "Bright" and then come straight back on; without this the late off
+    # looked like a manual switch-off and turned the room off again.
+    for:
+      seconds: 2
+
+variables:
+  scenes_select: !input scenes_select
+  manual_override_boolean: !input manual_override_boolean
+  lights_master: !input lights_master
+
+conditions:
+  # A light dropping off Wi-Fi (Shelly blips ~90s) makes the group read off
+  # without anyone touching it - running the off script then switched the
+  # rest of the room off for real (kitchen counter lights, Nov 2026).
+  - condition: template
+    value_template: >-
+      {{ expand(lights_master) | selectattr('state', 'in', ['unavailable', 'unknown'])
+         | list | count == 0 }}
+  # Under manual override, Manual Override Detection reconciles the scene
+  # itself (running the off script here would count as a scene selection
+  # and clear the override).
+  - condition: template
+    value_template: >-
+      {{ not is_state(scenes_select, 'Off')
+         and (manual_override_boolean == '' or is_state(manual_override_boolean, 'off')) }}
+
+actions:
+  - action: script.turn_on
+    data:
+      entity_id: !input off_script
+  - action: input_text.set_value
+    data:
+      entity_id: !input last_action_text
+      value: "Manual Override: Lights Off"
+  - action: input_boolean.turn_off
+    data:
+      entity_id: !input auto_mode_boolean

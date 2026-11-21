@@ -1,0 +1,946 @@
+# Garage / workspace admin page: rooms, machines, 3D printer, TV, cameras
+# and sensor-node health. Room cards and pills use the shared templates in
+# dashboards/button_card_templates.yaml. Scripts/automations live in
+# packages/workspace.yaml.
+path: garage
+title: Garage
+icon: mdi:garage-variant
+type: sections
+max_columns: 4
+sections:
+  # =====================================================================
+  # Column 1: Workspace
+  # =====================================================================
+  - type: grid
+    cards:
+      # --- Workspace: whole-building controls + the three rooms
+      - type: heading
+        heading: Workspace
+        icon: mdi:hammer-wrench
+        badges:
+          - type: entity
+            entity: sensor.workspace_total_power
+            show_icon: true
+          - type: entity
+            entity: sensor.cnc_machine_state
+            show_icon: true
+      - type: grid
+        grid_options:
+          columns: full
+          rows: auto
+        square: false
+        columns: 4
+        cards:
+          - type: custom:button-card
+            template: room_toggle
+            entity: switch.workshop
+            name: Workshop
+            icon: mdi:hammer-wrench
+            variables:
+              color: "var(--green-color)"
+          - type: custom:button-card
+            template: room_pill
+            entity: script.workspace_startup
+            name: Wake up
+            icon: mdi:weather-sunset-up
+            variables:
+              color: "var(--amber-color)"
+              active: "[[[ return entity && entity.state === 'on'; ]]]"
+            tap_action:
+              action: perform-action
+              perform_action: script.turn_on
+              target:
+                entity_id: script.workspace_startup
+          - type: custom:button-card
+            template: room_pill
+            entity: script.workspace_shutdown_slow
+            name: Sleep
+            icon: mdi:weather-night
+            variables:
+              color: "var(--indigo-color)"
+              active: "[[[ return entity && entity.state === 'on'; ]]]"
+            tap_action:
+              action: perform-action
+              perform_action: script.turn_on
+              target:
+                entity_id: script.workspace_shutdown_slow
+          - type: custom:button-card
+            template: room_toggle
+            entity: light.workspace_lights_master
+            name: All lights
+            icon: mdi:lightbulb-group
+
+      - type: custom:button-card
+        grid_options:
+          columns: full
+          rows: auto
+        template: room_card
+        name: Workshop
+        icon: mdi:hammer-wrench
+        entity: light.workshop_light
+        triggers_update:
+          - sensor.workshop_average_temperature
+          - climate.workshop
+          - sensor.workshop_average_humidity
+          - binary_sensor.workshop_motion
+        variables:
+          temp: sensor.workshop_average_temperature
+          climate: climate.workshop
+          second: sensor.workshop_average_humidity
+          motion: binary_sensor.workshop_motion
+        custom_fields:
+          lights:
+            card:
+              type: tile
+              entity: light.workshop_light
+              name: Light
+          toggles:
+            card:
+              type: grid
+              square: false
+              columns: 3
+              cards:
+                - type: custom:button-card
+                  template: room_toggle
+                  entity: input_boolean.workshop_automatic_lights
+                  name: Auto
+                  icon: mdi:refresh-auto
+                  variables:
+                    color: "var(--blue-color)"
+                - type: custom:button-card
+                  template: room_toggle
+                  entity: switch.workshop_heater
+                  name: Heater
+                  icon: mdi:radiator
+                  variables:
+                    color: "var(--deep-orange-color)"
+                - type: custom:button-card
+                  template: room_toggle
+                  entity: switch.workshop_fan
+                  name: Fan
+                  icon: mdi:fan
+                  variables:
+                    color: "var(--cyan-color)"
+          extra:
+            card:
+              type: vertical-stack
+              cards:
+                - type: tile
+                  entity: climate.workshop
+                  name: Heating
+                  state_content:
+                    - hvac_action
+                    - current_temperature
+                  features_position: inline
+                  features:
+                    - type: target-temperature
+                - type: tile
+                  entity: input_number.workshop_motion_timeout
+                  name: Light timeout
+                  features_position: inline
+                  features:
+                    - type: numeric-input
+                      style: buttons
+
+      - type: custom:button-card
+        grid_options:
+          columns: full
+          rows: auto
+        template: room_card
+        name: Machine Room
+        icon: mdi:cog-outline
+        entity: light.machine_room_light
+        triggers_update:
+          - sensor.machine_room_average_temperature
+          - climate.machine_room
+          - sensor.machine_room_average_humidity
+          - binary_sensor.machine_room_motion
+        variables:
+          temp: sensor.machine_room_average_temperature
+          climate: climate.machine_room
+          second: sensor.machine_room_average_humidity
+          motion: binary_sensor.machine_room_motion
+        custom_fields:
+          lights:
+            card:
+              type: tile
+              entity: light.machine_room_light
+              name: Light
+          toggles:
+            card:
+              type: grid
+              square: false
+              columns: 3
+              cards:
+                - type: custom:button-card
+                  template: room_toggle
+                  entity: input_boolean.machine_room_automatic_lights
+                  name: Auto
+                  icon: mdi:refresh-auto
+                  variables:
+                    color: "var(--blue-color)"
+                - type: custom:button-card
+                  template: room_toggle
+                  entity: switch.machine_room_heater
+                  name: Heater
+                  icon: mdi:radiator
+                  variables:
+                    color: "var(--deep-orange-color)"
+                - type: custom:button-card
+                  template: room_toggle
+                  entity: switch.cnc_machine
+                  name: CNC
+                  icon: mdi:state-machine
+                  variables:
+                    color: "var(--red-color)"
+                  confirmation:
+                    text: "[[[ return `Are you sure you want to do that, Dave?` ]]]"
+          extra:
+            card:
+              type: vertical-stack
+              cards:
+                - type: tile
+                  entity: climate.machine_room
+                  name: Heating
+                  state_content:
+                    - hvac_action
+                    - current_temperature
+                  features_position: inline
+                  features:
+                    - type: target-temperature
+                - type: tile
+                  entity: input_number.machine_room_motion_timeout
+                  name: Light timeout
+                  features_position: inline
+                  features:
+                    - type: numeric-input
+                      style: buttons
+
+      - type: custom:button-card
+        grid_options:
+          columns: full
+          rows: auto
+        template: room_card
+        name: Garage
+        icon: mdi:garage-variant
+        entity: light.garage_light
+        triggers_update:
+          - sensor.garage_average_temperature
+          - sensor.garage_average_humidity
+          - binary_sensor.garage_motion
+        variables:
+          temp: sensor.garage_average_temperature
+          second: sensor.garage_average_humidity
+          motion: binary_sensor.garage_motion
+        custom_fields:
+          lights:
+            card:
+              type: tile
+              entity: light.garage_light
+              name: Light
+          toggles:
+            card:
+              type: grid
+              square: false
+              columns: 3
+              cards:
+                - type: custom:button-card
+                  template: room_toggle
+                  entity: input_boolean.garage_automatic_lights
+                  name: Auto
+                  icon: mdi:refresh-auto
+                  variables:
+                    color: "var(--blue-color)"
+                - type: custom:button-card
+                  template: room_toggle
+                  entity: switch.garage_tv
+                  name: TV power
+                  icon: mdi:television
+                  variables:
+                    color: "var(--purple-color)"
+                - type: custom:button-card
+                  template: room_toggle
+                  entity: light.workshop_mini_square
+                  name: Matrix
+                  icon: mdi:led-strip-variant
+          extra:
+            card:
+              type: tile
+              entity: input_number.garage_motion_timeout
+              name: Light timeout
+              features_position: inline
+              features:
+                - type: numeric-input
+                  style: buttons
+
+  # =====================================================================
+  # Column 2: Machines & power + Climate history
+  # =====================================================================
+  - type: grid
+    cards:
+      # --- Machines & power
+      - type: heading
+        heading: Machines & Power
+        icon: mdi:lightning-bolt
+      - type: grid
+        grid_options:
+          columns: full
+          rows: auto
+        square: false
+        columns: 4
+        cards:
+          - type: custom:button-card
+            template: room_toggle
+            entity: switch.workshop_computer
+            name: PC
+            icon: mdi:desktop-classic
+            variables:
+              color: "var(--blue-color)"
+          - type: custom:button-card
+            template: room_toggle
+            entity: switch.soldering_iron
+            name: Iron
+            icon: mdi:soldering-iron
+            variables:
+              color: "var(--red-color)"
+          - type: custom:button-card
+            template: room_toggle
+            entity: switch.cnc_machine
+            name: CNC
+            icon: mdi:state-machine
+            variables:
+              color: "var(--red-color)"
+            confirmation:
+              text: "[[[ return `Are you sure you want to do that, Dave?` ]]]"
+          - type: custom:button-card
+            template: room_toggle
+            entity: switch.workshop_it
+            name: IT
+            icon: mdi:server-network
+            variables:
+              color: "var(--green-color)"
+            confirmation:
+              text: "[[[ return entity.state === 'on' ? 'Turn off the workshop IT power?' : 'Turn on the workshop IT power?' ]]]"
+      - type: tile
+        entity: sensor.workspace_total_power
+        name: Total
+        grid_options:
+          rows: auto
+          columns: 4
+      - type: tile
+        entity: sensor.cnc_machine_state
+        name: CNC
+        grid_options:
+          rows: auto
+          columns: 4
+      - type: tile
+        entity: sensor.garage_power_monitoring_temperature_watchdog
+        name: Sub-board
+        icon: mdi:thermometer
+        grid_options:
+          rows: auto
+          columns: 4
+      # auto-entities drops any line whose sensor is unavailable: mini-graph-card
+      # sits on its loading spinner forever if one entity has no numeric history
+      # (e.g. the Garage Utilities EM being offline).
+      - type: custom:auto-entities
+        grid_options:
+          columns: full
+          rows: auto
+        card:
+          type: custom:mini-graph-card
+          name: Workshop Power
+          icon: mdi:chart-line
+          hours_to_show: 2
+          update_interval: 30
+          points_per_hour: 60
+          line_width: 2
+          decimals: 0
+          show:
+            name: true
+            icon: true
+            state: true
+            labels: true
+            legend: true
+        card_param: entities
+        # Jinja, so the server drops unavailable lines and the browser doesn't
+        # re-filter on every state change
+        filter:
+          template: |-
+            {%- set lines = [
+              {'entity': 'sensor.workspace_total_power', 'name': 'Total', 'color': '#9e9e9e', 'show_line': false, 'show_fill': true, 'show_legend': false},
+              {'entity': 'sensor.workspace_lights_monitor_power', 'name': 'Lights & Fans'},
+              {'entity': 'sensor.cnc_machine_power', 'name': 'CNC'},
+              {'entity': 'sensor.garage_air_compressor_power', 'name': 'Compressor'},
+              {'entity': 'sensor.garage_vacuum_power', 'name': 'Vacuum'},
+              {'entity': 'sensor.workshop_computer_power', 'name': 'Computer'},
+              {'entity': 'sensor.soldering_iron_power', 'name': 'Iron'},
+              {'entity': 'sensor.workshop_it_power', 'name': 'IT'}
+            ] -%}
+            {{ lines | selectattr('entity', 'has_value') | list }}
+
+      # --- Climate history
+      - type: heading
+        heading: Climate
+        icon: mdi:thermometer-lines
+      - type: custom:mini-graph-card
+        grid_options:
+          columns: full
+          rows: auto
+        name: Temperature (24h)
+        icon: mdi:thermometer
+        hours_to_show: 24
+        update_interval: 60
+        points_per_hour: 4
+        line_width: 2
+        smoothing: true
+        decimals: 1
+        show:
+          name: true
+          icon: true
+          state: true
+          labels: true
+          legend: true
+        entities:
+          - entity: sensor.workshop_average_temperature
+            name: Workshop
+          - entity: sensor.machine_room_average_temperature
+            name: Machine Room
+          - entity: sensor.garage_average_temperature
+            name: Garage
+      - type: custom:mini-graph-card
+        grid_options:
+          columns: full
+          rows: auto
+        name: Humidity (10 days)
+        icon: mdi:water-percent
+        hours_to_show: 240
+        update_interval: 300
+        points_per_hour: 1
+        line_width: 2
+        smoothing: true
+        decimals: 0
+        show:
+          name: true
+          icon: true
+          state: true
+          labels: true
+          legend: true
+        entities:
+          - entity: sensor.workshop_average_humidity
+            name: Workshop
+          - entity: sensor.machine_room_average_humidity
+            name: Machine Room
+          - entity: sensor.garage_average_humidity
+            name: Garage
+
+      # --- Damp / condensation (packages/damp.yaml)
+      - type: heading
+        heading: Damp
+        icon: mdi:water-alert-outline
+      - type: custom:button-card
+        grid_options:
+          columns: full
+          rows: auto
+        template: status_list
+        triggers_update:
+          - binary_sensor.workshop_condensation_risk
+          - binary_sensor.machine_room_condensation_risk
+          - sensor.workshop_condensation_margin
+          - sensor.machine_room_condensation_margin
+        variables:
+          title: Condensation risk
+          items: |
+            [[[
+              const f = id => { const s = states[id]; return s && !isNaN(parseFloat(s.state)) ? parseFloat(s.state).toFixed(1) : '—'; };
+              return [['workshop', 'Workshop'], ['machine_room', 'Machine Room']].map(([r, n]) => {
+                const risk = states[`binary_sensor.${r}_condensation_risk`];
+                const level = risk?.attributes.level || 'Unknown';
+                const color = level === 'Low' ? 'green' : level === 'Likely tonight' ? 'orange' : 'red';
+                const icon = level === 'Low' ? 'mdi:water-check-outline' : 'mdi:water-alert-outline';
+                return { icon, color, title: `${n} · ${level}`,
+                  detail: `Now ${f(`sensor.${r}_average_temperature`)}°, dew point ${f(`sensor.${r}_dew_point`)}°, ` +
+                          `tonight ~${f(`sensor.${r}_predicted_low`)}° (${f(`sensor.${r}_condensation_margin_predicted`)}° margin)`,
+                  entity: `binary_sensor.${r}_condensation_risk` };
+              });
+            ]]]
+      - type: custom:mini-graph-card
+        grid_options:
+          columns: full
+          rows: auto
+        name: Workshop · temperature vs dew point (48h)
+        icon: mdi:water-thermometer-outline
+        hours_to_show: 48
+        update_interval: 60
+        points_per_hour: 4
+        line_width: 2
+        smoothing: true
+        decimals: 1
+        show:
+          name: true
+          icon: true
+          state: true
+          labels: true
+          legend: true
+          fill: false
+        entities:
+          - entity: sensor.workshop_average_temperature
+            name: Workshop
+            color: "#e8730c"
+          - entity: sensor.workshop_dew_point
+            name: Dew point
+            color: "#f5c18a"
+          # Heater setpoint (incl. the 1am damp protection raise)
+          - entity: climate.workshop
+            attribute: temperature
+            name: Heater setpoint
+            color: "#8a3f00"
+            smoothing: false
+            show_state: false
+      - type: custom:mini-graph-card
+        grid_options:
+          columns: full
+          rows: auto
+        name: Machine Room · temperature vs dew point (48h)
+        icon: mdi:water-thermometer-outline
+        hours_to_show: 48
+        update_interval: 60
+        points_per_hour: 4
+        line_width: 2
+        smoothing: true
+        decimals: 1
+        show:
+          name: true
+          icon: true
+          state: true
+          labels: true
+          legend: true
+          fill: false
+        entities:
+          - entity: sensor.machine_room_average_temperature
+            name: Machine Room
+            color: "#1e6fd9"
+          - entity: sensor.machine_room_dew_point
+            name: Dew point
+            color: "#94c0f5"
+          # Heater setpoint (incl. the 1am damp protection raise)
+          - entity: climate.machine_room
+            attribute: temperature
+            name: Heater setpoint
+            color: "#0b3a7a"
+            smoothing: false
+            show_state: false
+
+  # =====================================================================
+  # Column 3: 3D printer + Garage TV
+  # =====================================================================
+  - type: grid
+    cards:
+      # --- 3D printer (OctoPrint)
+      - type: heading
+        heading: 3D Printer
+        icon: mdi:printer-3d-nozzle
+      - type: custom:button-card
+        grid_options:
+          columns: full
+          rows: auto
+        entity: sensor.octoprint_current_state
+        show_name: false
+        show_icon: false
+        show_state: false
+        triggers_update:
+          - binary_sensor.octoprint_printing
+          - binary_sensor.octoprint_printing_error
+          - sensor.octoprint_job_percentage
+          - sensor.octoprint_estimated_finish_time
+          - sensor.octoprint_current_file
+          - sensor.octoprint_actual_tool0_temp
+          - sensor.octoprint_target_tool0_temp
+          - sensor.octoprint_actual_bed_temp
+          - sensor.octoprint_target_bed_temp
+        tap_action:
+          action: more-info
+        styles:
+          card:
+            - padding: 16px
+          grid:
+            - grid-template-areas: '"body"'
+            - grid-template-columns: 1fr
+          custom_fields:
+            body:
+              - justify-self: stretch
+              - text-align: left
+        custom_fields:
+          body: |
+            [[[
+              const s = id => states[id] ? states[id].state : null;
+              const n = id => { const x = parseFloat(s(id)); return isNaN(x) ? null : x; };
+              const printing = s('binary_sensor.octoprint_printing') === 'on';
+              const error = s('binary_sensor.octoprint_printing_error') === 'on';
+              const state = s('sensor.octoprint_current_state') || 'unavailable';
+              const pct = printing ? Math.max(0, Math.min(100, n('sensor.octoprint_job_percentage') || 0)) : 0;
+              const file = (s('sensor.octoprint_current_file') || '').replace(/\.gcode$/i, '').replace(/_/g, ' ');
+              const col = error ? 'var(--red-color)' : printing ? 'var(--green-color)' : 'var(--secondary-text-color)';
+
+              let eta = '';
+              const f = s('sensor.octoprint_estimated_finish_time');
+              if (printing && f && !isNaN(Date.parse(f))) {
+                const d = new Date(f), mins = Math.max(0, Math.round((d - Date.now()) / 60000));
+                const left = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
+                eta = `Done ${d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})} · ${left} left`;
+              }
+              const temp = (label, icon, a, t) => {
+                const av = n(a), tv = n(t);
+                const hot = tv && av !== null && av > 40;
+                return `<div class="tp"><ha-icon icon="${icon}" style="color:${hot ? 'var(--deep-orange-color)' : 'var(--secondary-text-color)'}"></ha-icon>
+                  <div><div class="tv">${av === null ? '—' : av.toFixed(0)}°<small>${tv ? ' / ' + tv.toFixed(0) + '°' : ''}</small></div><div class="tl">${label}</div></div></div>`;
+              };
+
+              return `
+              <style>
+                .hd{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+                .st{font-size:1.35rem;font-weight:700;color:${col};text-transform:capitalize}
+                .pc{font-size:1.35rem;font-weight:700;font-variant-numeric:tabular-nums}
+                .fl{font-size:.85rem;color:var(--primary-text-color);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+                .bar{height:8px;border-radius:4px;margin:12px 0 6px;background:color-mix(in srgb,var(--primary-text-color) 10%,transparent);overflow:hidden}
+                .bar div{height:100%;border-radius:4px;background:${col}}
+                .eta{font-size:.8rem;color:var(--secondary-text-color)}
+                .tps{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+                .tp{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;background:color-mix(in srgb,var(--primary-text-color) 5%,transparent)}
+                .tp ha-icon{--mdc-icon-size:22px}
+                .tv{font-size:1.05rem;font-weight:700;font-variant-numeric:tabular-nums}
+                .tv small{font-size:.75rem;font-weight:500;color:var(--secondary-text-color)}
+                .tl{font-size:11px;font-weight:600;color:var(--secondary-text-color)}
+              </style>
+              <div class="hd"><div class="st">${error ? 'Error' : state}</div>${printing ? `<div class="pc">${pct.toFixed(0)}%</div>` : ''}</div>
+              ${printing && file ? `<div class="fl">${file}</div>` : ''}
+              ${printing ? `<div class="bar"><div style="width:${pct}%"></div></div><div class="eta">${eta}</div>` : ''}
+              <div class="tps">
+                ${temp('Nozzle', 'mdi:printer-3d-nozzle-heat', 'sensor.octoprint_actual_tool0_temp', 'sensor.octoprint_target_tool0_temp')}
+                ${temp('Bed', 'mdi:radiator', 'sensor.octoprint_actual_bed_temp', 'sensor.octoprint_target_bed_temp')}
+              </div>`;
+            ]]]
+      - type: conditional
+        grid_options:
+          columns: full
+          rows: auto
+        conditions:
+          - condition: state
+            entity: binary_sensor.octoprint_printing
+            state: "on"
+        card:
+          type: grid
+          square: false
+          columns: 3
+          cards:
+            - type: custom:button-card
+              template: room_pill
+              name: Pause
+              icon: mdi:pause
+              tap_action:
+                action: perform-action
+                perform_action: button.press
+                target:
+                  entity_id: button.octoprint_pause_job
+            - type: custom:button-card
+              template: room_pill
+              name: Resume
+              icon: mdi:play
+              tap_action:
+                action: perform-action
+                perform_action: button.press
+                target:
+                  entity_id: button.octoprint_resume_job
+            - type: custom:button-card
+              template: room_pill
+              name: Stop
+              icon: mdi:stop
+              confirmation:
+                text: Cancel the current print?
+              tap_action:
+                action: perform-action
+                perform_action: button.press
+                target:
+                  entity_id: button.octoprint_stop_job
+      - type: picture-entity
+        grid_options:
+          columns: full
+          rows: auto
+        entity: camera.octoprint_camera
+        camera_view: auto
+        show_name: false
+        show_state: false
+
+      # --- Garage TV: Roku + IR remote (Workshop Far Sensor blaster)
+      - type: heading
+        heading: Garage TV
+        icon: mdi:television
+      - type: custom:mini-media-player
+        grid_options:
+          columns: full
+          rows: auto
+        entity: media_player.garage_garage_roku
+        artwork: cover
+        source: icon
+        info: short
+        hide:
+          power_state: false
+      - type: grid
+        grid_options:
+          columns: full
+          rows: auto
+        square: false
+        columns: 5
+        cards:
+          - type: custom:button-card
+            template: room_pill
+            name: Power
+            icon: mdi:power
+            tap_action:
+              <<: &ir
+                action: perform-action
+                perform_action: button.press
+              target:
+                entity_id: button.workshop_far_sensor_power_toggle
+          - type: custom:button-card
+            template: room_pill
+            name: Input
+            icon: mdi:import
+            tap_action:
+              <<: *ir
+              target:
+                entity_id: button.workshop_far_sensor_source_select
+          - type: custom:button-card
+            template: room_pill
+            name: Mute
+            icon: mdi:volume-off
+            tap_action:
+              <<: *ir
+              target:
+                entity_id: button.workshop_far_sensor_mute_toggle
+          - type: custom:button-card
+            template: room_pill
+            name: Vol −
+            icon: mdi:volume-minus
+            tap_action:
+              <<: *ir
+              target:
+                entity_id: button.workshop_far_sensor_volume_down
+          - type: custom:button-card
+            template: room_pill
+            name: Vol +
+            icon: mdi:volume-plus
+            tap_action:
+              <<: *ir
+              target:
+                entity_id: button.workshop_far_sensor_volume_up
+          - type: custom:button-card
+            template: room_pill
+            name: Left
+            icon: mdi:chevron-left
+            tap_action:
+              <<: *ir
+              target:
+                entity_id: button.workshop_far_sensor_nav_left
+          - type: custom:button-card
+            template: room_pill
+            name: Up
+            icon: mdi:chevron-up
+            tap_action:
+              <<: *ir
+              target:
+                entity_id: button.workshop_far_sensor_nav_up
+          - type: custom:button-card
+            template: room_pill
+            name: OK
+            icon: mdi:circle-medium
+            tap_action:
+              <<: *ir
+              target:
+                entity_id: button.workshop_far_sensor_nav_ok
+          - type: custom:button-card
+            template: room_pill
+            name: Down
+            icon: mdi:chevron-down
+            tap_action:
+              <<: *ir
+              target:
+                entity_id: button.workshop_far_sensor_nav_down
+          - type: custom:button-card
+            template: room_pill
+            name: Right
+            icon: mdi:chevron-right
+            tap_action:
+              <<: *ir
+              target:
+                entity_id: button.workshop_far_sensor_nav_right
+
+  # =====================================================================
+  # Column 4: Cameras + Sensor nodes
+  # =====================================================================
+  - type: grid
+    cards:
+      # --- Cameras
+      - type: heading
+        heading: Cameras
+        icon: mdi:cctv
+      - type: picture-entity
+        entity: camera.machine_room_left_sensor_camera
+        name: Machine room left
+        camera_view: auto
+        show_state: false
+        grid_options:
+          rows: auto
+          columns: 6
+      - type: picture-entity
+        entity: camera.machine_room_right_sensor_camera
+        name: Machine room right
+        camera_view: auto
+        show_state: false
+        grid_options:
+          rows: auto
+          columns: 6
+      - type: picture-entity
+        grid_options:
+          columns: full
+          rows: auto
+        entity: camera.house_view_medium
+        name: House view
+        camera_view: auto
+        show_state: false
+
+      # --- Sensor nodes (ESPHome): readings, Wi-Fi signal, restart
+      - type: heading
+        heading: Sensor Nodes
+        icon: mdi:access-point
+      - type: entities
+        grid_options:
+          columns: full
+          rows: auto
+        entities:
+          - type: custom:multiple-entity-row
+            name: Workshop Door
+            entity: binary_sensor.workshop_door_sensor_motion
+            show_state: false
+            state_color: true
+            secondary_info: last-changed
+            entities:
+              - name: Temp
+                entity: sensor.workshop_door_sensor_temperature
+                format: precision1
+              - name: Humid
+                entity: sensor.workshop_door_sensor_humidity
+                format: precision0
+              - name: Signal
+                entity: sensor.workshop_door_sensor_esp_signal
+              - icon: mdi:restart
+                tap_action:
+                  action: perform-action
+                  perform_action: switch.turn_on
+                  target:
+                    entity_id: switch.workshop_door_sensor_esp_restart
+          - type: custom:multiple-entity-row
+            name: Workshop Far
+            entity: binary_sensor.workshop_far_sensor_motion
+            show_state: false
+            state_color: true
+            secondary_info: last-changed
+            entities:
+              - name: Temp
+                entity: sensor.workshop_far_sensor_temperature
+                format: precision1
+              - name: Humid
+                entity: sensor.workshop_far_sensor_humidity
+                format: precision0
+              - name: Signal
+                entity: sensor.workshop_far_sensor_esp_signal
+              - icon: mdi:restart
+                tap_action:
+                  action: perform-action
+                  perform_action: switch.turn_on
+                  target:
+                    entity_id: switch.workshop_far_sensor_esp_restart
+          - type: custom:multiple-entity-row
+            name: Machine Room Right
+            entity: binary_sensor.machine_room_right_sensor_motion
+            show_state: false
+            state_color: true
+            secondary_info: last-changed
+            entities:
+              - name: Temp
+                entity: sensor.machine_room_right_sensor_temperature
+                format: precision1
+              - name: Humid
+                entity: sensor.machine_room_right_sensor_humidity
+                format: precision0
+              - name: Signal
+                entity: sensor.machine_room_right_sensor_esp_signal
+              - icon: mdi:restart
+                tap_action:
+                  action: perform-action
+                  perform_action: switch.turn_on
+                  target:
+                    entity_id: switch.machine_room_right_sensor_esp_restart
+          - type: custom:multiple-entity-row
+            name: Machine Room Left
+            entity: binary_sensor.machine_room_left_sensor_motion
+            show_state: false
+            state_color: true
+            secondary_info: last-changed
+            entities:
+              - name: Temp
+                entity: sensor.machine_room_left_sensor_temperature
+                format: precision1
+              - name: Humid
+                entity: sensor.machine_room_left_sensor_humidity
+                format: precision0
+              - name: Signal
+                entity: sensor.machine_room_left_sensor_esp_signal
+              - icon: mdi:restart
+                tap_action:
+                  action: perform-action
+                  perform_action: switch.turn_on
+                  target:
+                    entity_id: switch.machine_room_left_sensor_esp_restart
+          - type: custom:multiple-entity-row
+            name: Garage East
+            entity: binary_sensor.garage_east_sensor_motion
+            show_state: false
+            state_color: true
+            secondary_info: last-changed
+            entities:
+              - name: Temp
+                entity: sensor.garage_east_sensor_temperature
+                format: precision1
+              - name: Humid
+                entity: sensor.garage_east_sensor_humidity
+                format: precision0
+              - name: Signal
+                entity: sensor.garage_east_sensor_esp_signal
+              - icon: mdi:restart
+                tap_action:
+                  action: perform-action
+                  perform_action: switch.turn_on
+                  target:
+                    entity_id: switch.garage_east_sensor_esp_restart
+          - type: custom:multiple-entity-row
+            name: Garage West
+            entity: binary_sensor.garage_west_sensor_motion
+            show_state: false
+            state_color: true
+            secondary_info: last-changed
+            entities:
+              - name: Temp
+                entity: sensor.garage_west_sensor_temperature
+                format: precision1
+              - name: Humid
+                entity: sensor.garage_west_sensor_humidity
+                format: precision0
+              - name: Signal
+                entity: sensor.garage_west_sensor_esp_signal
+              - icon: mdi:restart
+                tap_action:
+                  action: perform-action
+                  perform_action: switch.turn_on
+                  target:
+                    entity_id: switch.garage_west_sensor_esp_restart

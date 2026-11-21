@@ -1,0 +1,632 @@
+# Extension: Dining Room is the feature column (individual light sliders,
+# hands-off and ceiling power status, triptych, TV and a heating graph);
+# Kitchen + Utility Room in the middle, Shower Room on the right.
+# Sections view so cards stay in their columns.
+path: extension
+title: Extension
+type: sections
+max_columns: 3
+sections:
+  # =====================================================================
+  # Column 1: Dining Room
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: custom:button-card
+        grid_options:
+          columns: full
+          rows: auto
+        template: room_card
+        name: Dining Room
+        icon: mdi:silverware-fork-knife
+        entity: light.dining_room_lights_master
+        triggers_update:
+          - sensor.dining_room_average_temperature
+          - climate.dining_room
+          - sensor.dining_room_average_humidity
+          - binary_sensor.dining_room_motion
+          - input_select.dining_room_scenes
+        variables:
+          temp: sensor.dining_room_average_temperature
+          climate: climate.dining_room
+          second: sensor.dining_room_average_humidity
+          second_icon: mdi:water-percent
+          motion: binary_sensor.dining_room_motion
+          scene: input_select.dining_room_scenes
+        custom_fields:
+          # One slider per light: the three ceiling spots and the lamps
+          # (the lamps group, so the right lamp joins when it's back)
+          lights:
+            card:
+              type: vertical-stack
+              cards:
+                - type: tile
+                  entity: light.dining_room_ceiling_window
+                  name: Ceiling · Window
+                  icon: mdi:ceiling-light
+                  features_position: inline
+                  features:
+                    - type: light-brightness
+                - type: tile
+                  entity: light.dining_room_ceiling_door
+                  name: Ceiling · Door
+                  icon: mdi:ceiling-light
+                  features_position: inline
+                  features:
+                    - type: light-brightness
+                - type: tile
+                  entity: light.dining_room_ceiling_piano
+                  name: Ceiling · Piano
+                  icon: mdi:ceiling-light
+                  features_position: inline
+                  features:
+                    - type: light-brightness
+                - type: tile
+                  entity: light.dining_room_lamps
+                  name: Lamps
+                  icon: mdi:lamp
+                  features_position: inline
+                  features:
+                    - type: light-brightness
+          scenes:
+            card:
+              type: grid
+              square: false
+              columns: 6
+              cards:
+                - type: custom:button-card
+                  template: room_scene
+                  entity: input_select.dining_room_scenes
+                  icon: mdi:brightness-7
+                  variables:
+                    option: Bright
+                    color: "var(--amber-color)"
+                - type: custom:button-card
+                  template: room_scene
+                  entity: input_select.dining_room_scenes
+                  icon: mdi:sofa
+                  variables:
+                    option: Relax
+                    color: "var(--teal-color)"
+                - type: custom:button-card
+                  template: room_scene
+                  entity: input_select.dining_room_scenes
+                  icon: mdi:fire
+                  variables:
+                    option: Cosy
+                    color: "var(--deep-orange-color)"
+                - type: custom:button-card
+                  template: room_scene
+                  entity: input_select.dining_room_scenes
+                  icon: mdi:music
+                  variables:
+                    option: Music
+                    color: "var(--pink-color)"
+                - type: custom:button-card
+                  template: room_scene
+                  entity: input_select.dining_room_scenes
+                  icon: mdi:movie-open
+                  variables:
+                    option: Movie
+                    color: "var(--indigo-color)"
+                - type: custom:button-card
+                  template: room_scene
+                  entity: input_select.dining_room_scenes
+                  icon: mdi:power
+                  variables:
+                    option: "Off"
+                    color: "var(--red-color)"
+          toggles:
+            card:
+              type: grid
+              square: false
+              columns: 4
+              cards:
+                - type: custom:button-card
+                  template: room_toggle
+                  entity: input_boolean.dining_room_automatic_lights
+                  name: Auto
+                  icon: mdi:refresh-auto
+                  variables:
+                    color: "var(--blue-color)"
+                - type: custom:button-card
+                  template: room_boost
+                  entity: input_boolean.boost_dining_room
+                  variables:
+                    slug: dining_room
+                # Lit when the lights were changed by hand (Hue app, wall
+                # dimmer); motion leaves the room alone until it clears.
+                # Tap to hand control back to the house.
+                - type: custom:button-card
+                  template: room_toggle
+                  entity: input_boolean.dining_room_manual_override
+                  name: Hands off
+                  icon: mdi:hand-back-right
+                  variables:
+                    color: "var(--orange-color)"
+                # Mains to the Hue ceiling spots (Shelly). Off = the
+                # ceiling can't be reached; tap to switch it back on.
+                - type: custom:button-card
+                  template: room_toggle
+                  entity: switch.dining_room_hue_lights
+                  name: Ceiling power
+                  icon: mdi:power-plug
+                  variables:
+                    color: "var(--green-color)"
+          # Triptych, TV and a 24 h temperature / heating graph
+          extra:
+            card:
+              type: vertical-stack
+              cards:
+                # --- Triptych (per-controller settings are on the LEDs page)
+                - type: heading
+                  heading: Triptych
+                  icon: mdi:view-column
+                  heading_style: subtitle
+                  badges:
+                    - type: entity
+                      entity: sensor.dining_room_triptych_power
+                      show_state: true
+                      show_icon: true
+                      icon: mdi:flash
+                - type: grid
+                  columns: 6
+                  square: false
+                  card_mod:
+                    style: ":host { display: block; padding: 0 8px; }"
+                  cards:
+                    - type: custom:button-card
+                      template: room_toggle
+                      entity: light.triptych_master
+                      name: Power
+                      icon: mdi:power
+                      variables:
+                        color: "#6666FF"
+                    - type: custom:button-card
+                      template: room_pill
+                      name: Bright
+                      icon: mdi:brightness-7
+                      variables:
+                        active: true
+                        color: var(--amber-color)
+                      tap_action:
+                        action: perform-action
+                        perform_action: script.turn_on
+                        target:
+                          entity_id: script.triptych_scene_bright
+                    - type: custom:button-card
+                      template: room_pill
+                      name: Relax
+                      icon: mdi:sofa
+                      variables:
+                        active: true
+                        color: var(--teal-color)
+                      tap_action:
+                        action: perform-action
+                        perform_action: script.turn_on
+                        target:
+                          entity_id: script.triptych_scene_relax
+                    - type: custom:button-card
+                      template: room_pill
+                      name: Cosy
+                      icon: mdi:fire
+                      variables:
+                        active: true
+                        color: var(--deep-orange-color)
+                      tap_action:
+                        action: perform-action
+                        perform_action: script.turn_on
+                        target:
+                          entity_id: script.triptych_scene_cosy
+                    - type: custom:button-card
+                      template: room_pill
+                      name: Music
+                      icon: mdi:music
+                      variables:
+                        active: true
+                        color: var(--pink-color)
+                      tap_action:
+                        action: perform-action
+                        perform_action: script.turn_on
+                        target:
+                          entity_id: script.triptych_scene_music
+                    - type: custom:button-card
+                      template: room_pill
+                      name: Showoff
+                      icon: mdi:play
+                      variables:
+                        active: true
+                        color: var(--purple-color)
+                      tap_action:
+                        action: perform-action
+                        perform_action: script.turn_on
+                        target:
+                          entity_id: script.triptych_showcase
+                # --- TV (scripts in packages/tv.yaml)
+                - type: heading
+                  heading: TV
+                  icon: mdi:television
+                  heading_style: subtitle
+                - type: grid
+                  columns: 4
+                  square: false
+                  card_mod:
+                    style: ":host { display: block; padding: 0 8px; }"
+                  cards:
+                    - type: custom:button-card
+                      template: room_toggle
+                      entity: media_player.dining_room_tv
+                      name: Power
+                      icon: mdi:television
+                      variables:
+                        color: var(--indigo-color)
+                      tap_action:
+                        action: perform-action
+                        perform_action: script.turn_on
+                        target:
+                          entity_id: script.dining_room_tv_power
+                    - type: custom:button-card
+                      template: room_pill
+                      name: Home
+                      icon: mdi:home-outline
+                      variables:
+                        active: true
+                        color: var(--indigo-color)
+                      tap_action:
+                        action: perform-action
+                        perform_action: script.turn_on
+                        target:
+                          entity_id: script.dining_room_tv_launch_home
+                    - type: custom:button-card
+                      template: room_pill
+                      name: YouTube
+                      icon: mdi:youtube
+                      variables:
+                        active: true
+                        color: var(--red-color)
+                      tap_action:
+                        action: perform-action
+                        perform_action: script.turn_on
+                        target:
+                          entity_id: script.dining_room_tv_launch_youtube
+                    - type: custom:button-card
+                      template: room_pill
+                      entity: media_player.dining_room_tv
+                      name: Remote
+                      icon: mdi:remote-tv
+                      variables:
+                        active: true
+                        color: var(--grey-color)
+                      tap_action:
+                        action: more-info
+                # --- 24 h temperature against the heating setpoint
+                - type: custom:mini-graph-card
+                  hours_to_show: 24
+                  points_per_hour: 4
+                  update_interval: 120
+                  height: 90
+                  line_width: 2
+                  smoothing: true
+                  decimals: 1
+                  show:
+                    name: false
+                    icon: false
+                    state: false
+                    labels: false
+                    legend: true
+                    fill: false
+                  card_mod:
+                    style: "ha-card { background: none; box-shadow: none; border: none; }"
+                  entities:
+                    - entity: sensor.dining_room_average_temperature
+                      name: Room
+                      color: "#e8730c"
+                    - entity: climate.dining_room
+                      attribute: temperature
+                      name: Heater
+                      color: "#8a3f00"
+                      smoothing: false
+                    - entity: sensor.dining_room_heater_power
+                      name: Heating (W)
+                      color: "#f5c18a"
+                      y_axis: secondary
+                      smoothing: false
+                      show_line: false
+                      show_fill: true
+
+  # =====================================================================
+  # Column 2: Kitchen, Utility Room
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: custom:button-card
+        grid_options:
+          columns: full
+          rows: auto
+        template: room_card
+        name: Kitchen
+        icon: mdi:chef-hat
+        entity: light.kitchen_lights_master
+        triggers_update:
+          - sensor.kitchen_average_temperature
+          - climate.kitchen
+          - binary_sensor.kitchen_motion
+          - input_select.kitchen_scenes
+        variables:
+          temp: sensor.kitchen_average_temperature
+          climate: climate.kitchen
+          motion: binary_sensor.kitchen_motion
+          scene: input_select.kitchen_scenes
+        custom_fields:
+          lights:
+            card:
+              type: vertical-stack
+              cards:
+                - type: tile
+                  entity: light.kitchen_lights_master
+                  name: Lights
+                  features_position: inline
+                  features:
+                    - type: light-brightness
+          scenes:
+            card:
+              type: grid
+              square: false
+              columns: 4
+              cards:
+                - type: custom:button-card
+                  template: room_scene
+                  entity: input_select.kitchen_scenes
+                  icon: mdi:brightness-7
+                  variables:
+                    option: Bright
+                    color: "var(--amber-color)"
+                - type: custom:button-card
+                  template: room_scene
+                  entity: input_select.kitchen_scenes
+                  icon: mdi:sofa
+                  variables:
+                    option: Relax
+                    color: "var(--teal-color)"
+                - type: custom:button-card
+                  template: room_scene
+                  entity: input_select.kitchen_scenes
+                  icon: mdi:fire
+                  variables:
+                    option: Cosy
+                    color: "var(--deep-orange-color)"
+                - type: custom:button-card
+                  template: room_scene
+                  entity: input_select.kitchen_scenes
+                  icon: mdi:power
+                  variables:
+                    option: "Off"
+                    color: "var(--red-color)"
+          toggles:
+            card:
+              type: grid
+              square: false
+              columns: 3
+              cards:
+                - type: custom:button-card
+                  template: room_toggle
+                  entity: input_boolean.kitchen_automatic_lights
+                  name: Auto
+                  icon: mdi:refresh-auto
+                  variables:
+                    color: "var(--blue-color)"
+
+      - type: custom:button-card
+        grid_options:
+          columns: full
+          rows: auto
+        template: room_card
+        name: Utility Room
+        icon: mdi:washing-machine
+        entity: light.utility_room_lights_master
+        triggers_update:
+          - sensor.utility_room_average_temperature
+          - sensor.utility_room_average_humidity
+          - binary_sensor.utility_room_motion
+          - input_select.utility_room_scenes
+        variables:
+          temp: sensor.utility_room_average_temperature
+          second: sensor.utility_room_average_humidity
+          second_icon: mdi:water-percent
+          motion: binary_sensor.utility_room_motion
+          scene: input_select.utility_room_scenes
+        custom_fields:
+          lights:
+            card:
+              type: vertical-stack
+              cards:
+                - type: tile
+                  entity: light.utility_room_lights_master
+                  name: Lights
+                  features_position: inline
+                  features:
+                    - type: light-brightness
+          scenes:
+            card:
+              type: grid
+              square: false
+              columns: 2
+              cards:
+                - type: custom:button-card
+                  template: room_scene
+                  entity: input_select.utility_room_scenes
+                  icon: mdi:brightness-7
+                  variables:
+                    option: Bright
+                    color: "var(--amber-color)"
+                - type: custom:button-card
+                  template: room_scene
+                  entity: input_select.utility_room_scenes
+                  icon: mdi:power
+                  variables:
+                    option: "Off"
+                    color: "var(--red-color)"
+          toggles:
+            card:
+              type: grid
+              square: false
+              columns: 5
+              cards:
+                - type: custom:button-card
+                  template: room_toggle
+                  entity: input_boolean.utility_room_automatic_lights
+                  name: Auto
+                  icon: mdi:refresh-auto
+                  variables:
+                    color: "var(--blue-color)"
+                - type: custom:button-card
+                  template: room_status
+                  entity: binary_sensor.washing_machine_active
+                  icon: mdi:washing-machine
+                  name: Washer
+                - type: custom:button-card
+                  template: room_status
+                  entity: binary_sensor.tumble_dryer_active
+                  icon: mdi:tumble-dryer
+                  name: Dryer
+                - type: custom:button-card
+                  template: room_status
+                  entity: binary_sensor.dishwasher_active
+                  icon: mdi:dishwasher
+                  name: Dishwasher
+                - type: custom:button-card
+                  template: room_status
+                  entity: binary_sensor.octoprint_printing
+                  icon: mdi:printer-3d
+                  name: Printer
+
+  # =====================================================================
+  # Column 3: Shower Room
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: custom:button-card
+        grid_options:
+          columns: full
+          rows: auto
+        template: room_card
+        name: Shower Room
+        icon: mdi:shower-head
+        entity: light.shower_room_lights_master
+        triggers_update:
+          - sensor.shower_room_average_temperature
+          - climate.shower_room
+          - sensor.shower_room_average_humidity
+          - binary_sensor.shower_room_motion
+          - input_select.shower_room_scenes
+        variables:
+          temp: sensor.shower_room_average_temperature
+          climate: climate.shower_room
+          second: sensor.shower_room_average_humidity
+          second_icon: mdi:water-percent
+          motion: binary_sensor.shower_room_motion
+          scene: input_select.shower_room_scenes
+        custom_fields:
+          lights:
+            card:
+              type: vertical-stack
+              cards:
+                - type: tile
+                  entity: light.shower_room_lights_master
+                  name: Lights
+                  features_position: inline
+                  features:
+                    - type: light-brightness
+          scenes:
+            card:
+              type: grid
+              square: false
+              columns: 2
+              cards:
+                - type: custom:button-card
+                  template: room_scene
+                  entity: input_select.shower_room_scenes
+                  icon: mdi:brightness-7
+                  variables:
+                    option: Bright
+                    color: "var(--amber-color)"
+                - type: custom:button-card
+                  template: room_scene
+                  entity: input_select.shower_room_scenes
+                  icon: mdi:power
+                  variables:
+                    option: "Off"
+                    color: "var(--red-color)"
+          toggles:
+            card:
+              type: grid
+              square: false
+              columns: 3
+              cards:
+                - type: custom:button-card
+                  template: room_toggle
+                  entity: input_boolean.shower_room_automatic_lights
+                  name: Auto
+                  icon: mdi:refresh-auto
+                  variables:
+                    color: "var(--blue-color)"
+                - type: custom:button-card
+                  template: room_boost
+                  entity: input_boolean.boost_shower_room
+                  variables:
+                    slug: shower_room
+          # Towel rail (switch.shower_room_heater, run by climate.shower_room):
+          # there's no sensor on the rail itself, so this shows the room it
+          # heats against the setpoint, with shading while the rail is on.
+          extra:
+            card:
+              type: vertical-stack
+              cards:
+                - type: heading
+                  heading: Towel rail
+                  icon: mdi:radiator
+                  heading_style: subtitle
+                  badges:
+                    - type: entity
+                      entity: switch.shower_room_heater
+                      show_state: true
+                      show_icon: true
+                    - type: entity
+                      entity: sensor.daily_shower_room_heater_energy_usage
+                      show_state: true
+                      show_icon: true
+                      icon: mdi:lightning-bolt
+                - type: custom:mini-graph-card
+                  hours_to_show: 24
+                  points_per_hour: 4
+                  update_interval: 120
+                  height: 90
+                  line_width: 2
+                  smoothing: true
+                  decimals: 1
+                  show:
+                    name: false
+                    icon: false
+                    state: false
+                    labels: false
+                    legend: true
+                    fill: false
+                  card_mod:
+                    style: "ha-card { background: none; box-shadow: none; border: none; }"
+                  entities:
+                    - entity: sensor.shower_room_average_temperature
+                      name: Room
+                      color: "#1e88a8"
+                    - entity: climate.shower_room
+                      attribute: temperature
+                      name: Setpoint
+                      color: "#0b3a4f"
+                      smoothing: false
+                    - entity: sensor.shower_room_heater_power
+                      name: Rail (W)
+                      color: "#f5a25d"
+                      y_axis: secondary
+                      smoothing: false
+                      show_line: false
+                      show_fill: true
+                      show_legend: true

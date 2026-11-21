@@ -1,0 +1,126 @@
+script:
+  bathroom_scene_scroll:
+    alias: Bathroom Scene Progression
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: "input_select.select_{{ 'next' if is_state('input_boolean.status_nighttime', 'on') else 'previous' }}"
+        target:
+          entity_id: input_select.bathroom_scenes
+        data:
+          cycle: true
+      - action: script.turn_on
+        target:
+          entity_id: "script.bathroom_scene_{{ states('input_select.bathroom_scenes') | lower  }}"
+
+  bathroom_scene_change:
+    alias: Bathroom Scene Change
+    description: "Scene change functions"
+    mode: single
+    fields:
+      scene_name:
+        description: "The title of the scene"
+        example: "Automatic"
+      scene_duration:
+        description: "The duration of scene change"
+        example: "5"
+    sequence:
+      - action: input_boolean.turn_on
+        data:
+          entity_id: input_boolean.bathroom_scene_changing
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.bathroom_previous_scene
+          value: "{{ states('input_select.bathroom_scenes') | string }}"
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.bathroom_last_action
+          value: "Scene Selected: {{ scene_name }}"
+
+      - action: input_select.select_option
+        data:
+          entity_id: input_select.bathroom_scenes
+          option: "{{ scene_name }}"
+
+      - action: timer.start
+        data:
+          entity_id: timer.bathroom_scene_changing
+          duration: "{{ scene_duration | int }}"
+
+      - wait_template: "{{ is_state('timer.bathroom_scene_changing', 'idle') }}"
+
+      - action: input_boolean.turn_off
+        data:
+          entity_id: input_boolean.bathroom_scene_changing
+
+  bathroom_scene_bright:
+    alias: Bathroom Bright Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.bathroom_scene_change
+        data:
+          variables:
+            scene_name: "Bright"
+            scene_duration: 1
+      - action: light.turn_on
+        data:
+          entity_id: light.bathroom_dimmer
+          brightness: 255
+          transition: 1
+
+  bathroom_scene_relax:
+    alias: Bathroom Relax Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.bathroom_scene_change
+        data:
+          variables:
+            scene_name: "Relax"
+            scene_duration: 2
+      - action: light.turn_on
+        data:
+          entity_id: light.bathroom_dimmer
+          brightness: 170
+          transition: 2
+
+  bathroom_scene_cosy:
+    alias: Bathroom Cosy Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.bathroom_scene_change
+        data:
+          variables:
+            scene_name: "Cosy"
+            scene_duration: 2
+      - action: light.turn_on
+        data:
+          entity_id: light.bathroom_dimmer
+          brightness: 100
+          transition: 2
+
+  bathroom_scene_off:
+    alias: Bathroom Off Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.bathroom_scene_change
+        data:
+          variables:
+            scene_name: "Off"
+            scene_duration: 1
+      - action: light.turn_off
+        data:
+          entity_id: light.bathroom_dimmer

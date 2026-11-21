@@ -1,0 +1,87 @@
+blueprint:
+  name: Lights - Physical Switch Toggle
+  description: >-
+    Toggle a room between its "off" script and its "on" script from a
+    physical switch/button press, as long as the room isn't mid scene
+    transition. The trigger itself is fully configurable so this covers
+    Shelly clicks, Hue remote events, BTHome button presses, etc.
+  domain: automation
+  input:
+    trigger:
+      name: Trigger
+      description: The physical switch/button event(s) that should toggle the room.
+      selector:
+        trigger: {}
+    changing_timer:
+      name: Scene Changing Timer
+      selector:
+        entity:
+          domain: timer
+    scenes_select:
+      name: Scenes (input_select)
+      selector:
+        entity:
+          domain: input_select
+    on_script:
+      name: Script to run when currently Off
+      selector:
+        entity:
+          domain: script
+    off_script:
+      name: Script to run when currently not Off
+      selector:
+        entity:
+          domain: script
+    auto_mode_boolean:
+      name: Auto Mode Active (input_boolean)
+      selector:
+        entity:
+          domain: input_boolean
+    night_on_script:
+      name: Script to run when currently Off at night (optional)
+      description: >-
+        Used instead of the on script while Night Mode is on. Leave blank to
+        always use the on script.
+      default: ""
+      selector:
+        entity:
+          domain: script
+    nighttime_boolean:
+      name: Nighttime Status (input_boolean)
+      default: input_boolean.status_nighttime
+      selector:
+        entity:
+          domain: input_boolean
+
+mode: single
+triggers: !input trigger
+
+variables:
+  changing_timer: !input changing_timer
+  scenes_select: !input scenes_select
+  on_script: !input on_script
+  night_on_script: !input night_on_script
+  nighttime_boolean: !input nighttime_boolean
+
+conditions:
+  - condition: template
+    value_template: "{{ is_state(changing_timer, 'idle') }}"
+
+actions:
+  - choose:
+      - conditions: "{{ not is_state(scenes_select, 'Off') }}"
+        sequence:
+          - action: script.turn_on
+            data:
+              entity_id: !input off_script
+      - conditions: "{{ is_state(scenes_select, 'Off') }}"
+        sequence:
+          - action: script.turn_on
+            data:
+              entity_id: >-
+                {{ night_on_script
+                   if night_on_script != '' and is_state(nighttime_boolean, 'on')
+                   else on_script }}
+  - action: input_boolean.turn_off
+    data:
+      entity_id: !input auto_mode_boolean

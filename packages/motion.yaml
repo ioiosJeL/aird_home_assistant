@@ -1,0 +1,277 @@
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      common: &common
+        package: "Motion"
+
+    # Template Sensors
+    binary_sensor.*_motion:
+      <<: *common
+      device_class: "motion"
+
+    input_boolean.motion_mode_*:
+      <<: *common
+
+    input_number.*_motion_timeout:
+      <<: *common
+
+input_number:
+  living_room_motion_timeout:
+    name: Living Room Motion Timeout
+    min: 1
+    max: 30
+
+  dining_room_motion_timeout:
+    name: Dining Room Motion Timeout
+    min: 1
+    max: 30
+
+  kitchen_motion_timeout:
+    name: Kitchen Motion Timeout
+    min: 1
+    max: 30
+
+  bathroom_motion_timeout:
+    name: Bathroom Motion Timeout
+    min: 1
+    max: 30
+
+  master_bedroom_motion_timeout:
+    name: Master Bedroom Motion Timeout
+    min: 1
+    max: 30
+
+  double_bedroom_motion_timeout:
+    name: Double Bedroom Motion Timeout
+    min: 1
+    max: 30
+
+  single_bedroom_motion_timeout:
+    name: Single Bedroom Motion Timeout
+    min: 1
+    max: 30
+
+  landing_motion_timeout:
+    name: Landing Motion Timeout
+    min: 1
+    max: 30
+
+  patio_motion_timeout:
+    name: Patio Motion Timeout
+    min: 1
+    max: 30
+
+  hall_motion_timeout:
+    name: Hall Motion Timeout
+    min: 1
+    max: 30
+
+  front_porch_motion_timeout:
+    name: Front Porch Motion Timeout
+    min: 1
+    max: 30
+
+  utility_room_motion_timeout:
+    name: Utility Room Motion Timeout
+    min: 1
+    max: 30
+
+  shower_room_motion_timeout:
+    name: Shower Room Motion Timeout
+    min: 1
+    max: 30
+
+  sunroom_motion_timeout:
+    name: Sunroom Motion Timeout
+    min: 1
+    max: 30
+
+  garage_motion_timeout:
+    name: Garage Motion Timeout
+    min: 1
+    max: 30
+
+  workshop_motion_timeout:
+    name: Workshop Motion Timeout
+    min: 1
+    max: 30
+
+  machine_room_motion_timeout:
+    name: Machine Room Motion Timeout
+    min: 1
+    max: 30
+
+template:
+  - binary_sensor:
+      - default_entity_id: binary_sensor.living_room_motion
+        name: "Living Room Motion"
+        device_class: motion
+        delay_off: 0:00:10
+        state: >-
+          {{ is_state('binary_sensor.hms_living_room_motion', 'on') }}
+
+      - default_entity_id: binary_sensor.dining_room_motion
+        name: "Dining Room Motion"
+        device_class: motion
+        delay_off: 0:00:10
+        # A desk PIR sensor (binary_sensor.pir_dining_room_desk) was
+        # referenced here but never actually exists in the entity registry
+        # under any name - dropped until that hardware is deployed.
+        state: >-
+          {{ is_state('binary_sensor.hms_dining_room_motion', 'on') }}
+
+      - default_entity_id: binary_sensor.master_bedroom_motion
+        name: "Master Bedroom Motion"
+        device_class: motion
+        delay_off: 0:00:10
+        state: >-
+          {{ is_state('binary_sensor.hms_master_bedroom_motion', 'on') }}
+
+      - default_entity_id: binary_sensor.double_bedroom_motion
+        name: "Double Bedroom Motion"
+        device_class: motion
+        delay_off: 0:00:10
+        state: >-
+          {{ is_state('binary_sensor.hms_double_bedroom_motion', 'on') }}
+
+      - default_entity_id: binary_sensor.single_bedroom_motion
+        name: "Single Bedroom Motion"
+        device_class: motion
+        delay_off: 0:00:10
+        state: >-
+          {{ is_state('binary_sensor.hms_single_bedroom_motion', 'on') }}
+
+      - default_entity_id: binary_sensor.kitchen_motion
+        name: "Kitchen Motion"
+        device_class: motion
+        delay_off: 0:00:10
+        state: >-
+          {{ is_state('binary_sensor.hms_kitchen_motion', 'on') }}
+
+      - default_entity_id: binary_sensor.bathroom_motion
+        name: "Bathroom Motion"
+        device_class: motion
+        delay_off: 0:00:10
+        state: >-
+          {{ is_state('binary_sensor.hms_bathroom_motion', 'on') }}
+
+      - default_entity_id: binary_sensor.landing_motion
+        name: "Landing Motion"
+        device_class: motion
+        delay_off: 0:00:10
+        state: >-
+          {{ is_state('binary_sensor.hms_landing_motion', 'on') }}
+
+      - default_entity_id: binary_sensor.hall_motion
+        name: "Hall Motion"
+        device_class: motion
+        delay_off: 0:00:10
+        state: >-
+          {{ is_state('binary_sensor.hms_hall_motion', 'on') }}
+
+      - default_entity_id: binary_sensor.front_porch_motion
+        name: "Front Porch Motion"
+        device_class: motion
+        delay_off: 0:00:10
+        state: >-
+          {{ is_state('binary_sensor.hms_front_porch_motion', 'on') }}
+
+      - default_entity_id: binary_sensor.sunroom_motion
+        name: "Sunroom Motion"
+        device_class: motion
+        delay_off: 0:00:10
+        state: >-
+          {{ is_state('binary_sensor.hms_sunroom_motion', 'on') }}
+
+      - default_entity_id: binary_sensor.utility_room_motion
+        name: "Utility Room Motion"
+        device_class: motion
+        delay_off: 0:00:10
+        state: >-
+          {{ is_state('binary_sensor.hms_utility_room_motion', 'on') }}
+
+      - default_entity_id: binary_sensor.shower_room_motion
+        name: "Shower Room Motion"
+        device_class: motion
+        delay_off: 0:00:10
+        state: >-
+          {{ is_state('binary_sensor.hms_shower_room_motion', 'on') }}
+
+      - default_entity_id: binary_sensor.garage_motion
+        name: "Garage Motion"
+        device_class: motion
+        delay_off: 0:00:10
+        state: >-
+          {{ is_state('binary_sensor.garage_east_sensor_motion', 'on')
+            or is_state('binary_sensor.garage_west_sensor_motion', 'on') }}
+
+      - default_entity_id: binary_sensor.workshop_motion
+        name: "Workshop Motion"
+        device_class: motion
+        delay_off: 0:00:10
+        state: >-
+          {{ is_state('binary_sensor.workshop_door_sensor_motion', 'on')
+            or is_state('binary_sensor.workshop_far_sensor_motion', 'on') }}
+
+      - default_entity_id: binary_sensor.machine_room_motion
+        name: "Machine Room Motion"
+        device_class: motion
+        delay_off: 0:00:10
+        state: >-
+          {{ is_state('binary_sensor.machine_room_left_sensor_motion', 'on')
+            or is_state('binary_sensor.machine_room_right_sensor_motion', 'on') }}
+
+      - default_entity_id: binary_sensor.workspace_motion
+        name: "Workspace Motion"
+        device_class: motion
+        state: >-
+          {{ is_state('binary_sensor.machine_room_motion', 'on')
+            or is_state('binary_sensor.garage_motion', 'on')
+            or is_state('binary_sensor.workshop_motion', 'on') }}
+
+      - default_entity_id: binary_sensor.inside_motion
+        name: "Inside Motion"
+        device_class: motion
+        state: >-
+          {{ is_state('binary_sensor.living_room_motion', 'on')
+            or is_state('binary_sensor.dining_room_motion', 'on')
+            or is_state('binary_sensor.kitchen_motion', 'on')
+            or is_state('binary_sensor.master_bedroom_motion', 'on')
+            or is_state('binary_sensor.landing_motion', 'on')
+            or is_state('binary_sensor.front_porch_motion', 'on')
+            or is_state('binary_sensor.hall_motion', 'on')
+            or is_state('binary_sensor.sunroom_motion', 'on')
+            or is_state('binary_sensor.utility_room_motion', 'on')
+            or is_state('binary_sensor.shower_room_motion', 'on')
+            or is_state('binary_sensor.double_bedroom_motion', 'on')
+            or is_state('binary_sensor.single_bedroom_motion', 'on')
+            or is_state('binary_sensor.bathroom_motion', 'on') }}
+
+      - default_entity_id: binary_sensor.patio_motion
+        name: "Patio Motion"
+        device_class: motion
+        state: >-
+          {{ is_state('binary_sensor.homs_patio_motion', 'on')
+            or is_state('binary_sensor.patio_person_detected', 'on')
+            or is_state('binary_sensor.patio_vehicle_detected', 'on') }}
+
+      - default_entity_id: binary_sensor.object_detected_driveway
+        name: "Driveway Object Detected"
+        device_class: motion
+        state: >-
+          {{ is_state('binary_sensor.driveway_person_detected', 'on')
+            or is_state('binary_sensor.driveway_vehicle_detected', 'on') }}
+
+      - default_entity_id: binary_sensor.object_detected_car_port
+        name: "Car Port Object Detected"
+        device_class: motion
+        state: >-
+          {{ is_state('binary_sensor.car_port_person_detected', 'on')
+            or is_state('binary_sensor.car_port_vehicle_detected', 'on') }}
+
+      - default_entity_id: binary_sensor.object_detected_patio
+        name: "Patio Object Detected"
+        device_class: motion
+        state: >-
+          {{ is_state('binary_sensor.patio_person_detected', 'on')
+            or is_state('binary_sensor.patio_vehicle_detected', 'on') }}

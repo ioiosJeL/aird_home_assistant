@@ -1,0 +1,688 @@
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      common: &common
+        package: "UniFi Custom"
+
+    # Template Sensors
+    sensor.latest_*_camera:
+      icon: mdi:cctv
+      <<: *common
+    input_text.last_*_camera:
+      icon: mdi:cctv
+      <<: *common
+    input_number.detected_*_timeout:
+      icon: mdi:clock-alert-outline
+      <<: *common
+
+# Local copy instead of re-requesting a live frame from the camera for every
+# filename we need. One camera.snapshot per detection, then fast filesystem
+# copies - cuts camera round-trips (and NVR load) by two thirds.
+shell_command:
+  cctv_copy_file: 'cp "{{ source }}" "{{ dest }}"'
+
+input_text:
+  last_object_camera:
+    name: "Last Object Camera Detection"
+
+  last_person_camera:
+    name: "Last Person Camera Detection"
+
+  last_vehicle_camera:
+    name: "Last Vehicle Camera Detection"
+
+  last_animal_camera:
+    name: "Last Animal Camera Detection"
+
+  last_motion_camera:
+    name: "Last Perimeter Camera Motion"
+
+input_number:
+  detected_object_timeout:
+    name: "Object Detection Timeout"
+    min: 1
+    max: 180
+    mode: box
+
+  detected_person_timeout:
+    name: Person Detection Timeout
+    min: 1
+    max: 180
+    mode: box
+
+  detected_vehicle_timeout:
+    name: Vehicle Detection Timeout
+    min: 1
+    max: 180
+    mode: box
+
+  detected_animal_timeout:
+    name: Animal Detection Timeout
+    min: 1
+    max: 180
+    mode: box
+
+  detection_notification_timeout:
+    name: Detection Notification Retrigger Timeout
+    min: 10
+    max: 600
+    mode: box
+
+  safety_alarm_notification_timeout:
+    name: Safety Alarm Notification Retrigger Timeout
+    min: 10
+    max: 600
+    mode: box
+    initial: 60
+
+  nvr_storage_alert_threshold:
+    name: NVR Storage Alert Threshold
+    min: 50
+    max: 100
+    mode: box
+    initial: 90
+
+# Daily perimeter activity counters - reset at midnight, incremented on every
+# confirmed detection. Gives a free "how busy was the perimeter today" stat
+# for dashboards without any extra history/recorder queries.
+counter:
+  detections_person_today:
+    name: "Person Detections Today"
+    icon: mdi:account-alert
+    restore: true
+
+  detections_vehicle_today:
+    name: "Vehicle Detections Today"
+    icon: mdi:car
+    restore: true
+
+  detections_animal_today:
+    name: "Animal Detections Today"
+    icon: mdi:paw
+    restore: true
+
+timer:
+  since_detected_object:
+    name: "Time Since Object Detected"
+
+  since_detected_person:
+    name: "Time Since Person Detected"
+
+  since_detected_vehicle:
+    name: "Time Since Vehicle Detected"
+
+  since_detected_animal:
+    name: "Time Since Animal Detected"
+
+  detection_notification_retrigger:
+    name: "Prevent Retriggering of Detection Notification"
+
+  safety_alarm_notification_retrigger:
+    name: "Prevent Retriggering of Safety Alarm Notification"
+
+template:
+  - binary_sensor:
+      - default_entity_id: binary_sensor.outside_is_dark
+        name: "Dark Outside"
+        state: >-
+          {{ is_state('binary_sensor.cam_car_port_is_dark', 'on')
+            or is_state('binary_sensor.g5_bullet_is_dark', 'on')
+            or is_state('binary_sensor.cam_patio_is_dark', 'on') }}
+
+      - name: "Any CCTV Camera Offline"
+        device_class: problem
+        delay_on:
+          minutes: 5
+        state: >-
+          {{ expand(
+               'camera.driveway_medium', 'camera.car_port_medium', 'camera.patio_medium',
+               'camera.the_boys_high_resolution_channel', 'camera.house_view_medium'
+             ) | selectattr('state', 'eq', 'unavailable') | list | count > 0 }}
+        attributes:
+          offline_cameras: >-
+            {{ expand(
+                 'camera.driveway_medium', 'camera.car_port_medium', 'camera.patio_medium',
+                 'camera.the_boys_high_resolution_channel', 'camera.house_view_medium'
+               ) | selectattr('state', 'eq', 'unavailable') | map(attribute='name') | list }}
+
+  - sensor:
+      - name: "Perimeter Activity Today"
+        icon: mdi:cctv
+        state: >-
+          {{ states('counter.detections_person_today') | int(0)
+             + states('counter.detections_vehicle_today') | int(0)
+             + states('counter.detections_animal_today') | int(0) }}
+        attributes:
+          people: "{{ states('counter.detections_person_today') | int(0) }}"
+          vehicles: "{{ states('counter.detections_vehicle_today') | int(0) }}"
+          animals: "{{ states('counter.detections_animal_today') | int(0) }}"
+          last_detection_camera: "{{ states('input_text.last_object_camera') }}"
+          last_motion_camera: "{{ states('input_text.last_motion_camera') }}"
+
+script:
+  camera_detection:
+    alias: Camera Detected Object
+    description: "Camera detected a person, vehicle or animal"
+    mode: queued
+    fields:
+      camera:
+        description: "The name of the camera"
+        example: "driveway"
+      type:
+        description: "The type of the detection (person, vehicle, animal)"
+        example: "vehicle"
+    sequence:
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.last_object_camera
+          value: "{{ camera }}"
+
+      # Single live snapshot for this event - every other copy of the frame
+      # is a cheap local file copy, not another round-trip to the camera.
+      - action: camera.snapshot
+        data_template:
+          entity_id: camera.{{ camera }}_medium
+          filename: "/config/www/cctv/{{ type }}_{{ camera }}.jpg"
+
+      - action: shell_command.cctv_copy_file
+        data_template:
+          source: "/config/www/cctv/{{ type }}_{{ camera }}.jpg"
+          dest: "/config/www/cctv/{{ type }}_latest.jpg"
+      - action: local_file.update_file_path
+        data_template:
+          entity_id: camera.latest_{{ type }}
+          file_path: "/config/www/cctv/{{ type }}_latest.jpg"
+
+      - action: shell_command.cctv_copy_file
+        data_template:
+          source: "/config/www/cctv/{{ type }}_{{ camera }}.jpg"
+          dest: "/config/www/cctv/latest.jpg"
+      - action: local_file.update_file_path
+        data_template:
+          entity_id: camera.latest_detection
+          file_path: "/config/www/cctv/latest.jpg"
+
+      - if:
+          - condition: state
+            entity_id: timer.since_detected_object
+            state: "idle"
+        then:
+          - action: script.camera_detection_notification
+            data:
+              camera: "{{ camera }}"
+              type: "{{ type }}"
+
+      - action: timer.cancel
+        target:
+          entity_id: timer.since_detected_object
+      - action: timer.start
+        data:
+          entity_id: timer.since_detected_object
+          duration: "{{ states('input_number.detected_object_timeout') | int  }}"
+
+      # Only when the TV is actually reachable - it's off far more often
+      # than not, and calling notify while it's off logs a loud error every
+      # time without ever succeeding. This must never block the counters
+      # and perimeter-socket logic below.
+      - if:
+          - condition: state
+            entity_id: media_player.dining_room_tv
+            state: "on"
+        then:
+          - action: script.dining_room_tv_notify
+            data:
+              message: >-
+                {{ type | capitalize }} in {{ camera | replace('_', ' ') }}
+
+      - choose:
+          - conditions: "{{ type == 'person' }}"
+            sequence:
+              - action: input_text.set_value
+                data:
+                  entity_id: input_text.last_person_camera
+                  value: "{{ camera }}"
+              - action: counter.increment
+                target:
+                  entity_id: counter.detections_person_today
+              - action: timer.cancel
+                target:
+                  entity_id: timer.since_detected_person
+              - action: timer.start
+                data:
+                  entity_id: timer.since_detected_person
+                  duration: "{{ states('input_number.detected_person_timeout') | int }}"
+
+          - conditions: "{{ type == 'vehicle' }}"
+            sequence:
+              - action: input_text.set_value
+                data:
+                  entity_id: input_text.last_vehicle_camera
+                  value: "{{ camera }}"
+              - action: counter.increment
+                target:
+                  entity_id: counter.detections_vehicle_today
+              - action: timer.cancel
+                target:
+                  entity_id: timer.since_detected_vehicle
+              - action: timer.start
+                data:
+                  entity_id: timer.since_detected_vehicle
+                  duration: "{{ states('input_number.detected_vehicle_timeout') | int }}"
+
+          - conditions: "{{ type == 'animal' }}"
+            sequence:
+              - action: input_text.set_value
+                data:
+                  entity_id: input_text.last_animal_camera
+                  value: "{{ camera }}"
+              - action: counter.increment
+                target:
+                  entity_id: counter.detections_animal_today
+              - action: timer.cancel
+                target:
+                  entity_id: timer.since_detected_animal
+              - action: timer.start
+                data:
+                  entity_id: timer.since_detected_animal
+                  duration: "{{ states('input_number.detected_animal_timeout') | int }}"
+
+      # Perimeter security socket - only worth switching on after dark, and
+      # the state comparison here used to check for "Off" (capital O), which
+      # a switch entity never reports, so this never actually fired.
+      - if:
+          - condition: state
+            entity_id: binary_sensor.outside_is_dark
+            state: "on"
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: switch.external_sockets
+                state: "on"
+        then:
+          - action: switch.turn_on
+            data:
+              entity_id: switch.external_sockets
+
+      # Log it (with the Protect event id, for the recorded clip) on the
+      # camera alert page - sensor.camera_alerts, camera_alerts.yaml.
+      # The Protect event entity can land a moment after the binary sensor.
+      - variables:
+          ev_entities: >-
+            {{ ['event.' ~ camera ~ '_smart_detection', 'event.' ~ camera ~ '_vehicle'] | select('has_value') | list }}
+      - wait_template: >-
+          {{ expand(ev_entities) | map(attribute='state') | map('as_timestamp', 0) | select('gt', as_timestamp(now()) - 60) | list | count > 0 }}
+        timeout: 5
+      - variables:
+          ev: >-
+            {% set recent = expand(ev_entities) | selectattr('state', 'gt', (utcnow() - timedelta(seconds=90)).isoformat()) | sort(attribute='state', reverse=true) | list %}
+            {{ recent[0].entity_id if recent else '' }}
+      - event: camera_alert
+        event_data:
+          camera: "{{ camera }}"
+          type: "{{ type }}"
+          event_id: "{{ state_attr(ev, 'event_id') if ev else '' }}"
+          nvr: "{{ config_entry_id('camera.' ~ camera ~ '_medium') or '' }}"
+
+  camera_detection_notification:
+    alias: Camera Detected Notification
+    description: "Notification of person, vehicle or animal detection"
+    mode: queued
+    fields:
+      camera:
+        description: "The name of the camera"
+        example: "driveway"
+      type:
+        description: "The type of the detection"
+        example: "vehicle"
+    sequence:
+      - if:
+          - condition: state
+            entity_id: input_boolean.status_homewatch
+            state: "on"
+          # Per-type on/off (camera_alerts.yaml)
+          - condition: template
+            value_template: "{{ is_state('input_boolean.camera_alerts_' ~ type, 'on') }}"
+        then:
+          - if:
+              - condition: state
+                entity_id: timer.detection_notification_retrigger
+                state: "idle"
+            then:
+              # START RETRIGGER TIMER
+              - action: timer.start
+                data:
+                  entity_id: timer.detection_notification_retrigger
+                  duration: "{{ states('input_number.detection_notification_timeout') | int }}"
+
+              # Mini squares flash removed 2026-11-17: Homewatch is only on
+              # while John is out, so the flash (master bedroom, living room,
+              # workshop) only ever lit up around Elizabeth and read as lights
+              # switching on by themselves. Phone notification below is kept.
+              # To restore: script.notify_mini_squares_object_detected with
+              # object_type: "{{ type | capitalize }}"
+
+              # Skip entirely rather than always failing: no AI Task
+              # provider is configured at all, so this call would error on
+              # every single detection otherwise. Falls back to a plain
+              # photo notification below when generated_content is unset.
+              - if:
+                  - condition: template
+                    value_template: "{{ states.ai_task | list | count > 0 }}"
+                then:
+                  - action: ai_task.generate_data
+                    continue_on_error: true
+                    data:
+                      task_name: "cctv_detection_caption"
+                      instructions: >-
+                        Briefly describe what you see in this image from my camera.
+                        Your message needs to be short to fit in a text message. Don't
+                        describe stationary objects or buildings but desscribe any people, vehicles or animals.
+                      attachments:
+                        - media_content_id: "/config/www/cctv/{{ type }}_latest.jpg"
+                          media_content_type: image/jpeg
+                    response_variable: generated_content
+
+              - action: logbook.log
+                data:
+                  name: "CCTV"
+                  message: >-
+                    {{ type | capitalize }} detected on {{ camera | replace('_', ' ') }}{{
+                      ': ' ~ generated_content.text if generated_content is defined else '' }}
+                  entity_id: input_text.last_object_camera
+
+              # Picture + live feed (iPhone/iPad, expanded) + tap for the
+              # recorded clip and quick actions (packages/camera_alerts.yaml)
+              - action: script.notify_dispatch
+                data:
+                  event: "camera_{{ type }}"
+                  title: >-
+                    {{ {'person': '🚶', 'vehicle': '🚗', 'animal': '🐾'}.get(type, '📷') }}
+                    {{ type | capitalize }} on the {{ camera | replace('_', ' ') }}
+                  message: >-
+                    {{ generated_content.text if generated_content is defined
+                       else now().strftime('%-I:%M%p') | lower ~ ' · tap to watch the clip' }}
+                  image: "/api/camera_proxy/camera.{{ camera }}_medium?t={{ as_timestamp(now()) | int }}"
+                  camera: "camera.{{ camera }}_medium"
+                  url: /lovelace/camera-alert
+                  group: camera-alerts
+                  push_actions:
+                    - action: "MUTE__camera_{{ type }}__60"
+                      title: Mute 1 hour
+                    - action: "CAM_OFF__{{ type }}"
+                      title: "Stop {{ {'person': 'people', 'vehicle': 'vehicle', 'animal': 'animal'}.get(type, type) }} alerts"
+                      destructive: true
+                    - action: CAM_LIGHTS
+                      title: Outside lights on
+
+              # Only when the TV is actually reachable - it's off far more
+              # often than not, and calling notify while it's off logs a
+              # loud error every time without ever succeeding.
+              - if:
+                  - condition: state
+                    entity_id: media_player.dining_room_tv
+                    state: "on"
+                then:
+                  - action: script.dining_room_tv_notify
+                    data:
+                      message: >-
+                        {{ generated_content.text if generated_content is defined
+                           else type | capitalize ~ ' in ' ~ (camera | replace('_', ' ')) }}
+
+  camera_safety_alarm:
+    alias: Camera Safety Alarm Detected
+    description: "Camera microphone heard a smoke or CO alarm"
+    mode: queued
+    fields:
+      camera:
+        description: "The name of the camera"
+        example: "driveway"
+      alarm_type:
+        description: "smoke or co"
+        example: "smoke"
+    sequence:
+      - action: camera.snapshot
+        data_template:
+          entity_id: camera.{{ camera }}_medium
+          filename: "/config/www/cctv/safety_{{ camera }}.jpg"
+
+      - if:
+          - condition: state
+            entity_id: timer.safety_alarm_notification_retrigger
+            state: "idle"
+        then:
+          - action: timer.start
+            data:
+              entity_id: timer.safety_alarm_notification_retrigger
+              duration: "{{ states('input_number.safety_alarm_notification_timeout') | int }}"
+
+          - action: logbook.log
+            data:
+              name: "CCTV Safety Alarm"
+              message: >-
+                {{ alarm_type | upper }} alarm heard by {{ camera | replace('_', ' ') }} camera
+              entity_id: input_text.last_object_camera
+
+          # Only when the TV is actually reachable - this is a safety alert
+          # and must never be blocked by (or spam an error for) the TV
+          # being off; script.notify_dispatch below covers the rest of the
+          # channels (phones with picture and live feed, kitchen TTS) regardless.
+          - if:
+              - condition: state
+                entity_id: media_player.dining_room_tv
+                state: "on"
+            then:
+              - action: script.dining_room_tv_notify
+                data:
+                  message: >-
+                    🚨 {{ alarm_type | upper }} ALARM heard near {{ camera | replace('_', ' ') }}
+
+          - action: script.notify_dispatch
+            data:
+              event: safety_alarm
+              critical: true
+              title: "🚨 Safety Alarm Detected"
+              image: "/api/camera_proxy/camera.{{ camera }}_medium?t={{ as_timestamp(now()) | int }}"
+              camera: "camera.{{ camera }}_medium"
+              url: /lovelace/camera-alert
+              message: >-
+                {{ alarm_type | upper }} alarm heard by {{ camera | replace('_', ' ') }} camera
+
+automation:
+  # Speedtest.net polling is switched off on the integration (it ran hourly,
+  # ~40 MB and a saturated line each time); test once a night instead.
+  # It still runs once whenever Home Assistant starts.
+  - id: speedtest_nightly
+    alias: "Speed Test Nightly"
+    mode: single
+    triggers:
+      - trigger: time
+        at: "03:30:00"
+    actions:
+      - action: homeassistant.update_entity
+        target:
+          entity_id: sensor.speedtest_download
+
+  - alias: "Camera Detected Person"
+    mode: queued
+    triggers:
+      - trigger: state
+        id: driveway
+        entity_id: binary_sensor.driveway_person_detected
+        to: "on"
+      - trigger: state
+        id: car_port
+        entity_id: binary_sensor.car_port_person_detected
+        to: "on"
+      - trigger: state
+        id: patio
+        entity_id: binary_sensor.patio_person_detected
+        to: "on"
+    action:
+      - action: script.camera_detection
+        data:
+          camera: "{{ trigger.id }}"
+          type: "person"
+
+  - alias: "Camera Detected Vehicle"
+    mode: queued
+    triggers:
+      - trigger: state
+        id: driveway
+        entity_id: binary_sensor.driveway_vehicle_detected
+        to: "on"
+      - trigger: state
+        id: car_port
+        entity_id: binary_sensor.car_port_vehicle_detected
+        to: "on"
+      - trigger: state
+        id: patio
+        entity_id: binary_sensor.patio_vehicle_detected
+        to: "on"
+    action:
+      - action: script.camera_detection
+        data:
+          camera: "{{ trigger.id }}"
+          type: "vehicle"
+
+  - alias: "Camera Detected Animal"
+    mode: queued
+    triggers:
+      - trigger: state
+        id: driveway
+        entity_id: binary_sensor.driveway_animal_detected
+        to: "on"
+      - trigger: state
+        id: car_port
+        entity_id: binary_sensor.car_port_animal_detected
+        to: "on"
+      - trigger: state
+        id: patio
+        entity_id: binary_sensor.patio_animal_detected
+        to: "on"
+    action:
+      - action: script.camera_detection
+        data:
+          camera: "{{ trigger.id }}"
+          type: "animal"
+
+  - alias: "Camera Safety Alarm Heard"
+    mode: queued
+    triggers:
+      - trigger: state
+        id: driveway_smoke
+        entity_id: binary_sensor.driveway_smoke_alarm_detected
+        to: "on"
+      - trigger: state
+        id: car_port_smoke
+        entity_id: binary_sensor.car_port_smoke_alarm_detected
+        to: "on"
+      - trigger: state
+        id: patio_smoke
+        entity_id: binary_sensor.patio_smoke_alarm_detected
+        to: "on"
+      - trigger: state
+        id: driveway_co
+        entity_id: binary_sensor.driveway_co_alarm_detected
+        to: "on"
+      - trigger: state
+        id: car_port_co
+        entity_id: binary_sensor.car_port_co_alarm_detected
+        to: "on"
+      - trigger: state
+        id: patio_co
+        entity_id: binary_sensor.patio_co_alarm_detected
+        to: "on"
+    action:
+      - action: script.camera_safety_alarm
+        data:
+          camera: "{{ trigger.id | regex_replace('_(smoke|co)$', '') }}"
+          alarm_type: "{{ 'smoke' if trigger.id.endswith('_smoke') else 'co' }}"
+
+  # The other UniFi cameras (the boys, house view, greenhouse, and
+  # driveway's g5_bullet_motion) don't have AI person/vehicle/animal
+  # detection enabled, but their plain motion sensors were completely
+  # unused. Fold them into the same activity trail (Logbook + "last motion"
+  # sensor) so every camera on the site actually contributes something,
+  # without spamming a phone notification for every leaf blowing past.
+  #
+  # There is no separate "g4_bullet" camera - car_port and patio are both
+  # G4 Bullet hardware and already get full AI detection coverage via their
+  # own dedicated automations above, so a g4_bullet_motion trigger here
+  # would only ever be a dead reference (that entity_id doesn't exist).
+  - alias: "Perimeter Camera Motion Activity"
+    mode: queued
+    max: 10
+    triggers:
+      - trigger: state
+        id: the_boys
+        entity_id: binary_sensor.the_boys_motion
+        to: "on"
+      - trigger: state
+        id: house_view
+        entity_id: binary_sensor.house_view_motion
+        to: "on"
+      - trigger: state
+        id: greenhouse
+        entity_id: binary_sensor.greenhouse_motion
+        to: "on"
+      - trigger: state
+        id: g5_bullet
+        entity_id: binary_sensor.g5_bullet_motion
+        to: "on"
+    action:
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.last_motion_camera
+          value: "{{ trigger.id }}"
+      - action: logbook.log
+        data:
+          name: "CCTV"
+          message: "Motion on {{ trigger.id | replace('_', ' ') }} camera"
+          entity_id: input_text.last_motion_camera
+
+  - alias: "CCTV Camera Offline Alert"
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.any_cctv_camera_offline
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: binary_sensor.any_cctv_camera_offline
+        state: "on"
+    action:
+      - action: script.notify_dispatch
+        data:
+          event: camera_offline
+          message: >-
+            Camera(s) offline: {{ state_attr('binary_sensor.any_cctv_camera_offline', 'offline_cameras') | join(', ') }}
+
+  - id: "cctv_nvr_storage_low"
+    alias: "CCTV NVR Storage Low"
+    mode: single
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.aird_nvr_storage_utilisation
+        above: input_number.nvr_storage_alert_threshold
+        for:
+          minutes: 10
+    action:
+      - action: script.notify_dispatch
+        data:
+          event: nvr_storage_low
+          message: >-
+            UniFi Protect storage is at {{ states('sensor.aird_nvr_storage_utilisation') }}% -
+            check retention settings or free up space.
+
+  - alias: "CCTV Daily Detection Counters Reset"
+    mode: single
+    triggers:
+      - trigger: time
+        at: "00:00:00"
+    action:
+      - action: counter.reset
+        target:
+          entity_id:
+            - counter.detections_person_today
+            - counter.detections_vehicle_today
+            - counter.detections_animal_today

@@ -1,0 +1,83 @@
+esphome:
+  name: ${deviceName}
+  friendly_name: ${deviceUpper}
+
+esp8266:
+  board: ${boardName}
+  restore_from_flash: true
+
+wifi:
+  ssid: ${wifiSSID}
+  password: ${wifiPass}
+  fast_connect: true
+  power_save_mode: none
+  manual_ip:
+    static_ip: ${ipAddress}
+    gateway: 192.168.40.1
+    subnet: 255.255.255.0
+    dns1: 192.168.1.1
+
+captive_portal:
+logger:
+ota:
+  platform: esphome
+  password: ${passOTA}
+
+i2c:
+  sda: ${i2cData}
+  scl: ${i2cClock}
+  scan: True
+  frequency: 800kHz
+  id: bus_a
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret api_key_includes_sensor_8266
+
+switch:
+  - platform: restart
+    name: "ESP Restart"
+
+sensor:
+  - platform: wifi_signal
+    name: ESP Signal
+    filters:
+      - or:
+          - throttle: 600s
+          - delta: 5.0
+    update_interval: 30s
+
+  - platform: uptime
+    name: ESP Uptime
+    update_interval: 60s
+
+  - platform: sht3xd
+    temperature:
+      name: "Temperature"
+      accuracy_decimals: 1
+      id: ${deviceName}_temperature
+      filters:
+        - or:
+            - throttle: 300s
+            - delta: 0.1
+    humidity:
+      name: "Humidity"
+      accuracy_decimals: 0
+      id: ${deviceName}_humidity
+      filters:
+        - or:
+            - throttle: 600s
+            - delta: 1.0
+    address: 0x44
+    update_interval: 5s
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: ${pirPin}
+      mode:
+        input: true
+        pulldown: true
+    name: "Motion"
+    device_class: motion

@@ -1,0 +1,168 @@
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      common: &common
+        package: "Water Heater"
+
+    # Template Sensors
+    input_boolean.power_status_*:
+      <<: *common
+
+climate:
+  - platform: generic_thermostat
+    name: Water Heater Backup
+    heater: switch.water_heater
+    target_sensor: sensor.water_heater_temperature
+    min_temp: 30
+    max_temp: 70
+    min_cycle_duration:
+      seconds: 240
+    away_temp: 30
+    precision: 1.0
+    cold_tolerance: 0.1
+    hot_tolerance: 1
+
+input_number:
+  water_heater_setpoint:
+    name: Water Heater Backup Setpoint
+    min: 30
+    max: 70
+
+  water_heater_low_alarm:
+    name: Water Heater Temperature To Take Action
+    min: 0
+    max: 70
+  water_heater_low_alarm_linger:
+    name: Water Heater Time To Wait In Minutes
+    min: 1
+    max: 60
+
+input_boolean:
+  power_status_water_heater:
+    name: "Power Status: Water Heater"
+    icon: mdi:gas-cylinder
+
+  power_tripped_water_heater:
+    name: "Power Tripped: Water Heater"
+    icon: mdi:gas-cylinder
+
+automation:
+  - alias: "Water Heater Turned On"
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.water_heater_power
+        above: 1200
+    actions:
+      - action: input_boolean.turn_on
+        entity_id: input_boolean.power_status_water_heater
+
+  - alias: "Water Heater Turned Off"
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.water_heater_power
+        below: 1200
+    actions:
+      - action: input_boolean.turn_off
+        entity_id: input_boolean.power_status_water_heater
+
+  - alias: "Water Heater Overcurrent"
+    mode: single
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.water_heater_power
+        above: 3300
+        for:
+          seconds: 2
+    actions:
+      # The legacy `notify: platform: file` integration this used to log to
+      # was removed by HA core (it now fails with "Invalid notify platform"
+      # on every startup and the notify.water_heater_log target never gets
+      # created) - logbook.log gives the same persistent, timestamped record.
+      - action: logbook.log
+        data:
+          name: "Water Heater"
+          message: "Overcurrent protection activated. Power: {{ (states('sensor.water_heater_power') | int(0)) }}W."
+          entity_id: climate.water_heater_backup
+
+      - choose:
+          # 'heating' is the hvac_action attribute, not a climate state
+          # (states are hvac modes like heat/off) - the old is_state() check
+          # could never match, so the backup was never switched off here.
+          - conditions: "{{ is_state_attr('climate.water_heater_backup', 'hvac_action', 'heating') }}"
+            sequence:
+              - action: climate.turn_off
+                target:
+                  entity_id: climate.water_heater_backup
+
+        default:
+          - action: switch.turn_off
+            target:
+              entity_id: switch.water_heater
+
+  - alias: Water Heater Activate Backup
+    mode: restart
+    description: ""
+    triggers:
+      - trigger: template
+        # default=999 on the temperature reading: if the sensor is briefly
+        # unavailable, treat it as "not cold" rather than crash the trigger,
+        # so backup heating only kicks in on a genuinely confirmed low
+        # reading, not a sensor hiccup.
+        value_template: "{{ (states('input_number.water_heater_low_alarm') | int) > (states('sensor.water_heater_temperature') | int(999)) }}"
+        for:
+          minutes: "{{ states('input_number.water_heater_low_alarm_linger') | int }}"
+    conditions: "{{ states('input_boolean.power_status_water_heater') == 'off'
+      and states('input_boolean.power_tripped_water_heater') == 'off' }}"
+    actions:
+      - action: script.water_heater_activate_backup
+
+script:
+  water_heater_activate_backup:
+    alias: Water Heater Activate Backup
+    mode: single
+    description: ""
+    sequence:
+      - action: logbook.log
+        data:
+          name: "Water Heater"
+          message: "Backup activated. Water temperature: {{ (states('sensor.water_heater_temperature') | int(0)) }}°C."
+          entity_id: climate.water_heater_backup
+
+      - action: input_boolean.turn_on
+        entity_id: input_boolean.power_tripped_water_heater
+
+      - action: climate.turn_on
+        target:
+          entity_id: climate.water_heater_backup
+
+      - action: climate.set_preset_mode
+        data:
+          entity_id: climate.water_heater_backup
+          preset_mode: none
+      - delay:
+          milliseconds: 250
+
+      - action: climate.set_temperature
+        target:
+          entity_id: climate.water_heater_backup
+        data_template:
+          temperature: "{{ states('input_number.water_heater_setpoint') | int }}"
+          hvac_mode: heat
+
+  water_heater_reset_backup:
+    alias: Water Heater Reset Backup
+    mode: single
+    description: ""
+    sequence:
+      - action: logbook.log
+        data:
+          name: "Water Heater"
+          message: "Backup reset."
+          entity_id: climate.water_heater_backup
+
+      - action: input_boolean.turn_off
+        entity_id: input_boolean.power_tripped_water_heater
+
+      - action: climate.turn_off
+        target:
+          entity_id: climate.water_heater_backup

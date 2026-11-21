@@ -1,0 +1,31 @@
+esphome:
+  name: screen-controller
+
+esp8266:
+  board: d1_mini
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+
+ota:
+  password: "ioios.io33"
+
+wifi:
+  ssid: !secret wifiSSID
+  password: !secret wifiPass
+  fast_connect: true
+
+
+# Example configuration entry
+output:
+  - platform: gpio
+    pin: D2
+    id: 'generic_out'
+    
+switch:
+  - platform: output
+    name: "Generic Output"
+    output: 'generic_out'

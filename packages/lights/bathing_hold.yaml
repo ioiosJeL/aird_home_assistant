@@ -1,0 +1,83 @@
+# Shower / bath in progress, from the room's humidity.
+#
+# Someone in the shower or bath sits behind a curtain/screen or lies still,
+# so the motion sensor stops seeing them and the lights used to time out
+# on them. These sensors hold the lights on (motion auto-off extra
+# condition, and the 15-minute "Master Lights Off Check" safety net) while
+# humidity shows a shower/bath is running.
+#
+# On when humidity is >= 5 points above its lowest reading in the past hour
+# AND still near its 15-minute peak (so it releases once the room starts
+# drying out, rather than staying on for the whole hour). Calibrated on Oct-Nov
+# 2026 history: holds of 10-45 min (shower) / 10-65 min (bath), lining up
+# with the room actually being used.
+
+homeassistant:
+  customize:
+    binary_sensor.shower_room_bathing:
+      package: "Lights"
+      room: "Shower Room"
+    binary_sensor.bathroom_bathing:
+      package: "Lights"
+      room: "Bathroom"
+
+template:
+  - triggers:
+      - trigger: time_pattern
+        minutes: "/5"
+      - trigger: state
+        entity_id: sensor.bluht_shower_room_humidity
+    binary_sensor:
+      - default_entity_id: binary_sensor.shower_room_bathing
+        name: Shower Room Bathing
+        unique_id: shower_room_bathing
+        icon: mdi:shower-head
+        delay_off:
+          minutes: 5
+        state: >-
+          {% set h = states('sensor.bluht_shower_room_humidity') | float(none) %}
+          {% set s = this.attributes.get('samples', []) | list %}
+          {% set ts = as_timestamp(now()) %}
+          {% if h is none %}
+            false
+          {% else %}
+            {% set w60 = s | selectattr(0, 'ge', ts - 3600) | map(attribute=1) | list + [h] %}
+            {% set w15 = s | selectattr(0, 'ge', ts - 900) | map(attribute=1) | list + [h] %}
+            {{ h - (w60 | min) >= 5 and h >= (w15 | max) - 1.5 }}
+          {% endif %}
+        attributes:
+          samples: >-
+            {% set h = states('sensor.bluht_shower_room_humidity') | float(none) %}
+            {% set s = this.attributes.get('samples', []) | list %}
+            {% set kept = s | selectattr(0, 'ge', as_timestamp(now()) - 3660) | list %}
+            {{ (kept + [[as_timestamp(now()) | round(0), h]]) if h is not none else kept }}
+
+  - triggers:
+      - trigger: time_pattern
+        minutes: "/5"
+      - trigger: state
+        entity_id: sensor.bluht_bathroom_humidity
+    binary_sensor:
+      - default_entity_id: binary_sensor.bathroom_bathing
+        name: Bathroom Bathing
+        unique_id: bathroom_bathing
+        icon: mdi:bathtub-outline
+        delay_off:
+          minutes: 5
+        state: >-
+          {% set h = states('sensor.bluht_bathroom_humidity') | float(none) %}
+          {% set s = this.attributes.get('samples', []) | list %}
+          {% set ts = as_timestamp(now()) %}
+          {% if h is none %}
+            false
+          {% else %}
+            {% set w60 = s | selectattr(0, 'ge', ts - 3600) | map(attribute=1) | list + [h] %}
+            {% set w15 = s | selectattr(0, 'ge', ts - 900) | map(attribute=1) | list + [h] %}
+            {{ h - (w60 | min) >= 5 and h >= (w15 | max) - 1.5 }}
+          {% endif %}
+        attributes:
+          samples: >-
+            {% set h = states('sensor.bluht_bathroom_humidity') | float(none) %}
+            {% set s = this.attributes.get('samples', []) | list %}
+            {% set kept = s | selectattr(0, 'ge', as_timestamp(now()) - 3660) | list %}
+            {{ (kept + [[as_timestamp(now()) | round(0), h]]) if h is not none else kept }}

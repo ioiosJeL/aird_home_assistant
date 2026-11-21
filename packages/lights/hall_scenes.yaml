@@ -1,0 +1,129 @@
+script:
+  hall_scene_scroll:
+    alias: Hall Scene Progression
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: "input_select.select_{{ 'next' if is_state('input_boolean.status_nighttime', 'on') else 'previous' }}"
+        target:
+          entity_id: input_select.hall_scenes
+        data:
+          cycle: true
+      - action: script.turn_on
+        target:
+          entity_id: "script.hall_scene_{{ states('input_select.hall_scenes') | lower  }}"
+
+  hall_scene_change:
+    alias: Hall Scene Change
+    description: "Scene change functions"
+    mode: single
+    fields:
+      scene_name:
+        description: "The title of the scene"
+        example: "Automatic"
+      scene_duration:
+        description: "The duration of scene change"
+        example: "5"
+    sequence:
+      - action: input_boolean.turn_on
+        data:
+          entity_id: input_boolean.hall_scene_changing
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.hall_previous_scene
+          value: "{{ states('input_select.hall_scenes') | string }}"
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.hall_last_action
+          value: "Scene Selected: {{ scene_name }}"
+
+      - action: input_select.select_option
+        data:
+          entity_id: input_select.hall_scenes
+          option: "{{ scene_name }}"
+
+      - action: timer.start
+        data:
+          entity_id: timer.hall_scene_changing
+          duration: "{{ scene_duration | int }}"
+
+      - wait_template: "{{ is_state('timer.hall_scene_changing', 'idle') }}"
+
+      - action: input_boolean.turn_off
+        data:
+          entity_id: input_boolean.hall_scene_changing
+
+  hall_scene_bright:
+    alias: Hall Bright Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.hall_scene_change
+        data:
+          variables:
+            scene_name: "Bright"
+            scene_duration: 1
+      - action: light.turn_on
+        data:
+          entity_id: light.hall
+          brightness: 255
+          color_temp_kelvin: 5220
+          transition: 1
+
+  hall_scene_relax:
+    alias: Hall Relax Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.hall_scene_change
+        data:
+          variables:
+            scene_name: "Relax"
+            scene_duration: 2
+      - action: light.turn_on
+        data:
+          entity_id: light.hall
+          brightness: 150
+          color_temp_kelvin: 4180
+          transition: 2
+
+  hall_scene_cosy:
+    alias: Hall Cosy Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.hall_scene_change
+        data:
+          variables:
+            scene_name: "Cosy"
+            scene_duration: 2
+      - action: light.turn_on
+        data:
+          entity_id: light.hall
+          brightness: 80
+          color_temp_kelvin: 3200
+          transition: 2
+
+  hall_scene_off:
+    alias: Hall Off Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.hall_scene_change
+        data:
+          variables:
+            scene_name: "Off"
+            scene_duration: 1
+      - action: light.turn_off
+        data:
+          entity_id: light.hall

@@ -1,0 +1,76 @@
+# House-wide roll-ups for the Overview view (dashboards/lovelace/overview.yaml)
+# and available for automations. Each has a count as its state and the names
+# behind it in an attribute, so health_tile/status_list can show both.
+
+template:
+  - sensor:
+      # Individual lights that are on (light groups excluded so nothing is
+      # counted twice); `rooms` lists the areas they are in.
+      - default_entity_id: sensor.lights_on
+        name: Lights On
+        icon: mdi:lightbulb-group
+        unit_of_measurement: lights
+        state: >-
+          {{ states.light | rejectattr('attributes.entity_id', 'defined')
+             | selectattr('state', 'eq', 'on') | list | count }}
+        attributes:
+          rooms: >-
+            {{ states.light | rejectattr('attributes.entity_id', 'defined')
+               | selectattr('state', 'eq', 'on') | map(attribute='entity_id')
+               | map('area_name') | reject('none') | unique | sort | join(', ') }}
+
+      # Room master light groups that are on (Home view "Lights on" card).
+      # Workspace, mini squares and triptych are deliberately not rooms.
+      - default_entity_id: sensor.rooms_lit
+        name: Rooms Lit
+        icon: mdi:home-lightbulb-outline
+        unit_of_measurement: rooms
+        # Plain state check (not expand(), which would open each group
+        # up into its individual bulbs)
+        state: >-
+          {{ ['light.dining_room_lights_master', 'light.living_room_lights_master', 'light.kitchen_lights_master', 'light.utility_room_lights_master', 'light.hall_lights_master', 'light.landing_lights_master', 'light.front_porch_lights_master', 'light.bathroom_lights_master', 'light.shower_room_lights_master', 'light.single_bedroom_lights_master', 'light.double_bedroom_lights_master', 'light.master_bedroom_lights_master', 'light.sunroom_lights_master'] | select('is_state', 'on') | list | count }}
+        attributes:
+          rooms: >-
+            {{ ['light.dining_room_lights_master', 'light.living_room_lights_master', 'light.kitchen_lights_master', 'light.utility_room_lights_master', 'light.hall_lights_master', 'light.landing_lights_master', 'light.front_porch_lights_master', 'light.bathroom_lights_master', 'light.shower_room_lights_master', 'light.single_bedroom_lights_master', 'light.double_bedroom_lights_master', 'light.master_bedroom_lights_master', 'light.sunroom_lights_master'] | select('is_state', 'on')
+               | map('replace', 'light.', '') | map('replace', '_lights_master', '') | list }}
+
+      # Thermostats currently calling for heat
+      - default_entity_id: sensor.heaters_running
+        name: Heaters Running
+        icon: mdi:radiator
+        unit_of_measurement: heaters
+        state: >-
+          {{ states.climate | selectattr('attributes.hvac_action', 'defined')
+             | selectattr('attributes.hvac_action', 'eq', 'heating') | list | count }}
+        attributes:
+          devices: >-
+            {{ states.climate | selectattr('attributes.hvac_action', 'defined')
+               | selectattr('attributes.hvac_action', 'eq', 'heating')
+               | map(attribute='name') | map('replace', ' Heating', '') | sort | join(', ') }}
+
+      # Pending updates across HA core/OS, add-ons, HACS and device firmware
+      - default_entity_id: sensor.updates_pending
+        name: Updates Pending
+        icon: mdi:package-up
+        unit_of_measurement: updates
+        state: >-
+          {{ states.update | selectattr('state', 'eq', 'on') | list | count }}
+        attributes:
+          devices: >-
+            {{ states.update | selectattr('state', 'eq', 'on') | map(attribute='name')
+               | map('replace', ' Firmware', '') | map('replace', ' Update', '') | sort | join(', ') }}
+
+script:
+  # "All off" on the Home view: each lit room goes through its own Off
+  # scene script so the room's scene selector ends up as Off too
+  house_lights_all_off:
+    alias: House Lights All Off
+    icon: mdi:lightbulb-group-off
+    mode: single
+    sequence:
+      - repeat:
+          for_each: "{{ state_attr('sensor.rooms_lit', 'rooms') or [] }}"
+          sequence:
+            - action: script.turn_on
+              target:
+                entity_id: "script.{{ repeat.item }}_scene_off"

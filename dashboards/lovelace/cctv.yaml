@@ -1,0 +1,441 @@
+# CCTV page (shared by the main and admin dashboards). One section per
+# column so columns size independently; top-level cards use rows: auto.
+# Detection counters/automations: packages/unifi.yaml.
+path: cctv
+title: CCTV
+icon: mdi:cctv
+type: sections
+max_columns: 4
+sections:
+  # =====================================================================
+  # Column 1: Cameras
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: heading
+        heading: Cameras
+        icon: mdi:cctv
+        badges:
+          - type: entity
+            entity: binary_sensor.any_cctv_camera_offline
+            show_icon: true
+            show_state: true
+            color: red
+            visibility:
+              - condition: state
+                entity: binary_sensor.any_cctv_camera_offline
+                state: "on"
+      - type: picture-entity
+        entity: camera.driveway_medium
+        name: Driveway
+        show_state: false
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: picture-entity
+        entity: camera.car_port_medium
+        name: Car Port
+        show_state: false
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: picture-entity
+        entity: camera.patio_medium
+        name: Patio
+        show_state: false
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: picture-entity
+        entity: camera.house_view_medium
+        name: House View
+        show_state: false
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: picture-entity
+        entity: camera.the_boys_high_resolution_channel
+        name: The Boys
+        show_state: false
+        grid_options:
+          columns: full
+          rows: auto
+
+  # =====================================================================
+  # Column 2: Activity today + latest snapshots
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: heading
+        heading: Activity Today
+        icon: mdi:motion-sensor
+      - type: custom:button-card
+        entity: sensor.perimeter_activity_today
+        show_name: false
+        show_icon: false
+        show_state: false
+        triggers_update:
+          - counter.detections_person_today
+          - counter.detections_vehicle_today
+          - counter.detections_animal_today
+          - input_text.last_person_camera
+          - input_text.last_vehicle_camera
+          - input_text.last_animal_camera
+          - input_text.last_motion_camera
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: full
+          rows: auto
+        styles:
+          card:
+            - padding: 14px 16px
+          grid:
+            - grid-template-areas: '"body"'
+            - grid-template-columns: 1fr
+          custom_fields:
+            body:
+              - justify-self: stretch
+              - text-align: left
+        custom_fields:
+          body: |
+            [[[
+              // Protect reports some cameras by model rather than name.
+              const cams = {g5_bullet: 'Driveway', g3_flex: 'House View', g3_instant: 'The Boys'};
+              const pretty = (v) => !v || ['unknown', 'unavailable', ''].includes(v) ? null
+                : cams[v] || v.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+              const total = parseInt(entity?.state) || 0;
+              const row = (label, icon, color, counter, cam) => {
+                const c = states[counter], n = c ? parseInt(c.state) || 0 : 0;
+                const where = pretty(states[cam]?.state);
+                const when = n > 0 && c ? new Date(c.last_changed).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : null;
+                const sub = n > 0 ? `Last ${when}${where ? ' · ' + where : ''}` : (where ? `None today · last on ${where}` : 'None today');
+                return `<div class="r" data-e="${counter}">
+                  <div class="i" style="background:color-mix(in srgb,${n ? color : 'var(--primary-text-color)'} ${n ? 22 : 6}%,transparent)"><ha-icon icon="${icon}" style="color:${n ? color : 'var(--secondary-text-color)'}"></ha-icon></div>
+                  <div><div class="l">${label}</div><div class="s">${sub}</div></div>
+                  <div class="n">${n}</div></div>`;
+              };
+              const other = pretty(states['input_text.last_motion_camera']?.state);
+              return `
+              <style>
+                .hd{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px}
+                .hd .t{font-size:.85rem;color:var(--secondary-text-color)}
+                .hd .v{font-size:1.55rem;font-weight:700}
+                .r{display:grid;grid-template-columns:36px 1fr auto;gap:10px;align-items:center;padding:6px 0}
+                .i{width:36px;height:36px;border-radius:11px;display:flex;align-items:center;justify-content:center}
+                .i ha-icon{--mdc-icon-size:20px}
+                .l{font-weight:600}
+                .s{font-size:.8rem;color:var(--secondary-text-color)}
+                .n{font-size:1.25rem;font-weight:700;font-variant-numeric:tabular-nums}
+                .o{font-size:.8rem;color:var(--secondary-text-color);margin-top:4px}
+              </style>
+              <div class="hd"><span class="t">Detections</span><span class="v">${total}</span></div>
+              ${row('People', 'mdi:walk', 'var(--blue-color)', 'counter.detections_person_today', 'input_text.last_person_camera')}
+              ${row('Vehicles', 'mdi:car', 'var(--amber-color)', 'counter.detections_vehicle_today', 'input_text.last_vehicle_camera')}
+              ${row('Animals', 'mdi:paw', 'var(--green-color)', 'counter.detections_animal_today', 'input_text.last_animal_camera')}
+              ${other ? `<div class="o">Last other motion: ${other}</div>` : ''}`;
+            ]]]
+      - type: heading
+        heading: Latest
+        heading_style: subtitle
+      - type: picture-entity
+        entity: camera.latest_person
+        name: Person
+        show_state: false
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: picture-entity
+        entity: camera.latest_vehicle
+        name: Vehicle
+        show_state: false
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: picture-entity
+        entity: camera.latest_animal
+        name: Animal
+        show_state: false
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: picture-entity
+        entity: camera.latest_detection
+        name: Any
+        show_state: false
+        grid_options:
+          columns: 6
+          rows: auto
+
+      # Timeline of AI detections and safety alarms (sensor.activity_feed,
+      # packages/alerts.yaml) - survives restarts, no history queries
+      - type: custom:button-card
+        template: feed_list
+        entity: sensor.activity_feed
+        grid_options:
+          columns: full
+          rows: auto
+        triggers_update:
+          - sensor.date_time_24h
+        variables:
+          title: Detection timeline
+          kinds: [cctv]
+          limit: 10
+          empty: No detections logged yet
+
+  # =====================================================================
+  # Column 3: Smart detection toggles
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: heading
+        heading: Detections
+        icon: mdi:shield-search
+      - type: grid
+        square: false
+        columns: 4
+        grid_options:
+          columns: full
+          rows: auto
+        cards:
+          - <<: &cam_label
+              type: custom:button-card
+              show_icon: false
+              tap_action:
+                action: none
+              styles:
+                card:
+                  - background: none
+                  - box-shadow: none
+                  - border: none
+                  - height: 100%
+                  - padding: 0 2px
+                name:
+                  - justify-self: start
+                  - font-size: 0.85rem
+                  - font-weight: 600
+            name: Driveway
+          - <<: &det
+              type: custom:button-card
+              template: room_toggle
+              name: Person
+              icon: mdi:walk
+              variables:
+                color: "var(--blue-color)"
+            entity: switch.driveway_detections_person
+          - type: custom:button-card
+            template: room_toggle
+            entity: switch.driveway_detections_vehicle
+            name: Vehicle
+            icon: mdi:car
+            variables:
+              color: "var(--amber-color)"
+          - type: custom:button-card
+            template: room_toggle
+            entity: switch.driveway_detections_animal
+            name: Animal
+            icon: mdi:paw
+            variables:
+              color: "var(--green-color)"
+
+          - <<: *cam_label
+            name: Car Port
+          - <<: *det
+            entity: switch.car_port_detections_person
+          - type: custom:button-card
+            template: room_toggle
+            entity: switch.car_port_detections_vehicle
+            name: Vehicle
+            icon: mdi:car
+            variables:
+              color: "var(--amber-color)"
+          - type: custom:button-card
+            template: room_toggle
+            entity: switch.car_port_detections_animal
+            name: Animal
+            icon: mdi:paw
+            variables:
+              color: "var(--green-color)"
+
+          # Patio's person/vehicle switches kept Protect's model-based names.
+          - <<: *cam_label
+            name: Patio
+          - <<: *det
+            entity: switch.g4_bullet_detections_person
+          - type: custom:button-card
+            template: room_toggle
+            entity: switch.g4_bullet_detections_vehicle
+            name: Vehicle
+            icon: mdi:car
+            variables:
+              color: "var(--amber-color)"
+          - type: custom:button-card
+            template: room_toggle
+            entity: switch.patio_detections_animal
+            name: Animal
+            icon: mdi:paw
+            variables:
+              color: "var(--green-color)"
+      - type: grid
+        square: false
+        columns: 2
+        grid_options:
+          columns: full
+          rows: auto
+        cards:
+          - type: custom:button-card
+            template: room_toggle
+            entity: switch.house_view_detections_motion
+            name: House View motion
+            icon: mdi:motion-sensor
+            variables:
+              color: "var(--purple-color)"
+          - type: custom:button-card
+            template: room_toggle
+            entity: switch.the_boys_detections_motion
+            name: The Boys motion
+            icon: mdi:motion-sensor
+            variables:
+              color: "var(--purple-color)"
+
+  # =====================================================================
+  # Column 4: NVR health
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: heading
+        heading: NVR
+        icon: mdi:server
+        badges:
+          - type: entity
+            entity: sensor.aird_network_state
+            show_icon: true
+      - type: custom:button-card
+        template: stat_tile
+        entity: sensor.aird_nvr_storage_utilisation
+        name: Storage
+        icon: mdi:harddisk
+        variables:
+          warn: 80
+          crit: 90
+        grid_options:
+          columns: 4
+          rows: auto
+      - type: custom:button-card
+        template: stat_tile
+        entity: sensor.aird_network_cpu_utilisation
+        name: CPU
+        icon: mdi:cpu-64-bit
+        variables:
+          warn: 70
+          crit: 85
+        grid_options:
+          columns: 4
+          rows: auto
+      - type: custom:button-card
+        template: stat_tile
+        entity: sensor.aird_network_memory_utilisation
+        name: Memory
+        icon: mdi:memory
+        variables:
+          warn: 75
+          crit: 90
+        grid_options:
+          columns: 4
+          rows: auto
+
+      # What the disk is full of, and how far back recordings go.
+      - type: custom:button-card
+        entity: sensor.aird_nvr_recording_capacity
+        show_name: false
+        show_icon: false
+        show_state: false
+        triggers_update:
+          - sensor.aird_nvr_type_continuous_video
+          - sensor.aird_nvr_type_timelapse_video
+          - sensor.aird_nvr_type_detections_video
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: full
+          rows: auto
+        styles:
+          card:
+            - padding: 12px 14px
+          grid:
+            - grid-template-areas: '"body"'
+            - grid-template-columns: 1fr
+          custom_fields:
+            body:
+              - justify-self: stretch
+              - text-align: left
+        custom_fields:
+          body: |
+            [[[
+              const n = id => { const x = parseFloat(states[id]?.state); return isNaN(x) ? 0 : x; };
+              const parts = [
+                ['Continuous', n('sensor.aird_nvr_type_continuous_video'), 'var(--blue-color)'],
+                ['Timelapse', n('sensor.aird_nvr_type_timelapse_video'), 'var(--amber-color)'],
+                ['Detections', n('sensor.aird_nvr_type_detections_video'), 'var(--green-color)'],
+              ];
+              const secs = parseFloat(entity?.state);
+              const days = isNaN(secs) ? null : secs / 86400;
+              return `
+              <style>
+                .hd{display:flex;justify-content:space-between;align-items:baseline}
+                .t{font-size:11px;font-weight:600;color:var(--secondary-text-color)}
+                .d{font-size:1.2rem;font-weight:700}
+                .d small{font-size:.65em;font-weight:500;margin-left:2px}
+                .bar{display:flex;height:8px;border-radius:4px;overflow:hidden;margin:8px 0 6px;background:color-mix(in srgb,var(--primary-text-color) 10%,transparent)}
+                .k{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:var(--secondary-text-color)}
+                .k b{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:middle}
+              </style>
+              <div class="hd"><span class="t">Recording history</span><span class="d">${days === null ? '—' : `≈${Math.round(days)}<small>days</small>`}</span></div>
+              <div class="bar">${parts.map(([, v, c]) => `<div style="width:${v}%;background:${c}"></div>`).join('')}</div>
+              <div class="k">${parts.map(([l, v, c]) => `<span><b style="background:${c}"></b>${l} ${v.toFixed(v && v < 10 ? 1 : 0)}%</span>`).join('')}</div>`;
+            ]]]
+
+      - type: custom:button-card
+        template: health_tile
+        entity: sensor.aird_nvr_cpu_temperature_watchdog
+        name: CPU temp
+        icon: mdi:thermometer
+        variables:
+          warn: 70
+          crit: 80
+          detail: none
+          ok_text: Normal
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: tile
+        entity: binary_sensor.aird_nvr_ssd_1
+        name: SSD
+        icon: mdi:harddisk
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: tile
+        entity: input_number.nvr_storage_alert_threshold
+        name: Storage alert at
+        icon: mdi:bell-alert-outline
+        features_position: inline
+        features:
+          - type: numeric-input
+            style: buttons
+        grid_options:
+          columns: full
+          rows: auto
+      - type: tile
+        entity: sensor.aird_network_uptime_2
+        name: Up since
+        icon: mdi:clock-check-outline
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: tile
+        entity: update.aird_network_firmware
+        name: Firmware
+        grid_options:
+          columns: 6
+          rows: auto

@@ -1,0 +1,1107 @@
+# Overview: the whole house at a glance. Exceptions first (what needs
+# attention, what's running), then energy, climate, outside, security and
+# system health. One section per column so columns size independently.
+# Cards use the shared templates in dashboards/button_card_templates.yaml;
+# the roll-up sensors (lights_on, heaters_running, updates_pending) live in
+# packages/overview.yaml.
+path: overview
+title: Overview
+type: sections
+max_columns: 4
+sections:
+  # =====================================================================
+  # Column 1: At a glance
+  # =====================================================================
+  - type: grid
+    cards:
+      # --- Hero: greeting, weather, sun, headline numbers
+      - type: custom:button-card
+        grid_options:
+          columns: full
+          rows: auto
+        entity: weather.portree
+        show_icon: false
+        show_name: false
+        show_state: false
+        tap_action:
+          action: none
+        triggers_update:
+          - sensor.date_time_24h
+          - sensor.outside_average_temperature
+          - sun.sun
+          - input_select.house_mode
+          - person.john_lumley
+          - person.elizabeth_munsie
+          - sensor.lights_on
+          - sensor.whole_house_power
+          - sensor.period_of_day
+        custom_fields:
+          hero: |
+            [[[
+              const more = id => `data-tap onpointerdown="this._p=[event.clientX,event.clientY]" onpointerup="const p=this._p;this._p=null;if(!p||Math.abs(event.clientX-p[0])>10||Math.abs(event.clientY-p[1])>10)return;event.stopPropagation();this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${id}'},bubbles:true,composed:true}))"`;
+              const now = new Date();
+              const h = now.getHours();
+              const greet = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+              const date = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+              const w = entity;
+              const icons = { 'clear-night': 'weather-night', cloudy: 'weather-cloudy', exceptional: 'alert-circle-outline',
+                fog: 'weather-fog', hail: 'weather-hail', lightning: 'weather-lightning', 'lightning-rainy': 'weather-lightning-rainy',
+                partlycloudy: 'weather-partly-cloudy', pouring: 'weather-pouring', rainy: 'weather-rainy', snowy: 'weather-snowy',
+                'snowy-rainy': 'weather-snowy-rainy', sunny: 'weather-sunny', windy: 'weather-windy', 'windy-variant': 'weather-windy-variant' };
+              const cond = w ? w.state.replace('partlycloudy', 'partly cloudy').replace('clear-night', 'clear').replace(/-/g, ' ') : '';
+              const t = parseFloat(states['sensor.outside_average_temperature']?.state);
+              const temp = isNaN(t) ? (w?.attributes.temperature ?? '—') : t.toFixed(1);
+              const wind = w ? `${Math.round(w.attributes.wind_speed)} ${w.attributes.wind_speed_unit}` : '';
+              // Sun: next sunrise/sunset and day length
+              const sun = states['sun.sun']?.attributes || {};
+              const rise = new Date(sun.next_rising), set = new Date(sun.next_setting);
+              const hm = d => d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+              const dayMs = set > rise ? set - rise : set - (rise - 86400000);
+              const dayLen = `${Math.floor(dayMs / 3600000)}h ${Math.round(dayMs / 60000) % 60}m`;
+              const sunTxt = states['sun.sun']?.state === 'above_horizon' ? `Sunset ${hm(set)}` : `Sunrise ${hm(rise)}`;
+              // Day-length trend: sunrise equation at the home latitude, today vs yesterday
+              const lat = (hass?.config?.latitude ?? 57.4) * Math.PI / 180;
+              const dayLenAt = d => {
+                const n = Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
+                const dec = 23.44 * Math.PI / 180 * Math.sin(2 * Math.PI * (284 + n) / 365);
+                const c = (Math.cos(90.833 * Math.PI / 180) - Math.sin(lat) * Math.sin(dec)) / (Math.cos(lat) * Math.cos(dec));
+                return c >= 1 ? 0 : c <= -1 ? 1440 : 2 * Math.acos(c) * 180 / Math.PI / 15 * 60;
+              };
+              const delta = Math.round(dayLenAt(now) - dayLenAt(new Date(now - 86400000)));
+              const trend = delta === 0 ? '' : ` (${delta > 0 ? '+' : '−'}${Math.abs(delta)}m on yesterday)`;
+              // Headline chips
+              const people = ['person.john_lumley', 'person.elizabeth_munsie'];
+              const home = people.filter(p => states[p]?.state === 'home').length;
+              const lights = states['sensor.lights_on']?.state ?? '—';
+              const pw = Math.round(parseFloat(states['sensor.whole_house_power']?.state)) || 0;
+              const mode = states['input_select.house_mode']?.state ?? '—';
+              const chip = (id, icon, txt) => `<span class="c" ${more(id)}><ha-icon icon="${icon}"></ha-icon>${txt}</span>`;
+              return `<div class="g">${greet}</div>` +
+                `<div class="d">${date} · ${(states['sensor.season']?.state ?? '').replace(/^\w/, c => c.toUpperCase())}</div>` +
+                `<div class="w" ${more('weather.portree')}><ha-icon icon="mdi:${icons[w?.state] || 'weather-cloudy'}"></ha-icon>` +
+                `<span class="tt">${temp}°</span><span class="wd">${cond}<br>Wind ${wind} · ${w?.attributes.humidity ?? '—'}% RH</span></div>` +
+                `<div class="s" ${more('sun.sun')}><ha-icon icon="mdi:weather-sunset"></ha-icon>${sunTxt} · ${dayLen} of daylight${trend}</div>` +
+                `<div class="cs">` +
+                  chip('input_select.house_mode', 'mdi:home-switch-outline', mode) +
+                  chip('zone.home', 'mdi:account-multiple', `${home} of ${people.length} home`) +
+                  chip('sensor.lights_on', 'mdi:lightbulb-group', `${lights} lights on`) +
+                  chip('sensor.whole_house_power', 'mdi:flash', `${pw >= 1000 ? (pw / 1000).toFixed(1) + ' kW' : pw + ' W'}`) +
+                `</div>`;
+            ]]]
+        styles:
+          card:
+            - padding: 18px 16px 14px
+            - cursor: default
+            - background: >-
+                linear-gradient(160deg, color-mix(in srgb, var(--primary-color) 14%,
+                var(--ha-card-background, var(--card-background-color))) 0%,
+                var(--ha-card-background, var(--card-background-color)) 60%)
+          grid:
+            - grid-template-areas: '"hero"'
+          custom_fields:
+            hero:
+              - justify-self: stretch
+              - text-align: left
+        extra_styles: |
+          #hero .g { font-size: 1.55rem; font-weight: 700; letter-spacing: -0.01em; }
+          #hero .d { font-size: 0.85rem; color: var(--secondary-text-color); margin-top: 2px; }
+          #hero .w { display: flex; align-items: center; gap: 10px; margin-top: 14px; cursor: pointer; }
+          #hero .w ha-icon { --mdc-icon-size: 36px; width: 36px; height: 36px; margin: 0; flex: none; color: var(--amber-color); }
+          #hero .tt { font-size: 2.2rem; font-weight: 700; line-height: 1; }
+          #hero .wd { font-size: 0.8rem; color: var(--secondary-text-color); line-height: 1.35; text-transform: capitalize; }
+          #hero .s { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 0.85rem; color: var(--secondary-text-color); cursor: pointer; --mdc-icon-size: 18px; }
+          #hero .cs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+          #hero .c { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 16px; font-size: 12px; font-weight: 600; cursor: pointer; background: color-mix(in srgb, var(--primary-text-color) 6%, transparent); --mdc-icon-size: 16px; -webkit-tap-highlight-color: transparent; }
+          #hero .s ha-icon { --mdc-icon-size: 18px; width: 18px; height: 18px; margin: 0; flex: none; }
+          #hero .c ha-icon { --mdc-icon-size: 16px; width: 16px; height: 16px; margin: 0; flex: none; }
+          #hero [data-tap]:active { opacity: 0.6; }
+
+      # --- Needs attention: only things that are wrong right now
+      - type: custom:button-card
+        grid_options:
+          columns: full
+          rows: auto
+        template: attention_list
+
+      # --- Recent activity (sensor.activity_feed, packages/alerts.yaml)
+      - type: custom:button-card
+        grid_options:
+          columns: full
+          rows: auto
+        template: feed_list
+        entity: sensor.activity_feed
+        triggers_update:
+          - sensor.date_time_24h
+        variables:
+          title: Recent activity
+          limit: 8
+          empty: Activity appears here as things happen
+
+      # This week (sensor.this_week, packages/calendar.yaml): the next 7 days
+      # from every calendar plus bin collections. Always shown here (Home hides it when empty).
+      - type: custom:button-card
+        template: status_list
+        triggers_update:
+          - sensor.this_week
+          - sensor.date_time_date
+        variables:
+          title: This week
+          empty_icon: mdi:calendar-check-outline
+          empty_title: Nothing on this week
+          empty_detail: Birthdays, bank holidays and bins show here
+          items: |
+            [[[
+              const evs = states['sensor.this_week']?.attributes.events || [];
+              const look = (c, s) =>
+                s.startsWith('🕐') ? { icon: 'mdi:clock-time-two-outline', color: 'amber' } :
+                c.startsWith('bins_') ? { icon: 'mdi:trash-can-outline',
+                    color: c === 'bins_green' ? 'green' : c === 'bins_blue' ? 'blue' : 'primary-text' }
+                : c.includes('birthday') ? { icon: 'mdi:cake-variant', color: 'pink' }
+                : c === 'bank_holidays' ? { icon: 'mdi:calendar-star', color: 'purple' }
+                : { icon: 'mdi:calendar', color: 'teal' };
+              const day0 = new Date(); day0.setHours(0, 0, 0, 0);
+              const label = e => {
+                const d = new Date(e.all_day ? e.start.slice(0, 10) + 'T00:00:00' : e.start);
+                const dd = new Date(d); dd.setHours(0, 0, 0, 0);
+                const n = Math.round((dd - day0) / 86400000);
+                const day = n === 0 ? 'Today' : n === 1 ? 'Tomorrow'
+                  : d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' });
+                return e.all_day || e.cal.startsWith('bins_') ? day
+                  : `${day}, ${d.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
+              };
+              return evs.map(e => ({ ...look(e.cal, e.summary), title: e.summary.replace(/^🕐\s*/, ''), detail: label(e) }));
+            ]]]
+
+      # Comings & goings (sensor.household_trips, packages/vehicles.yaml):
+      # who is out in which vehicle, then the last two days of trips.
+      - type: custom:button-card
+        template: status_list
+        triggers_update:
+          - sensor.household_trips
+          - person.john_lumley
+          - person.elizabeth_munsie
+          - sensor.date_time_date
+        variables:
+          title: Comings & goings
+          empty_icon: mdi:home-account
+          empty_title: Everyone's home
+          empty_detail: No trips in the last two days
+          items: |
+            [[[
+              const trips = states['sensor.household_trips']?.attributes.trips || [];
+              const vIcon = v => v === 'Van' ? 'mdi:van-utility' : 'mdi:car-side';
+              const veh = t => t.seen ? t.vehicle : `${t.vehicle}?`;
+              const who = w => w.length > 1 ? 'You both' : w[0];
+              const tm = ts => new Date(ts * 1000).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true });
+              const day0 = new Date(); day0.setHours(0, 0, 0, 0);
+              const day = ts => {
+                const d = new Date(ts * 1000); d.setHours(0, 0, 0, 0);
+                const n = Math.round((day0 - d) / 86400000);
+                return n === 0 ? 'Today' : n === 1 ? 'Yesterday' : d.toLocaleDateString('en-GB', { weekday: 'long' });
+              };
+              const out = [];
+              // Who is out now, and in what
+              const people = [['John', 'person.john_lumley'], ['Elizabeth', 'person.elizabeth_munsie']];
+              for (const [name, ent] of people) {
+                const st = states[ent]?.state;
+                if (!st || st === 'home') continue;
+                const t = trips.find(x => x.who.includes(name));
+                const left = t && t.dir === 'left' ? t : null;
+                const where = st === 'not_home' ? 'Out' : `At ${st}`;
+                out.push({
+                  entity: ent, color: 'amber',
+                  icon: left && left.seen ? vIcon(left.vehicle) : 'mdi:account-arrow-right',
+                  title: `${name} is out${left ? ` in the ${veh(left)}` : ''}`,
+                  detail: `${where}${left ? ` · left ${day(left.ts) === 'Today' ? '' : day(left.ts).toLowerCase() + ' '}${tm(left.ts)}` : ''}`,
+                });
+              }
+              // Recent trips (today and yesterday)
+              const cutoff = day0.getTime() / 1000 - 86400;
+              for (const t of trips.filter(x => x.ts >= cutoff).slice(0, 8)) {
+                const l = t.dir === 'left';
+                out.push({
+                  entity: 'sensor.household_trips',
+                  color: l ? 'orange' : 'green',
+                  icon: t.seen ? vIcon(t.vehicle) : 'mdi:account-arrow-right',
+                  title: `${who(t.who)} ${l ? 'left' : 'got home'} in the ${veh(t)}`,
+                  detail: `${day(t.ts)}, ${tm(t.ts)}${t.seen ? '' : ' · no vehicle seen'}`,
+                });
+              }
+              return out;
+            ]]]
+
+      # --- House mode and status flags
+      - type: heading
+        heading: House mode
+        icon: mdi:home-switch-outline
+        tap_action:
+          action: more-info
+          entity: input_select.house_mode
+      - type: grid
+        grid_options:
+          columns: full
+          rows: auto
+        columns: 5
+        square: false
+        cards:
+          - type: custom:button-card
+            template: room_scene
+            entity: input_select.house_mode
+            icon: mdi:sofa
+            variables:
+              option: Occupied
+              color: var(--blue-color)
+          - type: custom:button-card
+            template: room_scene
+            entity: input_select.house_mode
+            icon: mdi:weather-night
+            name: Night
+            variables:
+              option: Night Time
+              color: var(--indigo-color)
+          - type: custom:button-card
+            template: room_scene
+            entity: input_select.house_mode
+            icon: mdi:location-exit
+            variables:
+              option: Away
+              color: var(--red-color)
+          - type: custom:button-card
+            template: room_scene
+            entity: input_select.house_mode
+            icon: mdi:hand-wave
+            variables:
+              option: Welcome
+              color: var(--amber-color)
+          - type: custom:button-card
+            template: room_scene
+            entity: input_select.house_mode
+            icon: mdi:broom
+            name: Cleaning
+            variables:
+              option: Housekeeping
+              color: var(--teal-color)
+      - type: grid
+        grid_options:
+          columns: full
+          rows: auto
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            template: room_toggle
+            entity: input_boolean.status_homewatch
+            name: Homewatch
+            icon: mdi:eye-outline
+            variables:
+              color: var(--blue-color)
+          - type: custom:button-card
+            template: room_toggle
+            entity: input_boolean.status_guests
+            name: Guests
+            icon: mdi:account-group
+            variables:
+              color: var(--blue-color)
+          - type: custom:button-card
+            template: room_toggle
+            entity: input_boolean.status_nighttime
+            name: Night
+            icon: mdi:weather-night
+            variables:
+              color: var(--indigo-color)
+          - type: custom:button-card
+            template: room_toggle
+            entity: light.house_lights
+            name: House lights
+            icon: mdi:lightbulb-group
+            confirmation:
+              text: Toggle all house lights?
+
+  # =====================================================================
+  # Column 2: Activity and energy
+  # =====================================================================
+  - type: grid
+    cards:
+      # --- Happening now: everything that is running or occupied
+      - type: custom:button-card
+        grid_options:
+          columns: full
+          rows: auto
+        template: happening_list
+
+      # --- Energy
+      - type: heading
+        heading: Energy
+        icon: mdi:lightning-bolt
+        tap_action:
+          action: navigate
+          navigation_path: electrical
+        badges:
+          - type: entity
+            entity: sensor.it_ups_power
+            show_icon: true
+            icon: mdi:server
+          - type: entity
+            entity: binary_sensor.house_power_cut
+            show_state: true
+            show_icon: true
+            color: red
+            visibility:
+              - condition: state
+                entity: binary_sensor.house_power_cut
+                state: "on"
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.whole_house_power
+        name: Using now
+        icon: mdi:flash
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.daily_energy_usage
+        name: |
+          [[[
+            const y = parseFloat(entity?.attributes.last_period);
+            return isNaN(y) ? 'Today' : `Today · ${y.toFixed(1)} yesterday`;
+          ]]]
+        icon: mdi:lightning-bolt
+        variables:
+          format: kwh
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.daily_energy_cost
+        name: Cost today
+        icon: mdi:currency-gbp
+        variables:
+          format: gbp
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.water_heater_temperature
+        name: Hot water
+        icon: mdi:water-boiler
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:mini-graph-card
+        grid_options:
+          columns: full
+          rows: auto
+        entities:
+          - entity: sensor.whole_house_power
+            name: House
+            color: var(--amber-color)
+        name: Last 24 hours
+        hours_to_show: 24
+        points_per_hour: 4
+        line_width: 2
+        show:
+          icon: false
+          state: false
+          fill: fade
+          labels: false
+          legend: false
+      # Where the power is going right now, by circuit
+      - type: custom:button-card
+        grid_options:
+          columns: full
+          rows: auto
+        show_icon: false
+        show_state: false
+        name: Where it's going
+        tap_action:
+          action: navigate
+          navigation_path: electrical
+        triggers_update:
+          - sensor.whole_house_power
+          - sensor.electrical_shower_power
+          - sensor.electrical_hot_water_power
+          - sensor.electrical_workspace_power
+          - sensor.electrical_house_heating_power
+          - sensor.electrical_kitchen_power
+          - sensor.electrical_utility_power
+          - sensor.electrical_lighting_power
+          - sensor.electrical_unmeasured_power
+        variables:
+          circuits:
+            - [shower, Shower, mdi:shower-head]
+            - [hot_water, Hot water, mdi:water-boiler]
+            - [house_heating, Heating, mdi:radiator]
+            - [kitchen, Kitchen, mdi:stove]
+            - [utility, Utility, mdi:washing-machine]
+            - [lighting, Lighting, mdi:lightbulb]
+            - [workspace, Workspace, mdi:hammer-wrench]
+            - [unmeasured, Other, mdi:help-circle-outline]
+        custom_fields:
+          bars: |
+            [[[
+              const rows = variables.circuits.map(([k, n, i]) => ({ n, i, w: Math.max(0, parseFloat(states[`sensor.electrical_${k}_power`]?.state) || 0) }));
+              const total = rows.reduce((t, r) => t + r.w, 0) || 1;
+              const fmt = w => w >= 1000 ? `${(w / 1000).toFixed(1)} kW` : `${Math.round(w)} W`;
+              return rows.sort((a, b) => b.w - a.w).map(r => {
+                const pct = r.w / total * 100;
+                return `<div class="b${r.w < 1 ? ' z' : ''}"><ha-icon icon="${r.i}"></ha-icon><span class="n">${r.n}</span>` +
+                  `<span class="tr"><span style="width:${pct.toFixed(1)}%"></span></span><span class="v">${fmt(r.w)}</span></div>`;
+              }).join('');
+            ]]]
+        styles:
+          card:
+            - padding: 14px 16px 10px
+          grid:
+            - grid-template-areas: '"n" "bars"'
+          name:
+            - justify-self: start
+            - font-size: 0.95rem
+            - font-weight: 700
+          custom_fields:
+            bars:
+              - justify-self: stretch
+              - margin-top: 8px
+        extra_styles: |
+          #bars .b { display: grid; grid-template-columns: 20px 74px 1fr 56px; align-items: center; gap: 8px; padding: 3px 0; font-size: 0.82rem; }
+          #bars .b.z { opacity: 0.45; }
+          #bars ha-icon { --mdc-icon-size: 16px; width: 16px; height: 16px; margin: 0; color: var(--secondary-text-color); }
+          #bars .n { text-align: left; }
+          #bars .tr { height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); overflow: hidden; }
+          #bars .tr span { display: block; height: 100%; border-radius: 3px; background: var(--amber-color); }
+          #bars .v { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  # =====================================================================
+  # Column 3: Climate and outside
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: heading
+        heading: Climate
+        icon: mdi:home-thermometer-outline
+        tap_action:
+          action: navigate
+          navigation_path: climates
+        badges:
+          - type: entity
+            entity: sensor.heaters_running
+            show_icon: true
+            color: deep-orange
+      # Room ladder: every room warmest-first, with humidity and heating
+      - type: custom:button-card
+        grid_options:
+          columns: full
+          rows: auto
+        show_icon: false
+        show_state: false
+        name: Rooms
+        tap_action:
+          action: none
+        triggers_update:
+          - sensor.outside_average_temperature
+          - sensor.living_room_average_temperature
+          - sensor.dining_room_average_temperature
+          - sensor.kitchen_average_temperature
+          - sensor.sunroom_average_temperature
+          - sensor.hall_average_temperature
+          - sensor.landing_average_temperature
+          - sensor.master_bedroom_average_temperature
+          - sensor.double_bedroom_average_temperature
+          - sensor.single_bedroom_average_temperature
+          - sensor.bathroom_average_temperature
+          - sensor.shower_room_average_temperature
+          - sensor.utility_room_average_temperature
+          - sensor.front_porch_average_temperature
+          - sensor.heaters_running
+        variables:
+          rooms:
+            - living_room
+            - dining_room
+            - kitchen
+            - sunroom
+            - hall
+            - landing
+            - master_bedroom
+            - double_bedroom
+            - single_bedroom
+            - bathroom
+            - shower_room
+            - utility_room
+            - front_porch
+        custom_fields:
+          sub: |
+            [[[
+              const o = parseFloat(states['sensor.outside_average_temperature']?.state);
+              return `Warmest first · outside ${isNaN(o) ? '—' : o.toFixed(1) + '°'}`;
+            ]]]
+          list: |
+            [[[
+              const more = id => `data-tap onpointerdown="this._p=[event.clientX,event.clientY]" onpointerup="const p=this._p;this._p=null;if(!p||Math.abs(event.clientX-p[0])>10||Math.abs(event.clientY-p[1])>10)return;event.stopPropagation();this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${id}'},bubbles:true,composed:true}))"`;
+              const pretty = r => r.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+              const rows = variables.rooms.map(r => {
+                const t = parseFloat(states[`sensor.${r}_average_temperature`]?.state);
+                const h = parseFloat(states[`sensor.${r}_average_humidity`]?.state);
+                const c = states[`climate.${r}`];
+                return { r, t, h, heating: c?.attributes.hvac_action === 'heating' };
+              }).filter(x => !isNaN(x.t)).sort((a, b) => b.t - a.t);
+              // Bar spans 5..25°C, coloured by comfort band; humidity flags damp
+              const col = t => t < 14 ? 'var(--blue-color)' : t < 17 ? 'var(--cyan-color)' : t <= 23 ? 'var(--green-color)' : 'var(--deep-orange-color)';
+              const hcol = h => h >= 85 ? 'var(--red-color)' : h >= 70 ? 'var(--amber-color)' : 'var(--secondary-text-color)';
+              return rows.map(x => {
+                const w = Math.min(100, Math.max(4, (x.t - 5) / 20 * 100));
+                return `<div class="r" ${more(`sensor.${x.r}_average_temperature`)}>` +
+                  `<span class="n">${pretty(x.r)}${x.heating ? '<ha-icon icon="mdi:fire"></ha-icon>' : ''}</span>` +
+                  `<span class="tr"><span style="width:${w}%;background:${col(x.t)}"></span></span>` +
+                  `<span class="t">${x.t.toFixed(1)}°</span>` +
+                  `<span class="h" style="color:${isNaN(x.h) ? 'transparent' : hcol(x.h)}">${isNaN(x.h) ? '' : Math.round(x.h) + '%'}</span></div>`;
+              }).join('');
+            ]]]
+        styles:
+          card:
+            - padding: 14px 16px 10px
+            - cursor: default
+          grid:
+            - grid-template-areas: '"n" "sub" "list"'
+          name:
+            - justify-self: start
+            - font-size: 0.95rem
+            - font-weight: 700
+          custom_fields:
+            sub:
+              - justify-self: start
+              - font-size: 0.78rem
+              - color: var(--secondary-text-color)
+            list:
+              - justify-self: stretch
+              - margin-top: 8px
+        extra_styles: |
+          #list .r { display: grid; grid-template-columns: 112px 1fr 44px 36px; align-items: center; gap: 8px; padding: 4px 2px; font-size: 0.84rem; border-radius: 6px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+          #list .r:active { background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); }
+          #list .n { text-align: left; display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
+          #list .n ha-icon { --mdc-icon-size: 14px; width: 14px; height: 14px; margin: 0 0 0 2px; color: var(--deep-orange-color); }
+          #list .tr { height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); overflow: hidden; }
+          #list .tr span { display: block; height: 100%; border-radius: 3px; }
+          #list .t { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+          #list .h { text-align: right; font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+
+      # --- Outside and sky
+      - type: heading
+        heading: Outside & sky
+        icon: mdi:weather-night-partly-cloudy
+      - type: weather-forecast
+        grid_options:
+          columns: full
+          rows: auto
+        entity: weather.portree
+        show_current: false
+        show_forecast: true
+        forecast_type: hourly
+      - type: custom:button-card
+        grid_options:
+          columns: full
+          rows: auto
+        show_icon: false
+        show_name: false
+        show_state: false
+        tap_action:
+          action: none
+        triggers_update:
+          - sun.sun
+          - sensor.moon
+          - sensor.home_aurora_visibility
+          - binary_sensor.aurora_visible
+        custom_fields:
+          sky: |
+            [[[
+              const more = id => `data-tap onpointerdown="this._p=[event.clientX,event.clientY]" onpointerup="const p=this._p;this._p=null;if(!p||Math.abs(event.clientX-p[0])>10||Math.abs(event.clientY-p[1])>10)return;event.stopPropagation();this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${id}'},bubbles:true,composed:true}))"`;
+              const sun = states['sun.sun']?.attributes || {};
+              const hm = d => new Date(d).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+              const moon = states['sensor.moon']?.state || '';
+              const words = moon.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1));
+              const moonIcon = { new_moon: 'moon-new', waxing_crescent: 'moon-waxing-crescent', first_quarter: 'moon-first-quarter',
+                waxing_gibbous: 'moon-waxing-gibbous', full_moon: 'moon-full', waning_gibbous: 'moon-waning-gibbous',
+                last_quarter: 'moon-last-quarter', waning_crescent: 'moon-waning-crescent' }[moon] || 'moon-waxing-crescent';
+              const aur = parseFloat(states['sensor.home_aurora_visibility']?.state) || 0;
+              const aurOn = states['binary_sensor.aurora_visible']?.state === 'on';
+              const cell = (id, icon, col, v, l) => `<div class="k" ${more(id)}><ha-icon icon="mdi:${icon}" style="color:${col}"></ha-icon><div class="v">${v}</div><div class="l">${l}</div></div>`;
+              return cell('sensor.sun_next_rising', 'weather-sunset-up', 'var(--amber-color)', hm(sun.next_rising), 'Sunrise') +
+                cell('sensor.sun_next_setting', 'weather-sunset-down', 'var(--deep-orange-color)', hm(sun.next_setting), 'Sunset') +
+                cell('sensor.moon', moonIcon, 'var(--primary-text-color)', words[0] || '—', words.slice(1).join(' ') || 'Moon') +
+                cell('sensor.home_aurora_visibility', 'aurora', aurOn ? 'var(--green-color)' : 'var(--secondary-text-color)', `${Math.round(aur)}%`, aurOn ? 'Aurora now!' : 'Aurora');
+            ]]]
+        styles:
+          card:
+            - padding: 12px 8px
+            - cursor: default
+          grid:
+            - grid-template-areas: '"sky"'
+          custom_fields:
+            sky:
+              - justify-self: stretch
+        extra_styles: |
+          #sky { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+          #sky .k { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; border-radius: 10px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+          #sky .k:active { background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); }
+          #sky ha-icon { --mdc-icon-size: 24px; width: 24px; height: 24px; margin: 0; }
+          #sky .v { font-size: 1rem; font-weight: 700; }
+          #sky .l { font-size: 11px; color: var(--secondary-text-color); }
+      - type: custom:button-card
+        grid_options:
+          columns: full
+          rows: auto
+        entity: sensor.tide_height
+        show_icon: false
+        show_name: false
+        show_state: false
+        tap_action:
+          action: more-info
+        triggers_update:
+          - sensor.tide_height
+        custom_fields:
+          tide: |
+            [[[
+              const a = entity?.attributes || {};
+              const hm = d => new Date(d).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+              const up = (a.upcoming || []).slice(0, 2);
+              const cell = (icon, col, v, l) => `<div class="k"><ha-icon icon="mdi:${icon}" style="color:${col}"></ha-icon><div class="v">${v}</div><div class="l">${l}</div></div>`;
+              const h = parseFloat(entity?.state);
+              const now = cell(a.trend === 'rising' ? 'arrow-up-bold' : 'arrow-down-bold', 'var(--primary-text-color)',
+                isNaN(h) ? '—' : `${h.toFixed(1)} m`, a.trend === 'rising' ? 'Rising' : 'Falling');
+              return up.map(e => cell(e.type === 'high' ? 'wave-arrow-up' : 'wave-arrow-down', 'var(--blue-color)',
+                hm(e.time), `${e.type === 'high' ? 'High' : 'Low'} · ${e.height.toFixed(1)} m`)).join('') + now;
+            ]]]
+        styles:
+          card:
+            - padding: 12px 8px
+          grid:
+            - grid-template-areas: '"tide"'
+          custom_fields:
+            tide:
+              - justify-self: stretch
+        extra_styles: |
+          #tide { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+          #tide .k { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; }
+          #tide ha-icon { --mdc-icon-size: 24px; width: 24px; height: 24px; margin: 0; }
+          #tide .v { font-size: 1rem; font-weight: 700; }
+          #tide .l { font-size: 11px; color: var(--secondary-text-color); }
+
+  # =====================================================================
+  # Column 4: Security and system
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: heading
+        heading: Security
+        icon: mdi:shield-home-outline
+        tap_action:
+          action: navigate
+          navigation_path: cctv
+        badges:
+          - type: entity
+            entity: alarm_control_panel.aird_nvr_alarm_manager
+            show_state: true
+            show_icon: true
+          - type: entity
+            entity: binary_sensor.any_cctv_camera_offline
+            show_state: true
+            show_icon: true
+            color: red
+            visibility:
+              - condition: state
+                entity: binary_sensor.any_cctv_camera_offline
+                state: "on"
+      # Latest detection snapshot (written by packages/unifi.yaml)
+      - type: custom:button-card
+        grid_options:
+          columns: full
+          rows: auto
+        entity: input_text.last_object_camera
+        show_icon: false
+        show_name: false
+        show_state: false
+        tap_action:
+          action: navigate
+          navigation_path: cctv
+        triggers_update:
+          - input_text.last_object_camera
+          - sensor.perimeter_activity_today
+          - sensor.date_time_24h
+        custom_fields:
+          snap: |
+            [[[
+              const e = entity;
+              const v = e ? new Date(e.last_changed).getTime() : 0;
+              const cam = (e?.state || '').replace(/_/g, ' ');
+              const m = Math.max(0, Math.round((Date.now() - v) / 60000));
+              const ago = m < 1 ? 'just now' : m < 60 ? `${m}m ago` : m < 1440 ? `${Math.floor(m / 60)}h ago` : `${Math.floor(m / 1440)}d ago`;
+              return `<img src="/local/cctv/latest.jpg?v=${v}" loading="lazy" onerror="this.style.display='none'">` +
+                `<div class="cap"><ha-icon icon="mdi:cctv"></ha-icon>Last detection · ${cam} · ${ago}</div>`;
+            ]]]
+        styles:
+          card:
+            - padding: 0
+            - overflow: hidden
+          grid:
+            - grid-template-areas: '"snap"'
+          custom_fields:
+            snap:
+              - justify-self: stretch
+              - position: relative
+        extra_styles: |
+          #snap img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+          #snap .cap { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 6px; padding: 18px 12px 8px; font-size: 0.8rem; font-weight: 600; color: #fff; text-align: left; text-transform: capitalize; background: linear-gradient(transparent, rgba(0,0,0,0.65)); --mdc-icon-size: 16px; }
+          #snap .cap ha-icon { --mdc-icon-size: 16px; width: 16px; height: 16px; margin: 0; flex: none; }
+      - type: custom:button-card
+        template: value_tile
+        entity: counter.detections_person_today
+        name: People today
+        icon: mdi:walk
+        grid_options:
+          columns: 4
+          rows: auto
+      - type: custom:button-card
+        template: value_tile
+        entity: counter.detections_vehicle_today
+        name: Vehicles
+        icon: mdi:car
+        grid_options:
+          columns: 4
+          rows: auto
+      - type: custom:button-card
+        template: value_tile
+        entity: counter.detections_animal_today
+        name: Animals
+        icon: mdi:paw
+        grid_options:
+          columns: 4
+          rows: auto
+
+      # --- System
+      - type: heading
+        heading: System
+        icon: mdi:server
+        badges:
+          - type: entity
+            entity: sensor.last_boot
+            show_state: true
+            show_icon: true
+          - type: entity
+            entity: binary_sensor.remote_ui
+            show_state: false
+            show_icon: true
+      - type: grid
+        grid_options:
+          columns: full
+          rows: auto
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            template: stat_tile
+            entity: sensor.processor_use_percent
+            name: CPU
+            icon: mdi:cpu-64-bit
+            variables:
+              warn: 70
+              crit: 85
+          - type: custom:button-card
+            template: stat_tile
+            entity: sensor.memory_use_percent
+            name: Memory
+            icon: mdi:memory
+            variables:
+              warn: 80
+              crit: 90
+          - type: custom:button-card
+            template: stat_tile
+            entity: sensor.disk_use_percent
+            name: Disk
+            icon: mdi:harddisk
+            variables:
+              warn: 75
+              crit: 90
+          - type: custom:button-card
+            template: stat_tile
+            entity: sensor.aird_nvr_storage_utilisation
+            name: NVR
+            icon: mdi:cctv
+            variables:
+              warn: 90
+              crit: 98
+      - type: custom:button-card
+        template: health_tile
+        entity: sensor.updates_pending
+        name: Updates
+        icon: mdi:package-up
+        tap_action:
+          action: navigate
+          navigation_path: /config/updates
+        variables:
+          ok_text: All up to date
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: health_tile
+        entity: sensor.hue_devices_offline
+        name: Hue offline
+        icon: mdi:lan-disconnect
+        tap_action:
+          action: navigate
+          navigation_path: /admin-pages/hue
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: health_tile
+        entity: sensor.shelly_devices_offline
+        name: Shelly offline
+        icon: mdi:lan-disconnect
+        tap_action:
+          action: navigate
+          navigation_path: /admin-pages/shelly
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: health_tile
+        entity: sensor.hue_low_batteries
+        name: Low batteries
+        icon: mdi:battery-alert-variant-outline
+        tap_action:
+          action: navigate
+          navigation_path: /admin-pages/hue
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.backup_last_successful_automatic_backup
+        name: Last backup
+        icon: mdi:backup-restore
+        tap_action:
+          action: navigate
+          navigation_path: /config/backup
+        triggers_update:
+          - sensor.date_time_24h
+          - binary_sensor.backups_stale
+        custom_fields:
+          value: |
+            [[[
+              const t = new Date(entity?.state);
+              if (isNaN(t)) return '—';
+              const h = Math.round((Date.now() - t) / 3600000);
+              const u = x => `<span style="font-size:0.65em;font-weight:500;margin-left:2px">${x}</span>`;
+              return h < 48 ? `${h}${u('h ago')}` : `${Math.floor(h / 24)}${u('d ago')}`;
+            ]]]
+        styles:
+          icon:
+            - color: >-
+                [[[ return states['binary_sensor.backups_stale']?.state === 'on'
+                      ? 'var(--red-color)' : 'var(--green-color)'; ]]]
+        grid_options:
+          columns: 6
+          rows: auto
+      # UniFi at a glance: devices online, Wi-Fi clients, WAN latency
+      - type: custom:button-card
+        template: value_tile
+        entity: binary_sensor.network_device_offline
+        name: |
+          [[[
+            const c = ['ap_garage', 'ap_front_porch', 'ap_back_door', 'ap_back_porch', 'ap_driveway', 'ap_patio']
+              .reduce((t, k) => t + (parseInt(states[`sensor.${k}_clients`]?.state) || 0), 0);
+            const l = parseFloat(states['sensor.aird_network_cloudflare_wan_latency']?.state);
+            return `Network · ${c} Wi-Fi${isNaN(l) ? '' : ` · ${Math.round(l)} ms`}`;
+          ]]]
+        icon: mdi:lan
+        tap_action:
+          action: navigate
+          navigation_path: /admin-pages/network
+        triggers_update:
+          - sensor.ap_garage_clients
+          - sensor.ap_front_porch_clients
+          - sensor.ap_back_door_clients
+          - sensor.ap_back_porch_clients
+          - sensor.ap_driveway_clients
+          - sensor.ap_patio_clients
+          - sensor.aird_network_cloudflare_wan_latency
+        custom_fields:
+          value: |
+            [[[
+              const ids = ['aird_network', 'garage', 'garage_poe', 'front_porch_switch', 'back_porch', 'greenhouse_switch',
+                'ap_front_porch', 'ap_back_door', 'ap_back_porch', 'ap_driveway', 'ap_patio'];
+              const up = ids.filter(k => states[`sensor.${k}_state`]?.state === 'connected').length;
+              return `${up}<span style="font-size:0.65em;font-weight:500;margin-left:1px">/${ids.length}</span>`;
+            ]]]
+        styles:
+          icon:
+            - color: "[[[ return entity?.state === 'on' ? 'var(--red-color)' : 'var(--green-color)'; ]]]"
+        grid_options:
+          columns: 12
+          rows: auto
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.speedtest_download
+        name: Internet
+        icon: mdi:speedometer
+        triggers_update:
+          - sensor.speedtest_upload
+        custom_fields:
+          value: |
+            [[[
+              const d = parseFloat(entity?.state), up = parseFloat(states['sensor.speedtest_upload']?.state);
+              const u = x => `<span style="font-size:0.65em;font-weight:500;margin-left:1px">${x}</span>`;
+              return isNaN(d) ? '—' : `${Math.round(d)}${u('↓')} ${isNaN(up) ? '' : Math.round(up) + u('↑')}`;
+            ]]]
+        grid_options:
+          columns: 6
+          rows: auto
+      # Hottest devices (Shelly relays, switches, NVR): ranked in the browser
+      # over an explicit list instead of a server template scanning every
+      # sensor. Alert threshold is 80°C (binary_sensor.device_overheating).
+      - type: custom:button-card
+        template: power_board
+        name: Hottest devices
+        grid_options:
+          columns: full
+          rows: auto
+        variables:
+          unit: "°C"
+          total: false
+          limit: 4
+          min: -50
+          color: var(--deep-orange-color)
+          items:
+            - [sensor.machine_room_heater_device_temperature_watchdog, "Machine Room Heater"]
+            - [sensor.workshop_heater_device_temperature_watchdog, "Workshop Heater"]
+            - [sensor.workshop_double_switch_device_temperature_watchdog, "Workshop Double Switch"]
+            - [sensor.living_room_dimmer_device_temperature_watchdog, "Living Room Dimmer"]
+            - [sensor.workshop_light_temperature_watchdog, "Workshop Light"]
+            - [sensor.garage_tv_device_temperature_watchdog, "Garage TV"]
+            - [sensor.bathroom_dimmer_device_temperature_watchdog, "Bathroom Dimmer"]
+            - [sensor.sunroom_lightswitch_temperature_watchdog, "Patio light switch"]
+            - [sensor.shed_counter_light_temperature_watchdog, "Shed Counter Light"]
+            - [sensor.workshop_it_device_temperature_watchdog, "Workshop IT"]
+            - [sensor.shower_room_heater_temperature_watchdog, "Shower Room Heater"]
+            - [sensor.fridge_temperature_watchdog, "Fridge"]
+            - [sensor.dishwasher_temperature_watchdog, "Dishwasher"]
+            - [sensor.kitchen_heater_temperature_watchdog, "Kitchen Heater"]
+            - [sensor.kitchen_counter_lights_temperature_watchdog, "Kitchen Counter Lights"]
+            - [sensor.garage_power_monitoring_temperature_watchdog, "Garage Power Monitoring"]
+            - [sensor.dining_room_triptych_device_temperature_watchdog, "Dining Room Triptych"]
+            - [sensor.cnc_machine_contactor_temperature_watchdog, "CNC contactor"]
+            - [sensor.garage_contactors_switch_1_temperature_watchdog, "Spare contactor"]
+            - [sensor.garage_light_device_temperature_watchdog, "Garage Light"]
+            - [sensor.utility_room_ceiling_lights_temperature_watchdog, "Utility Room Ceiling Lights"]
+            - [sensor.master_bedroom_heater_temperature_watchdog, "Master Bedroom Heater"]
+            - [sensor.bathroom_heater_temperature_watchdog, "Bathroom Heater"]
+            - [sensor.extension_lights_temperature_watchdog, "Extension Lights"]
+            - [sensor.double_bedroom_heater_temperature_watchdog, "Double Bedroom Heater"]
+            - [sensor.external_sockets_temperature_watchdog, "Car Port Floodlight"]
+            - [sensor.dining_room_heater_temperature_watchdog, "Dining Room Heater"]
+            - [sensor.front_porch_switch_switch_temperature_watchdog, "Front porch switch"]
+            - [sensor.aird_nvr_cpu_temperature_watchdog, "NVR CPU"]
+            - [sensor.sunroom_heater_temperature_watchdog, "Sunroom Heater"]
+            - [sensor.living_room_heater_temperature_watchdog, "Living Room Heater"]
+        triggers_update:
+          - sensor.machine_room_heater_device_temperature_watchdog
+          - sensor.workshop_heater_device_temperature_watchdog
+          - sensor.workshop_double_switch_device_temperature_watchdog
+          - sensor.living_room_dimmer_device_temperature_watchdog
+          - sensor.workshop_light_temperature_watchdog
+          - sensor.garage_tv_device_temperature_watchdog
+          - sensor.bathroom_dimmer_device_temperature_watchdog
+          - sensor.sunroom_lightswitch_temperature_watchdog
+          - sensor.shed_counter_light_temperature_watchdog
+          - sensor.workshop_it_device_temperature_watchdog
+          - sensor.shower_room_heater_temperature_watchdog
+          - sensor.fridge_temperature_watchdog
+          - sensor.dishwasher_temperature_watchdog
+          - sensor.kitchen_heater_temperature_watchdog
+          - sensor.kitchen_counter_lights_temperature_watchdog
+          - sensor.garage_power_monitoring_temperature_watchdog
+          - sensor.dining_room_triptych_device_temperature_watchdog
+          - sensor.cnc_machine_contactor_temperature_watchdog
+          - sensor.garage_contactors_switch_1_temperature_watchdog
+          - sensor.garage_light_device_temperature_watchdog
+          - sensor.utility_room_ceiling_lights_temperature_watchdog
+          - sensor.master_bedroom_heater_temperature_watchdog
+          - sensor.bathroom_heater_temperature_watchdog
+          - sensor.extension_lights_temperature_watchdog
+          - sensor.double_bedroom_heater_temperature_watchdog
+          - sensor.external_sockets_temperature_watchdog
+          - sensor.dining_room_heater_temperature_watchdog
+          - sensor.front_porch_switch_switch_temperature_watchdog
+          - sensor.aird_nvr_cpu_temperature_watchdog
+          - sensor.sunroom_heater_temperature_watchdog
+          - sensor.living_room_heater_temperature_watchdog
+
+      # --- Jump to
+      - type: heading
+        heading: Jump to
+        icon: mdi:compass-outline
+      - type: grid
+        grid_options:
+          columns: full
+          rows: auto
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            template: room_pill
+            name: Ground
+            icon: mdi:home-floor-g
+            tap_action:
+              action: navigate
+              navigation_path: ground_floor
+          - type: custom:button-card
+            template: room_pill
+            name: Upstairs
+            icon: mdi:home-floor-1
+            tap_action:
+              action: navigate
+              navigation_path: other_floors
+          - type: custom:button-card
+            template: room_pill
+            name: Extension
+            icon: mdi:home-plus-outline
+            tap_action:
+              action: navigate
+              navigation_path: extension
+          - type: custom:button-card
+            template: room_pill
+            name: Climate
+            icon: mdi:thermostat
+            tap_action:
+              action: navigate
+              navigation_path: climates
+          - type: custom:button-card
+            template: room_pill
+            name: Electrical
+            icon: mdi:transmission-tower
+            tap_action:
+              action: navigate
+              navigation_path: electrical
+          - type: custom:button-card
+            template: room_pill
+            name: Humidity
+            icon: mdi:water-percent
+            tap_action:
+              action: navigate
+              navigation_path: humidity
+          - type: custom:button-card
+            template: room_pill
+            name: CCTV
+            icon: mdi:cctv
+            tap_action:
+              action: navigate
+              navigation_path: cctv
+          - type: custom:button-card
+            template: room_pill
+            name: LEDs
+            icon: mdi:led-strip-variant
+            tap_action:
+              action: navigate
+              navigation_path: leds

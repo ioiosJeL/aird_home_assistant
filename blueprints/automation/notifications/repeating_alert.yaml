@@ -1,0 +1,98 @@
+blueprint:
+  name: Notifications - Repeating Alert
+  description: >-
+    Replicates Home Assistant's built-in alert: component (immediate
+    notification, repeating reminders at increasing/fixed intervals, a
+    "done" message when the problem clears, and an acknowledge toggle to
+    silence repeats) but routes every message through
+    script.notify_dispatch so it's gated by the notification preference
+    toggles instead of a fixed notifiers: list.
+  domain: automation
+  input:
+    watched_entity:
+      name: Watched Entity
+      description: "The binary_sensor (or any entity) that signals the problem."
+      selector:
+        entity: {}
+    trigger_state:
+      name: Problem State
+      default: "on"
+      selector:
+        text: {}
+    acknowledge_boolean:
+      name: Acknowledge Toggle (input_boolean)
+      description: "Turning this on silences repeats until the problem clears."
+      selector:
+        entity:
+          domain: input_boolean
+    event:
+      name: Notify Preference Key
+      description: "Matches input_boolean.notify_<event>_<channel> in packages/notification_preferences.yaml"
+      selector:
+        text: {}
+    message:
+      name: Problem Message
+      selector:
+        template: {}
+    done_message:
+      name: Done Message
+      selector:
+        template: {}
+    repeat_minutes:
+      name: Repeat Schedule (minutes)
+      description: >-
+        List of minute delays between reminders, e.g. [1, 3, 30]. The last
+        value repeats indefinitely once the list is exhausted.
+      selector:
+        object: {}
+
+mode: restart
+triggers:
+  - trigger: state
+    id: start
+    entity_id: !input watched_entity
+    to: !input trigger_state
+  - trigger: state
+    id: cleared
+    entity_id: !input watched_entity
+    from: !input trigger_state
+
+variables:
+  watched_entity: !input watched_entity
+  trigger_state: !input trigger_state
+  acknowledge_boolean: !input acknowledge_boolean
+  event: !input event
+  repeat_minutes: !input repeat_minutes
+
+action:
+  - choose:
+      - conditions: "{{ trigger.id == 'start' }}"
+        sequence:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: "{{ acknowledge_boolean }}"
+          - repeat:
+              while:
+                - condition: template
+                  value_template: >-
+                    {{ is_state(watched_entity, trigger_state)
+                       and is_state(acknowledge_boolean, 'off') }}
+              sequence:
+                - action: script.notify_dispatch
+                  data:
+                    event: "{{ event }}"
+                    message: !input message
+                - wait_template: >-
+                    {{ not is_state(watched_entity, trigger_state)
+                       or is_state(acknowledge_boolean, 'on') }}
+                  timeout:
+                    minutes: >-
+                      {{ repeat_minutes[[repeat.index - 1, repeat_minutes | length - 1] | min] }}
+                  continue_on_timeout: true
+
+      - conditions: "{{ trigger.id == 'cleared' }}"
+        sequence:
+          - action: script.notify_dispatch
+            data:
+              event: "{{ event }}"
+              message: !input done_message

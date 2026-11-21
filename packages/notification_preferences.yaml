@@ -1,0 +1,522 @@
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      common: &common
+        package: "Notification Preferences"
+
+    input_boolean.notify_*:
+      <<: *common
+
+# One switch per (notification event x channel: John's devices, Elizabeth's
+# phone, kitchen speaker). Telegram was removed 21 Nov 2026. script.notify_dispatch
+# (below) reads these by name at send time, so flipping one here takes
+# effect immediately - no automation changes needed.
+#
+# No `initial:` values: HA restores each toggle's last state on restart, so
+# choices made on the Notifications admin page stick. (With `initial:` set
+# they silently reset on every restart.) Defaults for newly added events
+# are applied once by hand when the event is created.
+input_boolean:
+  # Camera detections, one event per type (camera_alerts.yaml also has an
+  # on/off switch per type: input_boolean.camera_alerts_<type>)
+  notify_camera_person_johns_devices:
+    name: "Camera Person: John's Devices"
+    icon: mdi:cellphone
+  notify_camera_person_elizabeth:
+    name: "Camera Person: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_camera_person_kitchen_tts:
+    name: "Camera Person: Kitchen Speaker"
+    icon: mdi:speaker-message
+  notify_camera_vehicle_johns_devices:
+    name: "Camera Vehicle: John's Devices"
+    icon: mdi:cellphone
+  notify_camera_vehicle_elizabeth:
+    name: "Camera Vehicle: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_camera_vehicle_kitchen_tts:
+    name: "Camera Vehicle: Kitchen Speaker"
+    icon: mdi:speaker-message
+  notify_camera_animal_johns_devices:
+    name: "Camera Animal: John's Devices"
+    icon: mdi:cellphone
+  notify_camera_animal_elizabeth:
+    name: "Camera Animal: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_camera_animal_kitchen_tts:
+    name: "Camera Animal: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_safety_alarm_johns_devices:
+    name: "Smoke/CO Alarm Heard: John's Devices"
+    icon: mdi:cellphone
+  notify_safety_alarm_elizabeth:
+    name: "Smoke/CO Alarm Heard: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_safety_alarm_kitchen_tts:
+    name: "Smoke/CO Alarm Heard: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_camera_offline_johns_devices:
+    name: "Camera Offline: John's Devices"
+    icon: mdi:cellphone
+  notify_camera_offline_elizabeth:
+    name: "Camera Offline: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_camera_offline_kitchen_tts:
+    name: "Camera Offline: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_nvr_storage_low_johns_devices:
+    name: "NVR Storage Low: John's Devices"
+    icon: mdi:cellphone
+  notify_nvr_storage_low_elizabeth:
+    name: "NVR Storage Low: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_nvr_storage_low_kitchen_tts:
+    name: "NVR Storage Low: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_print_error_johns_devices:
+    name: "3D Print Error: John's Devices"
+    icon: mdi:cellphone
+  notify_print_error_elizabeth:
+    name: "3D Print Error: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_print_error_kitchen_tts:
+    name: "3D Print Error: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_ink_low_johns_devices:
+    name: "Printer Ink Low: John's Devices"
+    icon: mdi:cellphone
+  notify_ink_low_elizabeth:
+    name: "Printer Ink Low: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_ink_low_kitchen_tts:
+    name: "Printer Ink Low: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_bin_reminder_johns_devices:
+    name: "Bin Reminder: John's Devices"
+    icon: mdi:cellphone
+  notify_bin_reminder_elizabeth:
+    name: "Bin Reminder: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_bin_reminder_kitchen_tts:
+    name: "Bin Reminder: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_power_cut_johns_devices:
+    name: "Power Cut: John's Devices"
+    icon: mdi:cellphone
+  notify_power_cut_elizabeth:
+    name: "Power Cut: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_power_cut_kitchen_tts:
+    name: "Power Cut: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_fridge_off_johns_devices:
+    name: "Fridge Off: John's Devices"
+    icon: mdi:cellphone
+  notify_fridge_off_elizabeth:
+    name: "Fridge Off: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_fridge_off_kitchen_tts:
+    name: "Fridge Off: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_dishwasher_off_johns_devices:
+    name: "Dishwasher Off: John's Devices"
+    icon: mdi:cellphone
+  notify_dishwasher_off_elizabeth:
+    name: "Dishwasher Off: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_dishwasher_off_kitchen_tts:
+    name: "Dishwasher Off: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_fridge_too_active_johns_devices:
+    name: "Fridge Too Active: John's Devices"
+    icon: mdi:cellphone
+  notify_fridge_too_active_elizabeth:
+    name: "Fridge Too Active: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_fridge_too_active_kitchen_tts:
+    name: "Fridge Too Active: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_freezer_too_active_johns_devices:
+    name: "Freezer Too Active: John's Devices"
+    icon: mdi:cellphone
+  notify_freezer_too_active_elizabeth:
+    name: "Freezer Too Active: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_freezer_too_active_kitchen_tts:
+    name: "Freezer Too Active: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_fridge_too_inactive_johns_devices:
+    name: "Fridge Too Inactive: John's Devices"
+    icon: mdi:cellphone
+  notify_fridge_too_inactive_elizabeth:
+    name: "Fridge Too Inactive: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_fridge_too_inactive_kitchen_tts:
+    name: "Fridge Too Inactive: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_freezer_too_inactive_johns_devices:
+    name: "Freezer Too Inactive: John's Devices"
+    icon: mdi:cellphone
+  notify_freezer_too_inactive_elizabeth:
+    name: "Freezer Too Inactive: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_freezer_too_inactive_kitchen_tts:
+    name: "Freezer Too Inactive: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_water_heater_backup_johns_devices:
+    name: "Water Heater Backup: John's Devices"
+    icon: mdi:cellphone
+  notify_water_heater_backup_elizabeth:
+    name: "Water Heater Backup: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_water_heater_backup_kitchen_tts:
+    name: "Water Heater Backup: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_aurora_visible_johns_devices:
+    name: "Aurora Visible: John's Devices"
+    icon: mdi:cellphone
+  notify_aurora_visible_elizabeth:
+    name: "Aurora Visible: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_aurora_visible_kitchen_tts:
+    name: "Aurora Visible: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_device_overheating_johns_devices:
+    name: "Device Overheating: John's Devices"
+    icon: mdi:cellphone
+  notify_device_overheating_elizabeth:
+    name: "Device Overheating: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_device_overheating_kitchen_tts:
+    name: "Device Overheating: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+
+  # --- Added Nov 2026: see packages/alerts.yaml for the automations ---
+
+  notify_print_finished_johns_devices:
+    name: "3D Print Finished: John's Devices"
+    icon: mdi:cellphone
+  notify_print_finished_elizabeth:
+    name: "3D Print Finished: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_print_finished_kitchen_tts:
+    name: "3D Print Finished: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_appliance_finished_johns_devices:
+    name: "Appliance Finished: John's Devices"
+    icon: mdi:cellphone
+  notify_appliance_finished_elizabeth:
+    name: "Appliance Finished: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_appliance_finished_kitchen_tts:
+    name: "Appliance Finished: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_house_mode_johns_devices:
+    name: "House Mode Changed: John's Devices"
+    icon: mdi:cellphone
+  notify_house_mode_elizabeth:
+    name: "House Mode Changed: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_house_mode_kitchen_tts:
+    name: "House Mode Changed: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_network_offline_johns_devices:
+    name: "Network Device Offline: John's Devices"
+    icon: mdi:cellphone
+  notify_network_offline_elizabeth:
+    name: "Network Device Offline: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_network_offline_kitchen_tts:
+    name: "Network Device Offline: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_electrical_fault_johns_devices:
+    name: "Electrical Fault: John's Devices"
+    icon: mdi:cellphone
+  notify_electrical_fault_elizabeth:
+    name: "Electrical Fault: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_electrical_fault_kitchen_tts:
+    name: "Electrical Fault: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_backups_stale_johns_devices:
+    name: "Backups Stale: John's Devices"
+    icon: mdi:cellphone
+  notify_backups_stale_elizabeth:
+    name: "Backups Stale: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_backups_stale_kitchen_tts:
+    name: "Backups Stale: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_frost_warning_johns_devices:
+    name: "Frost Warning: John's Devices"
+    icon: mdi:cellphone
+  notify_frost_warning_elizabeth:
+    name: "Frost Warning: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_frost_warning_kitchen_tts:
+    name: "Frost Warning: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_left_on_away_johns_devices:
+    name: "Left On While Away: John's Devices"
+    icon: mdi:cellphone
+  notify_left_on_away_elizabeth:
+    name: "Left On While Away: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_left_on_away_kitchen_tts:
+    name: "Left On While Away: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_battery_low_johns_devices:
+    name: "Battery Low: John's Devices"
+    icon: mdi:cellphone
+  notify_battery_low_elizabeth:
+    name: "Battery Low: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_battery_low_kitchen_tts:
+    name: "Battery Low: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_weekly_digest_johns_devices:
+    name: "Weekly Digest: John's Devices"
+    icon: mdi:cellphone
+  notify_weekly_digest_elizabeth:
+    name: "Weekly Digest: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_weekly_digest_kitchen_tts:
+    name: "Weekly Digest: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  # "That was weird" button (lights_insight.yaml). Default: John's devices
+  # on, set by hand 17 Nov 2026.
+  notify_oddity_report_johns_devices:
+    name: "Something Odd Reported: John's Devices"
+    icon: mdi:cellphone
+  notify_oddity_report_elizabeth:
+    name: "Something Odd Reported: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_oddity_report_kitchen_tts:
+    name: "Something Odd Reported: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  # Clock change reminder (calendar.yaml). Defaults: John's devices and
+  # Elizabeth's phone on, set by hand 18 Nov 2026.
+  notify_clock_change_johns_devices:
+    name: "Clocks Change Tonight: John's Devices"
+    icon: mdi:cellphone
+  notify_clock_change_elizabeth:
+    name: "Clocks Change Tonight: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_clock_change_kitchen_tts:
+    name: "Clocks Change Tonight: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  notify_away_summary_johns_devices:
+    name: "While You Were Out: John's Devices"
+    icon: mdi:cellphone
+  notify_away_summary_elizabeth:
+    name: "While You Were Out: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_away_summary_kitchen_tts:
+    name: "While You Were Out: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  # Automation in packages/military_aircraft.yaml
+  notify_military_aircraft_johns_devices:
+    name: "Military Aircraft Low Overhead: John's Devices"
+    icon: mdi:cellphone
+  notify_military_aircraft_elizabeth:
+    name: "Military Aircraft Low Overhead: Elizabeth's Phone"
+    icon: mdi:cellphone
+  notify_military_aircraft_kitchen_tts:
+    name: "Military Aircraft Low Overhead: Kitchen Speaker"
+    icon: mdi:speaker-message
+
+  # Global controls read by script.notify_dispatch
+  notify_quiet_hours:
+    name: "Kitchen Speaker Quiet Hours"
+    icon: mdi:volume-off
+
+input_datetime:
+  notify_quiet_start:
+    name: "Quiet Hours Start"
+    has_date: false
+    has_time: true
+  notify_quiet_end:
+    name: "Quiet Hours End"
+    has_date: false
+    has_time: true
+
+# Snooze: while active, everything except critical alerts is held back
+# (logged to the notification history but not sent).
+timer:
+  notify_snooze:
+    name: "Notifications Snoozed"
+    icon: mdi:bell-sleep
+    restore: true
+
+
+script:
+  notify_dispatch:
+    alias: Notify Dispatch
+    description: >-
+      Shared fan-out for John's devices / Elizabeth's phone / kitchen speaker,
+      gated per event by the input_boolean.notify_<event>_<channel> helpers
+      above, by Snooze (everything) and by per-alert mutes
+      (sensor.notify_mutes, packages/camera_alerts.yaml). Call with `event`
+      set to the preference key (e.g. "camera_person").
+    mode: queued
+    max: 10
+    fields:
+      event:
+        description: "Notification preference key, e.g. camera_person"
+        example: "camera_person"
+      message:
+        description: "Plain text message body"
+        example: "Person detected in driveway"
+      title:
+        description: "Push notification title"
+        default: "Aird Point"
+      critical:
+        description: "Send mobile pushes as a critical/urgent alert (bypasses silent mode, snooze and mutes)"
+        default: false
+        selector:
+          boolean:
+      push_actions:
+        description: >-
+          Optional actionable-notification buttons for the mobile pushes, e.g.
+          [{action: LIGHTS_OFF, title: Turn lights off}]. Handled by
+          automations listening for mobile_app_notification_action.
+          MUTE__<event>__<minutes> is handled for every event (camera_alerts.yaml).
+        default: []
+      image:
+        description: >-
+          Optional picture for the pushes: an /api/... path (fetched with the
+          app's login, e.g. /api/camera_proxy/camera.driveway_medium) or a
+          /local/... path.
+        default: ""
+      camera:
+        description: Optional camera entity; iPhone/iPad show its live feed when the notification is expanded
+        default: ""
+      url:
+        description: Optional dashboard path opened when the notification is tapped
+        default: ""
+      group:
+        description: Optional group/thread so related notifications stack together
+        default: ""
+    sequence:
+      # Field defaults are only UI hints, so apply them here
+      - variables:
+          title: "{{ title | default('Aird Point') }}"
+          critical: "{{ critical | default(false) | bool }}"
+          image: "{{ image | default('') }}"
+          camera: "{{ camera | default('') }}"
+          url: "{{ url | default('') }}"
+          group: "{{ group | default('') }}"
+          # Snooze holds back everything but critical alerts
+          snoozed: "{{ is_state('timer.notify_snooze', 'active') and not critical }}"
+          # Per-alert mutes (from notification buttons or the admin page)
+          muted: >-
+            {% set u = state_attr('sensor.notify_mutes', 'until') or {} %}
+            {{ not critical and event in u and as_timestamp(u[event], 0) > as_timestamp(now()) }}
+          held: "{{ 'snoozed' if snoozed else 'muted' if muted else '' }}"
+          # Quiet hours only mute the kitchen speaker (never critical alerts)
+          quiet: >-
+            {% set st = states('input_datetime.notify_quiet_start') %}
+            {% set en = states('input_datetime.notify_quiet_end') %}
+            {% set t = now().strftime('%H:%M:%S') %}
+            {% set inside = (st <= t < en) if st <= en else (t >= st or t < en) %}
+            {{ is_state('input_boolean.notify_quiet_hours', 'on') and not critical and inside }}
+          johns_devices_on: "{{ held == '' and is_state('input_boolean.notify_' ~ event ~ '_johns_devices', 'on') }}"
+          elizabeth_on: "{{ held == '' and is_state('input_boolean.notify_' ~ event ~ '_elizabeth', 'on') }}"
+          kitchen_tts_on: "{{ held == '' and not quiet and is_state('input_boolean.notify_' ~ event ~ '_kitchen_tts', 'on') }}"
+          push_actions: "{{ push_actions | default([]) }}"
+          # Companion app push options (iOS and Android keys side by side;
+          # each app ignores the other's)
+          push_data: >-
+            {% set push = {} %}
+            {% if critical %}{% set push = dict(push, sound={'name': 'default', 'critical': 1, 'volume': 1.0}) %}{% endif %}
+            {% if group %}{% set push = dict(push, **{'thread-id': group}) %}{% endif %}
+            {% set d = {'push': push} if push else {} %}
+            {% if critical %}{% set d = dict(d, ttl=0, priority='high', channel='alarm_stream') %}{% endif %}
+            {% if push_actions %}{% set d = dict(d, actions=push_actions) %}{% endif %}
+            {% if image %}{% set d = dict(d, image=image) %}{% endif %}
+            {% if camera %}{% set d = dict(d, entity_id=camera) %}{% endif %}
+            {% if url %}{% set d = dict(d, url=url, clickAction=url) %}{% endif %}
+            {% if group %}{% set d = dict(d, group=group) %}{% endif %}
+            {{ d }}
+
+      # Record every notification (sent or held back) for the dashboards'
+      # notification history - see sensor.notification_log in alerts.yaml
+      - event: aird_notification
+        event_data:
+          event: "{{ event }}"
+          title: "{{ title }}"
+          message: "{{ message }}"
+          critical: "{{ critical }}"
+          channels: >-
+            {{ (['John'] if johns_devices_on else [])
+               + (['Elizabeth'] if elizabeth_on else []) + (['Kitchen'] if kitchen_tts_on else []) }}
+          held: "{{ held }}"
+
+      - if:
+          - condition: template
+            value_template: "{{ johns_devices_on }}"
+        then:
+          # mobile_app notify services (not notify.send_message) so the
+          # push data can be passed through
+          - action: notify.mobile_app_johns_iphone
+            continue_on_error: true
+            data:
+              title: "{{ title }}"
+              message: "{{ message }}"
+              data: "{{ push_data }}"
+          - action: notify.mobile_app_johns_ipad
+            continue_on_error: true
+            data:
+              title: "{{ title }}"
+              message: "{{ message }}"
+              data: "{{ push_data }}"
+
+      - if:
+          - condition: template
+            value_template: "{{ elizabeth_on }}"
+        then:
+          - action: notify.mobile_app_elizabeth_s_phone_xoxo
+            continue_on_error: true
+            data:
+              title: "{{ title }}"
+              message: "{{ message }}"
+              data: "{{ push_data }}"
+
+      - if:
+          - condition: template
+            value_template: "{{ kitchen_tts_on }}"
+        then:
+          - action: notify.send_message
+            data:
+              entity_id: notify.kitchen_kiosk_text_to_speech
+              message: "{{ message }}"

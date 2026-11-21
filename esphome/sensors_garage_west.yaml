@@ -1,0 +1,40 @@
+substitutions:
+  deviceName: garage_west_sensor
+  deviceUpper: Garage West Sensor
+  ipAddress: 192.168.40.11
+
+  # WIFI AND OTHER CREDENTIALS. USE SECRETS WHERE POSSIBLE
+  wifiPass: !secret wifiPassESP
+  wifiSSID: !secret wifiSSIDESP
+  passOTA: !secret passOTA
+  
+  # ESP DECLARATION
+  boardPlatform: ESP8266
+  boardName: d1_mini
+  
+  # PIN MAPPING.
+  i2cData: D3
+  i2cClock: D4
+  pirPin: D0
+  irPin: D7
+  
+<<: !include includes/sensor_8266.yaml
+
+remote_transmitter:
+  pin: 
+    number: ${irPin}
+    inverted: true
+  # Infrared remotes use a 50% carrier signal
+  carrier_duty_percent: 50%
+
+button:
+  - platform: template
+    name: Power Toggle
+    on_press:
+      - remote_transmitter.transmit_pronto:
+          data: 0000 006D 0022 0000 015C 00AD 0019 0012 001A 0012 0019 0013 0019 0012 001A 0012 0019 0013 0019 0012 001A 0012 0019 003E 001A 003E 0019 003D 0019 003E 001A 003E 0019 003D 0019 003D 001A 0012 0019 0013 0019 003D 0019 0013 0019 003D 
+  - platform: template
+    name: Mute Toggle
+    on_press:
+      - remote_transmitter.transmit_pronto:
+          data: 0000 006D 0022 0000 015C 00AC 0019 0013 0019 0012 001A 0012 0019 0013 0019 0012 001A 0012 0019 0013 0019 0012 001A 003D 0019 003E 0019 003D 001A 003D 0019 003E 0019 003D 001A 003D 0019 0012 001A 0012 0019 0013 0019 0012 001A 0012 

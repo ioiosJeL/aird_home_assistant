@@ -1,0 +1,148 @@
+script:
+  double_bedroom_scene_scroll:
+    alias: Double Bedroom Scene Progression
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: "input_select.select_{{ 'next' if is_state('input_boolean.status_nighttime', 'on') else 'previous' }}"
+        target:
+          entity_id: input_select.double_bedroom_scenes
+        data:
+          cycle: true
+      - action: script.turn_on
+        target:
+          entity_id: "script.double_bedroom_scene_{{ states('input_select.double_bedroom_scenes') | lower  }}"
+
+  double_bedroom_scene_change:
+    alias: Double Bedroom Scene Change
+    description: "Scene change functions"
+    mode: single
+    fields:
+      scene_name:
+        description: "The title of the scene"
+        example: "Automatic"
+      scene_duration:
+        description: "The duration of scene change"
+        example: "5"
+    sequence:
+      - action: input_boolean.turn_on
+        data:
+          entity_id: input_boolean.double_bedroom_scene_changing
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.double_bedroom_previous_scene
+          value: "{{ states('input_select.double_bedroom_scenes') | string }}"
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.double_bedroom_last_action
+          value: "Scene Selected: {{ scene_name }}"
+
+      - action: input_select.select_option
+        data:
+          entity_id: input_select.double_bedroom_scenes
+          option: "{{ scene_name }}"
+
+      - action: timer.start
+        data:
+          entity_id: timer.double_bedroom_scene_changing
+          duration: "{{ scene_duration | int }}"
+
+      - wait_template: "{{ is_state('timer.double_bedroom_scene_changing', 'idle') }}"
+
+      - action: input_boolean.turn_off
+        data:
+          entity_id: input_boolean.double_bedroom_scene_changing
+
+  double_bedroom_scene_bright:
+    alias: Double Bedroom Bright Scene Extras
+    description: "Scene functions beyond light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.double_bedroom_scene_change
+        data:
+          variables:
+            scene_name: "Bright"
+            scene_duration: 3
+      - action: scene.turn_on
+        entity_id: scene.double_bedroom_read
+        data:
+          transition: 3
+
+  double_bedroom_scene_relax:
+    alias: Double Bedroom Relax Scene Extras
+    description: "Scene functions beyond light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.double_bedroom_scene_change
+        data:
+          variables:
+            scene_name: "Relax"
+            scene_duration: 5
+      - action: scene.turn_on
+        entity_id: scene.double_bedroom_relax
+        data:
+          transition: 5
+
+  double_bedroom_scene_cosy:
+    alias: Double Bedroom Cosy Scene Extras
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.double_bedroom_scene_change
+        data:
+          variables:
+            scene_name: "Cosy"
+            scene_duration: 5
+      - action: scene.turn_on
+        entity_id: scene.double_bedroom_starlight
+        data:
+          transition: 5
+
+  double_bedroom_scene_quickly_off:
+    alias: Double Bedroom Off Scene Quickly
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.double_bedroom_scene_change
+        data:
+          variables:
+            scene_name: "Off"
+            scene_duration: 2
+      - action: light.turn_on
+        data:
+          entity_id: light.double_bedroom_wall
+          brightness: 0
+          transition: 2
+
+  double_bedroom_scene_off:
+    alias: Double Bedroom Off Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.double_bedroom_scene_change
+        data:
+          variables:
+            scene_name: "Off"
+            scene_duration: 1
+      - action: light.turn_on
+        data:
+          entity_id: light.double_bedroom_wall
+          brightness: 0
+          transition: 1
+      - action: light.turn_on
+        data:
+          entity_id: light.double_bedroom_bedside
+          brightness: 0
+          transition: 1

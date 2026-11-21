@@ -1,0 +1,140 @@
+script:
+  kitchen_scene_scroll:
+    alias: Kitchen Scene Progression
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: "input_select.select_{{ 'next' if is_state('input_boolean.status_nighttime', 'on') else 'previous' }}"
+        target:
+          entity_id: input_select.kitchen_scenes
+        data:
+          cycle: true
+      - action: script.turn_on
+        target:
+          entity_id: "script.kitchen_scene_{{ states('input_select.kitchen_scenes') | lower  }}"
+
+  kitchen_scene_change:
+    alias: Kitchen Scene Change
+    description: "Scene change functions"
+    mode: single
+    fields:
+      scene_name:
+        description: "The title of the scene"
+        example: "Automatic"
+      scene_duration:
+        description: "The duration of scene change"
+        example: "5"
+    sequence:
+      - action: input_boolean.turn_on
+        data:
+          entity_id: input_boolean.kitchen_scene_changing
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.kitchen_previous_scene
+          value: "{{ states('input_select.kitchen_scenes') | string }}"
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.kitchen_last_action
+          value: "Scene Selected: {{ scene_name }}"
+
+      - action: input_select.select_option
+        data:
+          entity_id: input_select.kitchen_scenes
+          option: "{{ scene_name }}"
+
+      - action: timer.start
+        data:
+          entity_id: timer.kitchen_scene_changing
+          duration: "{{ scene_duration | int }}"
+
+      - wait_template: "{{ is_state('timer.kitchen_scene_changing', 'idle') }}"
+
+      - action: input_boolean.turn_off
+        data:
+          entity_id: input_boolean.kitchen_scene_changing
+
+  kitchen_scene_bright:
+    alias: Kitchen Bright Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.kitchen_scene_change
+        data:
+          variables:
+            scene_name: "Bright"
+            scene_duration: 1
+      - action: light.turn_on
+        data:
+          entity_id: light.kitchen_counter_lights
+      - delay:
+          milliseconds: 300
+      - action: light.turn_on
+        data:
+          entity_id: light.kitchen_ceiling_lights
+
+  kitchen_scene_relax:
+    alias: Kitchen Relax Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.kitchen_scene_change
+        data:
+          variables:
+            scene_name: "Relax"
+            scene_duration: 1
+      - action: light.turn_on
+        data:
+          entity_id: light.kitchen_counter_lights
+      - delay:
+          milliseconds: 300
+      - action: light.turn_off
+        data:
+          entity_id: light.kitchen_ceiling_lights
+
+  kitchen_scene_cosy:
+    alias: Kitchen Cosy Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.kitchen_scene_change
+        data:
+          variables:
+            scene_name: "Cosy"
+            scene_duration: 1
+      - action: light.turn_on
+        data:
+          entity_id: light.kitchen_ceiling_lights
+      - delay:
+          milliseconds: 300
+      - action: light.turn_off
+        data:
+          entity_id: light.kitchen_counter_lights
+
+  kitchen_scene_off:
+    alias: Kitchen Off Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.kitchen_scene_change
+        data:
+          variables:
+            scene_name: "Off"
+            scene_duration: 1
+      - action: light.turn_off
+        data:
+          entity_id: light.kitchen_counter_lights
+      - delay:
+          milliseconds: 300
+      - action: light.turn_off
+        data:
+          entity_id: light.kitchen_ceiling_lights

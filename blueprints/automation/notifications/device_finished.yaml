@@ -1,0 +1,67 @@
+blueprint:
+  name: Notifications - Device Finished
+  description: >-
+    Send a notification when an "activity" binary sensor (e.g. a power
+    monitor derived washing machine/dishwasher/tumble dryer "active"
+    sensor) turns off, signalling the appliance has finished its cycle.
+  domain: automation
+  input:
+    activity_sensor:
+      name: Activity Sensor
+      selector:
+        entity:
+          domain: binary_sensor
+    notify_target:
+      name: Notify Script
+      description: >-
+        Script called with a `message` variable, e.g.
+        script.dining_room_tv_notify (an on-screen toast on the TV).
+      default: script.dining_room_tv_notify
+      selector:
+        entity:
+          domain: script
+    availability_gate:
+      name: Availability Gate (optional)
+      description: >-
+        Only send the notification when this entity is in the given state -
+        e.g. so a TV-based notify target isn't attempted (and logged as an
+        error) while the TV is off. Leave blank to always send.
+      default: media_player.dining_room_tv
+      selector:
+        entity: {}
+    availability_state:
+      name: Availability Gate State
+      default: "on"
+      selector:
+        text: {}
+    message:
+      name: Message
+      selector:
+        text: {}
+
+mode: single
+triggers:
+  # from "on" only: a restart takes the sensor unknown -> off, which used
+  # to announce every appliance as "finished" at once
+  - trigger: state
+    entity_id: !input activity_sensor
+    from: "on"
+    to: "off"
+
+variables:
+  availability_gate: !input availability_gate
+  availability_state: !input availability_state
+
+actions:
+  - if:
+      - condition: template
+        value_template: >-
+          {{ availability_gate in ('', None)
+             or is_state(availability_gate, availability_state) }}
+    then:
+      - action: script.turn_on
+        target:
+          entity_id: !input notify_target
+        data:
+          variables:
+            message: !input message

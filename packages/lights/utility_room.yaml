@@ -1,0 +1,227 @@
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      double: &double
+        package: "Lights"
+        room: "Utility Room"
+
+    input_number.utility_room_lights_*:
+      <<: *double
+    light.utility_room_*:
+      <<: *double
+    timer.utility_room_scene_*:
+      <<: *double
+    sensor.utility_room_*_warmth:
+      <<: *double
+    sensor.utility_room_*_brightness:
+      <<: *double
+
+  customize:
+    input_select.utility_room_scenes:
+      <<: *double
+    input_text.utility_room_last_action:
+      <<: *double
+    input_text.utility_room_previous_scene:
+      <<: *double
+    input_boolean.utility_room_scene_changing:
+      <<: *double
+    sensor.utility_room_active_light_count:
+      <<: *double
+
+input_select:
+  # All scenes
+  utility_room_scenes:
+    name: Utility Room Scenes
+    options:
+      - "Bright"
+      - "Off"
+    icon: mdi:palette-outline
+
+light:
+  - platform: group
+    name: Utility Room Lights Master
+    entities:
+      - light.utility_room_ceiling_lights
+
+input_text:
+  # The last action performed
+  utility_room_last_action:
+    name: "Last Action: Utility Room"
+    icon: mdi:gesture-tap-button
+    initial: "None: Boot"
+
+  # Previous scene before current
+  utility_room_previous_scene:
+    name: Previous Utility Room Scene
+    icon: mdi:palette
+    initial: "Reboot"
+
+input_number:
+  # Lux level below which brings on the auto lights
+  utility_room_lights_on_threshold:
+    name: Utility Room Threshold On
+    min: 1
+    max: 70
+
+input_boolean:
+  # Boolean which is on during scene change
+  utility_room_scene_changing:
+    name: Utility Room Scene Change In Progress
+    icon: mdi:repeat-once
+    initial: false
+
+  # Boolean which is on when lights are in auto mode
+  utility_room_auto_mode_active:
+    name: Utility Room Auto Mode
+    icon: mdi:refresh-auto
+
+  # Auto mode active
+  utility_room_automatic_lights:
+    name: Utility Room Automatic Lights Mode
+    icon: mdi:refresh-auto
+
+timer:
+  # Running after the lights went (or nearly went) off on someone who was
+  # still here; the motion timeout is doubled while it runs
+  utility_room_motion_extended:
+    name: Utility Room Motion Timeout Extended
+    icon: mdi:timer-plus-outline
+    duration: "00:30:00"
+
+  # Timer set during each scene on script for transitions
+  utility_room_scene_changing:
+    name: Time For Scene Change
+    icon: mdi:timer-sand-empty
+
+  # Timer to prevent lights from waiting for light sensor to update
+  utility_room_auto_off_override:
+    name: Timer To Prevent Waiting For Lux Sensor
+    icon: mdi:timer-sand-empty
+
+template:
+  - sensor:
+      # Determine if any lights in any group is currently on
+      - default_entity_id: sensor.utility_room_active_light_count
+        name: "Utility Room Active Light Count"
+        unit_of_measurement: Lights
+        state: >-
+          {{ expand('light.utility_room_lights_master') | selectattr('state', 'ne', 'off') | list | count }}
+
+automation:
+  - alias: Utility Room Lights Auto On
+    use_blueprint:
+      path: lights/motion_auto_on.yaml
+      input:
+        # After House Shutdown, motion here wakes the house
+        wakes_house: true
+        previous_scene_text: input_text.utility_room_previous_scene
+        room_prefix: utility_room
+        extend_timer: timer.utility_room_motion_extended
+        motion_sensor: binary_sensor.utility_room_motion
+        automatic_lights_boolean: input_boolean.utility_room_automatic_lights
+        scenes_select: input_select.utility_room_scenes
+        illuminance_sensor: sensor.hms_utility_room_illuminance
+        threshold_number: input_number.utility_room_lights_on_threshold
+        override_timer: timer.utility_room_auto_off_override
+        last_action_text: input_text.utility_room_last_action
+        auto_mode_boolean: input_boolean.utility_room_auto_mode_active
+        daytime_script: script.utility_room_scene_bright
+
+  - alias: Utility Room Lights Auto Off
+    use_blueprint:
+      path: lights/motion_auto_off.yaml
+      input:
+        extend_timer: timer.utility_room_motion_extended
+        motion_sensor: binary_sensor.utility_room_motion
+        motion_timeout_number: input_number.utility_room_motion_timeout
+        automatic_lights_boolean: input_boolean.utility_room_automatic_lights
+        auto_mode_boolean: input_boolean.utility_room_auto_mode_active
+        off_script: script.utility_room_scene_off
+        last_action_text: input_text.utility_room_last_action
+        override_timer: timer.utility_room_auto_off_override
+
+  - alias: Utility Room Lights Manual Off Detection
+    use_blueprint:
+      path: lights/manual_off_detection.yaml
+      input:
+        lights_master: light.utility_room_lights_master
+        scenes_select: input_select.utility_room_scenes
+        off_script: script.utility_room_scene_off
+        last_action_text: input_text.utility_room_last_action
+        auto_mode_boolean: input_boolean.utility_room_auto_mode_active
+
+  - alias: Utility Room Scene Select Changed
+    use_blueprint:
+      path: lights/scene_select_changed.yaml
+      input:
+        scenes_select: input_select.utility_room_scenes
+        scene_changing_boolean: input_boolean.utility_room_scene_changing
+        room_prefix: utility_room
+
+  - alias: Utility Room Light Toggle
+    use_blueprint:
+      path: lights/physical_toggle.yaml
+      input:
+        trigger:
+          - trigger: event
+            event_type: shelly.click
+            event_data:
+              click_type: single_push
+              device: shellyplus1pm-441793954a50
+              channel: 1
+        changing_timer: timer.utility_room_scene_changing
+        scenes_select: input_select.utility_room_scenes
+        on_script: script.utility_room_scene_bright
+        off_script: script.utility_room_scene_off
+        auto_mode_boolean: input_boolean.utility_room_auto_mode_active
+
+  - alias: Utility Room Long Push
+    description: ""
+    mode: single
+    triggers:
+      - trigger: event
+        event_type: shelly.click
+        event_data:
+          click_type: long_push
+          device: shellyplus1pm-441793954a50
+          channel: 1
+    # "Everything off" when heading out. Each lit room in light.house_lights
+    # (not landing/front porch) goes through its own Off scene, so its scene
+    # selector reads Off and any manual override clears straight away -
+    # a bare light.turn_off looked like a manual switch-off in every room
+    # and left overridden rooms paused for another 30 min.
+    actions:
+      - repeat:
+          for_each: >-
+            {{ state_attr('light.house_lights', 'entity_id')
+               | select('is_state', 'on')
+               | map('replace', 'light.', '') | map('replace', '_lights_master', '')
+               | list }}
+          sequence:
+            - action: script.turn_on
+              target:
+                entity_id: "script.{{ repeat.item }}_scene_off"
+      # Safety net for anything a scene script missed
+      - delay:
+          seconds: 5
+      - action: light.turn_off
+        data:
+          entity_id: light.house_lights
+
+  - alias: Utility Room Double Push
+    description: ""
+    mode: single
+    triggers:
+      - trigger: event
+        event_type: shelly.click
+        event_data:
+          click_type: double_push
+          device: shellyplus1pm-441793954a50
+          channel: 1
+    actions:
+      - action: script.turn_on
+        target:
+          entity_id: script.homewatch_pause
+        data:
+          variables:
+            mins: 2

@@ -1,0 +1,198 @@
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      double: &double
+        package: "Lights"
+        room: "Kitchen"
+
+    input_number.kitchen_lights_*:
+      <<: *double
+    light.kitchen_*:
+      <<: *double
+    timer.kitchen_scene_*:
+      <<: *double
+    sensor.kitchen_*_warmth:
+      <<: *double
+    sensor.kitchen_*_brightness:
+      <<: *double
+
+  customize:
+    input_select.kitchen_scenes:
+      <<: *double
+    input_text.kitchen_last_action:
+      <<: *double
+    input_text.kitchen_previous_scene:
+      <<: *double
+    input_boolean.kitchen_scene_changing:
+      <<: *double
+    sensor.kitchen_active_light_count:
+      <<: *double
+
+input_select:
+  # All scenes
+  kitchen_scenes:
+    name: Kitchen Scenes
+    options:
+      - "Bright"
+      - "Relax"
+      - "Cosy"
+      - "Off"
+    icon: mdi:palette-outline
+
+input_text:
+  # The last action performed
+  kitchen_last_action:
+    name: "Last Action: Kitchen"
+    icon: mdi:gesture-tap-button
+    initial: "None: Boot"
+
+  # Previous scene before current
+  kitchen_previous_scene:
+    name: Previous Kitchen Scene
+    icon: mdi:palette
+    initial: "Reboot"
+
+input_number:
+  # Lux level below which brings on the auto lights
+  kitchen_lights_on_threshold:
+    name: Kitchen Threshold On
+    min: 1
+    max: 70
+
+light:
+  - platform: group
+    name: Kitchen Lights Master
+    entities:
+      - light.kitchen_ceiling_lights
+      - light.kitchen_counter_lights
+
+input_boolean:
+  # Boolean which is on during scene change
+  kitchen_scene_changing:
+    name: Kitchen Scene Change In Progress
+    icon: mdi:repeat-once
+    initial: false
+
+  # Boolean which is on when lights are in auto mode
+  kitchen_auto_mode_active:
+    name: Kitchen Auto Mode
+    icon: mdi:refresh-auto
+
+  # Auto mode active
+  kitchen_automatic_lights:
+    name: Kitchen Automatic Lights Mode
+    icon: mdi:refresh-auto
+
+timer:
+  # Running after the lights went (or nearly went) off on someone who was
+  # still here; the motion timeout is doubled while it runs
+  kitchen_motion_extended:
+    name: Kitchen Motion Timeout Extended
+    icon: mdi:timer-plus-outline
+    duration: "00:30:00"
+
+  # Timer set during each scene on script for transitions
+  kitchen_scene_changing:
+    name: Time For Scene Change
+    icon: mdi:timer-sand-empty
+
+  # Timer to prevent lights from waiting for light sensor to update
+  kitchen_auto_off_override:
+    name: Timer To Prevent Waiting For Lux Sensor
+    icon: mdi:timer-sand-empty
+
+template:
+  - sensor:
+      # Determine if any lights in any group is currently on
+      - default_entity_id: sensor.kitchen_active_light_count
+        name: "Kitchen Active Light Count"
+        unit_of_measurement: Lights
+        state: >-
+          {{ expand('light.kitchen_lights_master') | selectattr('state', 'ne', 'off') | list | count }}
+
+automation:
+  - alias: Kitchen Lights Auto On
+    use_blueprint:
+      path: lights/motion_auto_on.yaml
+      input:
+        # After House Shutdown, motion here wakes the house
+        wakes_house: true
+        previous_scene_text: input_text.kitchen_previous_scene
+        room_prefix: kitchen
+        extend_timer: timer.kitchen_motion_extended
+        motion_sensor: binary_sensor.kitchen_motion
+        automatic_lights_boolean: input_boolean.kitchen_automatic_lights
+        scenes_select: input_select.kitchen_scenes
+        illuminance_sensor: sensor.hms_kitchen_illuminance
+        threshold_number: input_number.kitchen_lights_on_threshold
+        override_timer: timer.kitchen_auto_off_override
+        last_action_text: input_text.kitchen_last_action
+        auto_mode_boolean: input_boolean.kitchen_auto_mode_active
+        daytime_script: script.kitchen_scene_bright
+        nighttime_script: script.kitchen_scene_relax
+
+  - alias: Kitchen Lights Auto Off
+    use_blueprint:
+      path: lights/motion_auto_off.yaml
+      input:
+        extend_timer: timer.kitchen_motion_extended
+        warning_off_lights:
+          - light.kitchen_ceiling_lights
+        lights_master: light.kitchen_lights_master
+        motion_sensor: binary_sensor.kitchen_motion
+        motion_timeout_number: input_number.kitchen_motion_timeout
+        automatic_lights_boolean: input_boolean.kitchen_automatic_lights
+        auto_mode_boolean: input_boolean.kitchen_auto_mode_active
+        off_script: script.kitchen_scene_off
+        last_action_text: input_text.kitchen_last_action
+        override_timer: timer.kitchen_auto_off_override
+
+  - alias: Kitchen Lights Manual Off Detection
+    use_blueprint:
+      path: lights/manual_off_detection.yaml
+      input:
+        lights_master: light.kitchen_lights_master
+        scenes_select: input_select.kitchen_scenes
+        off_script: script.kitchen_scene_off
+        last_action_text: input_text.kitchen_last_action
+        auto_mode_boolean: input_boolean.kitchen_auto_mode_active
+
+  - alias: Kitchen Scene Select Changed
+    use_blueprint:
+      path: lights/scene_select_changed.yaml
+      input:
+        scenes_select: input_select.kitchen_scenes
+        scene_changing_boolean: input_boolean.kitchen_scene_changing
+        room_prefix: kitchen
+
+  - alias: Kitchen Light Toggle
+    use_blueprint:
+      path: lights/physical_toggle.yaml
+      input:
+        trigger:
+          - trigger: event
+            event_type: shelly.click
+            event_data:
+              click_type: single
+              device: shellyswitch25-10A5DD
+              channel: 2
+        changing_timer: timer.kitchen_scene_changing
+        scenes_select: input_select.kitchen_scenes
+        on_script: script.kitchen_scene_bright
+        off_script: script.kitchen_scene_off
+        auto_mode_boolean: input_boolean.kitchen_auto_mode_active
+
+  - alias: Kitchen Scene Scroll
+    use_blueprint:
+      path: lights/scene_scroll.yaml
+      input:
+        trigger:
+          - trigger: event
+            event_type: shelly.click
+            event_data:
+              click_type: long
+              device: shellyswitch25-10A5DD
+              channel: 2
+        changing_timer: timer.kitchen_scene_changing
+        scroll_script: script.kitchen_scene_scroll
+        auto_mode_boolean: input_boolean.kitchen_auto_mode_active

@@ -1,0 +1,52 @@
+blueprint:
+  name: Lights - Basic Motion Off
+  description: >-
+    Turn a light off after motion has been clear for a configurable number
+    of minutes, if automatic lights are enabled and the light is currently
+    on. Uses a delay (rather than a native "for:" trigger) so the timeout
+    can come from an input_number users can adjust from the dashboard.
+  domain: automation
+  input:
+    motion_sensor:
+      name: Motion Sensor
+      selector:
+        entity:
+          domain: binary_sensor
+    motion_timeout_number:
+      name: Motion Timeout, Minutes (input_number)
+      selector:
+        entity:
+          domain: input_number
+    automatic_lights_boolean:
+      name: Automatic Lights Mode (input_boolean)
+      selector:
+        entity:
+          domain: input_boolean
+    light_target:
+      name: Light
+      selector:
+        entity:
+          domain: light
+
+mode: restart
+triggers:
+  - trigger: state
+    entity_id: !input motion_sensor
+    to: "off"
+
+variables:
+  motion_sensor: !input motion_sensor
+  motion_timeout_number: !input motion_timeout_number
+  automatic_lights: !input automatic_lights_boolean
+  light_target: !input light_target
+
+actions:
+  - delay: "{{ (states(motion_timeout_number) | int(0)) * 60 }}"
+  - condition: template
+    value_template: >-
+      {{ is_state(motion_sensor, 'off')
+         and states(automatic_lights) == 'on'
+         and states(light_target) == 'on' }}
+  - action: light.turn_off
+    target:
+      entity_id: !input light_target

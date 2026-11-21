@@ -1,0 +1,227 @@
+# Camera alert page (subview, opened by tapping a camera notification).
+# Recorded clip of each recent detection (UniFi Protect event video via the
+# integration's proxy, signed in the browser), live feed of the camera that
+# fired, per-type alert switches/mutes and quick actions.
+# Data: sensor.camera_alerts, sensor.notify_mutes (packages/camera_alerts.yaml).
+path: camera-alert
+title: Camera alert
+icon: mdi:cctv
+subview: true
+back_path: /lovelace/cctv
+type: sections
+max_columns: 2
+sections:
+  # =====================================================================
+  # Column 1: recorded clips
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: heading
+        heading: What happened
+        icon: mdi:play-box-multiple-outline
+      - type: custom:button-card
+        grid_options:
+          columns: full
+          rows: auto
+        entity: sensor.camera_alerts
+        show_icon: false
+        show_name: false
+        show_state: false
+        tap_action:
+          action: none
+        triggers_update:
+          - sensor.camera_alerts
+        custom_fields:
+          clips: |
+            [[[
+              const al = entity?.attributes.alerts || [];
+              if (!al.length) return '<div class="none">No detections yet</div>';
+              const icon = { person: 'mdi:walk', vehicle: 'mdi:car', animal: 'mdi:paw' };
+              const when = ts => {
+                const d = new Date(ts * 1000), t0 = new Date(); t0.setHours(0, 0, 0, 0);
+                const t = d.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true });
+                return d >= t0 ? t : `${d.toLocaleDateString('en-GB', { weekday: 'short' })} ${t}`;
+              };
+              const cam = c => c.replace(/_/g, ' ').replace(/\b\w/g, x => x.toUpperCase());
+              const iso = ts => new Date(ts * 1000).toISOString();
+              const clip = a => a.event_id ? `/api/unifiprotect/video/${a.nvr}/${a.event_id}`
+                : `/api/unifiprotect/video/${a.nvr}/camera.${a.camera}_medium/${iso(a.ts - 5)}/${iso(a.ts + 25)}`;
+              const thumb = a => a.event_id ? `/api/unifiprotect/thumbnail/${a.nvr}/${a.event_id}` : '';
+              const cap = a => `${a.type[0].toUpperCase() + a.type.slice(1)} · ${cam(a.camera)} · ${when(a.ts)}`;
+              // Signs /api paths for the browser (video/img can't send the login header)
+              const sign = `const h=document.querySelector('home-assistant').hass;`;
+              const play = `${sign}const r=this.getRootNode();r.querySelectorAll('.it').forEach(e=>e.classList.remove('sel'));this.classList.add('sel');r.querySelector('#cap').textContent=this.dataset.cap;r.querySelector('#err').style.display='none';h.callWS({type:'auth/sign_path',path:this.dataset.clip,expires:86400}).then(x=>{const v=r.querySelector('#clip');v.src=x.path;v.play().catch(()=>{});});`;
+              const boot = `${sign}this.getRootNode().querySelectorAll('[data-sign]').forEach(el=>{if(el.dataset.done)return;el.dataset.done=1;h.callWS({type:'auth/sign_path',path:el.dataset.sign,expires:86400}).then(x=>{el.src=x.path;});});`;
+              const items = al.map((a, i) => `
+                <div class="it ${i === 0 ? 'sel' : ''}" data-clip="${clip(a)}" data-cap="${cap(a)}" onclick="${play}">
+                  ${thumb(a) ? `<img data-sign="${thumb(a)}" alt="">` : `<span class="ph"><ha-icon icon="${icon[a.type] || 'mdi:cctv'}"></ha-icon></span>`}
+                  <div class="m"><div class="t"><ha-icon icon="${icon[a.type] || 'mdi:cctv'}"></ha-icon>${cam(a.camera)}</div><div class="d">${when(a.ts)}</div></div>
+                </div>`).join('');
+              return `
+                <video id="clip" controls playsinline muted preload="metadata" data-sign="${clip(al[0])}"
+                  onerror="this.getRootNode().querySelector('#err').style.display='block'"></video>
+                <div id="err">This clip isn't ready yet. Protect saves it once the movement stops, so tap it again in a moment.</div>
+                <div id="cap">${cap(al[0])}</div>
+                <div class="list">${items}</div>
+                <img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" style="display:none" onload="${boot}">`;
+            ]]]
+        styles:
+          card:
+            - padding: 12px
+          grid:
+            - grid-template-areas: '"clips"'
+            - grid-template-columns: 1fr
+          custom_fields:
+            clips:
+              - justify-self: stretch
+              - text-align: left
+        extra_styles: |
+          #clips video { width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 12px; display: block; }
+          #clips #err { display: none; margin-top: 8px; font-size: 0.8rem; color: var(--warning-color); }
+          #clips #cap { margin: 8px 2px 10px; font-weight: 600; }
+          #clips .list { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+          #clips .it { border-radius: 10px; overflow: hidden; cursor: pointer; border: 2px solid transparent;
+                       background: color-mix(in srgb, var(--primary-text-color) 5%, transparent); }
+          #clips .it.sel { border-color: var(--primary-color); }
+          #clips .it img, #clips .it .ph { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: flex;
+                       align-items: center; justify-content: center; color: var(--secondary-text-color); }
+          #clips .m { padding: 5px 8px 6px; }
+          #clips .t { font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+          #clips .t ha-icon { --mdc-icon-size: 14px; }
+          #clips .d { font-size: 0.72rem; color: var(--secondary-text-color); }
+          #clips .none { padding: 20px; text-align: center; color: var(--secondary-text-color); }
+
+  # =====================================================================
+  # Column 2: live, alert types, quick actions
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: heading
+        heading: Live now
+        icon: mdi:cctv
+      # Live feed of whichever camera fired last
+      - type: picture-entity
+        entity: camera.driveway_medium
+        name: Driveway
+        camera_view: live
+        show_state: false
+        grid_options:
+          columns: full
+          rows: auto
+        visibility:
+          - condition: state
+            entity: input_text.last_object_camera
+            state_not: [car_port, patio]
+      - type: picture-entity
+        entity: camera.car_port_medium
+        name: Car Port
+        camera_view: live
+        show_state: false
+        grid_options:
+          columns: full
+          rows: auto
+        visibility:
+          - condition: state
+            entity: input_text.last_object_camera
+            state: car_port
+      - type: picture-entity
+        entity: camera.patio_medium
+        name: Patio
+        camera_view: live
+        show_state: false
+        grid_options:
+          columns: full
+          rows: auto
+        visibility:
+          - condition: state
+            entity: input_text.last_object_camera
+            state: patio
+
+      - type: heading
+        heading: Quick actions
+        icon: mdi:gesture-tap
+      - type: grid
+        grid_options:
+          columns: full
+          rows: auto
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            template: room_pill
+            entity: script.outside_lights_alert
+            name: Lights 10 min
+            icon: mdi:light-flood-down
+            variables:
+              active: "[[[ return entity?.state === 'on'; ]]]"
+            tap_action:
+              action: perform-action
+              perform_action: script.turn_on
+              target:
+                entity_id: script.outside_lights_alert
+          - type: custom:button-card
+            template: room_pill
+            entity: input_boolean.status_homewatch
+            name: Homewatch
+            icon: mdi:shield-home-outline
+            variables:
+              color: var(--blue-color)
+              active: "[[[ return entity?.state === 'on'; ]]]"
+            tap_action:
+              action: toggle
+          - type: custom:button-card
+            template: room_pill
+            name: All cameras
+            icon: mdi:cctv
+            tap_action:
+              action: navigate
+              navigation_path: /lovelace/cctv
+          - type: custom:button-card
+            template: room_pill
+            name: Alert settings
+            icon: mdi:bell-cog
+            tap_action:
+              action: navigate
+              navigation_path: /admin-pages/notification-preferences
+
+      # --- Per type: on/off for good, or mute for a while
+      - type: heading
+        heading: Alert types
+        icon: mdi:bell-badge-outline
+      - type: custom:button-card
+        template: camera_alert_type
+        grid_options:
+          columns: full
+          rows: auto
+        name: People
+        icon: mdi:walk
+        variables:
+          kind: person
+      - type: custom:button-card
+        template: camera_alert_type
+        grid_options:
+          columns: full
+          rows: auto
+        name: Vehicles
+        icon: mdi:car
+        variables:
+          kind: vehicle
+      - type: custom:button-card
+        template: camera_alert_type
+        grid_options:
+          columns: full
+          rows: auto
+        name: Animals
+        icon: mdi:paw
+        variables:
+          kind: animal
+      - type: markdown
+        grid_options:
+          columns: full
+          rows: auto
+        text_only: true
+        content: >-
+          <small>Camera alerts only go out while **Homewatch** is on. The
+          switch on each type turns its alerts off for good; the timers mute
+          it for a while. Who gets them (John, Elizabeth, kitchen speaker) is
+          on the Notifications admin page.</small>

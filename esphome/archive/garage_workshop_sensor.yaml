@@ -1,0 +1,81 @@
+substitutions:
+  deviceName: workshop_sensor
+  deviceUpper: Garage Workshop Sensor
+
+  # WIFI AND OTHER CREDENTIALS. USE SECRETS WHERE POSSIBLE
+  wifiPass: !secret wifiPass
+  wifiSSID: !secret wifiSSID
+  passOTA: !secret passOTA
+  
+  # ESP DECLARATION
+  boardPlatform: ESP8266
+  boardName: d1_mini
+  
+  # PIN MAPPING. DEFAULTS TO ioios.io PITHY AND COUNTER DEVICES
+  i2cData: D2
+  i2cClock: D1
+  
+###############################################################################
+# WHOA WHERE ARE YOU GOING? GO STEADY BEYOND HERE, THIS IS THE BREAKABLE BIT! #
+###############################################################################
+
+esphome:
+  name: ${deviceName}
+  friendly_name: ${deviceUpper}
+  platform: ${boardPlatform}
+  board: ${boardName}
+
+wifi:
+  ssid: ${wifiSSID}
+  password: ${wifiPass}
+  fast_connect: true
+  
+captive_portal:
+logger:
+ota:
+  platform: esphome
+  password: ${passOTA}
+  
+i2c:
+  sda: ${i2cData}
+  scl: ${i2cClock}
+  scan: True
+  frequency: 800kHz
+  id: bus_a
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+    
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret api_key_archive_garage_workshop_sensor
+
+switch:
+  - platform: restart
+    name: "ESP Restart ${deviceUpper}"
+    
+external_components:
+   - source:
+        type: git
+        url: https://github.com/mrtoy-me/esphome-components-test
+     components: [ sht3xd ]
+sensor:
+  - platform: wifi_signal
+    name: ESP Signal ${deviceUpper}
+    update_interval: 60s
+
+  - platform: uptime
+    name: ESP Uptime ${deviceUpper}
+    update_interval: 60s
+              
+  - platform: sht3xd
+    temperature:
+      name: "${deviceUpper} Temperature"
+      id: ${deviceName}_temperature
+    humidity:
+      name: "${deviceUpper} Humidity"
+      id: ${deviceName}_humidity
+    address: 0x44
+    update_interval: 30s

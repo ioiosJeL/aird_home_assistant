@@ -1,0 +1,86 @@
+# Living room warm-up detection (wood burner / fire).
+#
+# Drives the "Living Room Warming" card on the Home view, which only shows
+# while the room is actively heating up from cold in the colder months.
+#
+# Calibrated on Nov 2026 history: lighting the fire warms the room at
+# 5-6 C/h at its peak, but the first 15-30 min after lighting only manage
+# ~1.5-2 C/h, and the fire often dies back for 30-40 min before it's
+# topped up. Tuned 2026-11-17 (replayed against 3-17 Nov) to show sooner
+# and stay up for the whole evening:
+#   on:  15-min rise >= 1.5 C/h AND 30-min rise >= 1.2 C/h (two windows so
+#        one noisy reading can't trigger it)
+#   off: 30-min rise below 0.5 C/h, held for 45 min (bridges a fire that
+#        dips before being refuelled)
+# Previously on at 30-min >= 2.5 C/h with a 15 min hold, which appeared
+# 20-55 min after lighting and dropped out mid-evening.
+
+homeassistant:
+  customize:
+    sensor.living_room_temperature_rate:
+      package: "Climate"
+      room: "Living Room"
+    binary_sensor.living_room_warming:
+      package: "Climate"
+      room: "Living Room"
+
+template:
+  # Rise rate over the last ~30 min, from a rolling buffer of 5-minute
+  # samples (a template rather than the derivative platform so it reloads
+  # without a restart).
+  - triggers:
+      - trigger: time_pattern
+        minutes: "/5"
+    sensor:
+      - default_entity_id: sensor.living_room_temperature_rate
+        name: Living Room Temperature Rate
+        unique_id: living_room_temperature_rate
+        unit_of_measurement: "°C/h"
+        state_class: measurement
+        icon: mdi:thermometer-chevron-up
+        state: >-
+          {% set s = this.attributes.get('samples', []) %}
+          {% if s | count >= 2 %}
+            {% set hrs = (as_timestamp(now()) - s[0][0]) / 3600 %}
+            {% set t = states('sensor.living_room_average_temperature') | float(none) %}
+            {{ ((t - s[0][1]) / hrs) | round(1) if t is not none and hrs > 0 else 0 }}
+          {% else %}
+            0
+          {% endif %}
+        attributes:
+          # Faster 15-min rate, used to bring the warming card up sooner
+          rate_15m: >-
+            {% set s = this.attributes.get('samples', []) %}
+            {% set recent = s | selectattr(0, 'ge', as_timestamp(now()) - 1050) | list %}
+            {% set t = states('sensor.living_room_average_temperature') | float(none) %}
+            {% if recent | count >= 1 and t is not none %}
+              {% set hrs = (as_timestamp(now()) - recent[0][0]) / 3600 %}
+              {{ ((t - recent[0][1]) / hrs) | round(1) if hrs > 0 else 0 }}
+            {% else %}
+              0
+            {% endif %}
+          samples: >-
+            {% set t = states('sensor.living_room_average_temperature') | float(none) %}
+            {% set s = this.attributes.get('samples', []) %}
+            {% set cutoff = as_timestamp(now()) - 1860 %}
+            {% set kept = s | selectattr(0, 'ge', cutoff) | list %}
+            {{ (kept + [[as_timestamp(now()) | round(0), t]]) if t is not none else kept }}
+
+  - binary_sensor:
+      - default_entity_id: binary_sensor.living_room_warming
+        name: Living Room Warming
+        icon: mdi:fireplace
+        delay_off:
+          minutes: 45
+        # Cold months only (Oct-Apr). Hysteresis: needs a fire-like rise to
+        # come on, but stays on through the slower tail of the warm-up.
+        state: >-
+          {% set rate = states('sensor.living_room_temperature_rate') | float(0) %}
+          {% set rate15 = state_attr('sensor.living_room_temperature_rate', 'rate_15m') | float(0) %}
+          {% if now().month not in [10, 11, 12, 1, 2, 3, 4] %}
+            false
+          {% elif this.state == 'on' %}
+            {{ rate >= 0.5 }}
+          {% else %}
+            {{ rate15 >= 1.5 and rate >= 1.2 }}
+          {% endif %}

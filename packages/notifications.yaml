@@ -1,0 +1,328 @@
+template:
+  - binary_sensor:
+      - name: "House Power Cut"
+        state: "{{ states('sensor.whole_house_power') | float(default=10) < 2 }}"
+        device_class: problem
+        delay_on:
+          seconds: 5
+
+      - name: "Washing Machine Active"
+        state: "{{ states('sensor.washing_machine_power') | float(default=0) > 1 }}"
+        device_class: running
+        icon: mdi:washing-machine
+        delay_on:
+          seconds: 30
+        delay_off:
+          seconds: 60
+      - name: "Tumble Dryer Active"
+        state: "{{ states('sensor.tumble_dryer_power') | float(default=0) > 1 }}"
+        device_class: running
+        icon: mdi:tumble-dryer
+        delay_on:
+          seconds: 30
+        delay_off:
+          seconds: 60
+      - name: "Dishwasher Active"
+        state: "{{ states('sensor.dishwasher_power') | float(default=0) > 1 }}"
+        device_class: running
+        icon: mdi:dishwasher
+        delay_on:
+          seconds: 30
+        delay_off:
+          seconds: 60
+
+      - name: "Fridge Off"
+        state: "{{ states('switch.fridge') == 'off' or states('switch.fridge') == 'unavailable' }}"
+        device_class: problem
+        delay_on:
+          minutes: 1
+      - name: "Dishwasher Off"
+        state: "{{ states('switch.dishwasher') == 'off' or states('switch.dishwasher') == 'unavailable' }}"
+        device_class: problem
+        delay_on:
+          minutes: 1
+
+      - name: "Fridge Too Active"
+        state: "{{ states('sensor.fridge_power') | float(default=20) > 50 }}"
+        device_class: problem
+        delay_on:
+          minutes: 90
+      - name: "Freezer Too Active"
+        state: "{{ states('sensor.freezer_power') | float(default=20) > 30 }}"
+        device_class: problem
+        delay_on:
+          minutes: 90
+
+      - name: "Fridge Too Inactive"
+        state: "{{ states('sensor.fridge_power') | float(default=20) < 5 }}"
+        device_class: problem
+        delay_on:
+          hours: 2
+      - name: "Freezer Too Inactive"
+        state: "{{ states('sensor.freezer_power') | float(default=20) < 5 }}"
+        device_class: problem
+        delay_on:
+          hours: 4
+
+      - name: "Water Heater Backup Active"
+        state: "{{ states('input_boolean.power_tripped_water_heater') == 'on' }}"
+        device_class: problem
+        delay_on:
+          seconds: 5
+
+      - name: "Aurora Visible"
+        state: "{{ states('sensor.home_aurora_visibility') | float(default=20) > 50 }}"
+        device_class: problem
+        delay_on:
+          minutes: 5
+
+      # Any device (Shelly relays, NVR, ...) whose internal temperature
+      # watchdog sensor reads above 80°C, or any Shelly reporting its own
+      # firmware overheat warning (binary_sensor.*_overheating from the
+      # Shelly integration). delay_off stops a device hovering around the
+      # threshold from re-alerting every few minutes.
+      - name: "Device Overheating"
+        unique_id: device_overheating
+        device_class: problem
+        icon: mdi:thermometer-alert
+        state: >-
+          {{ states.sensor | selectattr('entity_id', 'search', '_temperature_watchdog$')
+             | map(attribute='state') | map('float', 0) | select('gt', 80) | list | count > 0
+             or integration_entities('shelly') | select('match', 'binary_sensor\\..*_overheating$')
+                | select('is_state', 'on') | list | count > 0 }}
+        delay_on:
+          minutes: 1
+        delay_off:
+          minutes: 10
+        attributes:
+          devices: >-
+            {% set ns = namespace(n=[]) %}
+            {% for s in states.sensor | selectattr('entity_id', 'search', '_temperature_watchdog$')
+                 if s.state | float(0) > 80 %}
+              {% set name = device_attr(s.entity_id, 'name_by_user') or device_attr(s.entity_id, 'name') or s.name %}
+              {% set ns.n = ns.n + [name ~ ' (' ~ s.state | float | round(1) ~ '°C)'] %}
+            {% endfor %}
+            {% for e in integration_entities('shelly') | select('match', 'binary_sensor\\..*_overheating$')
+                 | select('is_state', 'on') %}
+              {% set name = device_attr(e, 'name_by_user') or device_attr(e, 'name') or state_attr(e, 'friendly_name') %}
+              {% if ns.n | select('search', '^' ~ name ~ ' \\(') | list | count == 0 %}
+                {% set ns.n = ns.n + [name ~ ' (Shelly overheat warning)'] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.n | join(', ') }}
+
+  - trigger:
+      - trigger: state
+        entity_id: sensor.cnc_machine_state
+        to: "Standby"
+        from: "Cutting"
+    binary_sensor:
+      - name: "CNC Machine Finished Cutting"
+        device_class: problem
+        auto_off: 300
+        state: "true"
+
+# Acknowledge toggles for the repeating alerts below (blueprints/automation/
+# notifications/repeating_alert.yaml) - turning one on silences reminders
+# for that alert until the underlying problem clears, which also resets it
+# back off. This replaces the old alert: component's "Acknowledge" button.
+input_boolean:
+  alert_ack_power_cut:
+    name: "Acknowledge: Power Cut"
+    icon: mdi:bell-off
+  alert_ack_fridge_off:
+    name: "Acknowledge: Fridge Off"
+    icon: mdi:bell-off
+  alert_ack_dishwasher_off:
+    name: "Acknowledge: Dishwasher Off"
+    icon: mdi:bell-off
+  alert_ack_fridge_too_active:
+    name: "Acknowledge: Fridge Too Active"
+    icon: mdi:bell-off
+  alert_ack_freezer_too_active:
+    name: "Acknowledge: Freezer Too Active"
+    icon: mdi:bell-off
+  alert_ack_fridge_too_inactive:
+    name: "Acknowledge: Fridge Too Inactive"
+    icon: mdi:bell-off
+  alert_ack_freezer_too_inactive:
+    name: "Acknowledge: Freezer Too Inactive"
+    icon: mdi:bell-off
+  alert_ack_water_heater_backup:
+    name: "Acknowledge: Water Heater Backup"
+    icon: mdi:bell-off
+  alert_ack_aurora_visible:
+    name: "Acknowledge: Aurora Visible"
+    icon: mdi:bell-off
+  alert_ack_device_overheating:
+    name: "Acknowledge: Device Overheating"
+    icon: mdi:bell-off
+
+automation:
+  - alias: "Alert: Power Cut to House"
+    use_blueprint:
+      path: notifications/repeating_alert.yaml
+      input:
+        watched_entity: binary_sensor.house_power_cut
+        acknowledge_boolean: input_boolean.alert_ack_power_cut
+        event: power_cut
+        message: "Power Cut to House"
+        done_message: "Power Restored to House"
+        repeat_minutes: [1, 3, 30]
+
+  - alias: "Alert: Fridge Power Off"
+    use_blueprint:
+      path: notifications/repeating_alert.yaml
+      input:
+        watched_entity: binary_sensor.fridge_off
+        acknowledge_boolean: input_boolean.alert_ack_fridge_off
+        event: fridge_off
+        message: "Fridge Power Off - Check Shelly Relay"
+        done_message: "Fridge Back On"
+        repeat_minutes: [15]
+
+  - alias: "Alert: Dishwasher Power Off"
+    use_blueprint:
+      path: notifications/repeating_alert.yaml
+      input:
+        watched_entity: binary_sensor.dishwasher_off
+        acknowledge_boolean: input_boolean.alert_ack_dishwasher_off
+        event: dishwasher_off
+        message: "Dishwasher Power Off - Check Shelly Relay"
+        done_message: "Dishwasher Back On"
+        repeat_minutes: [15]
+
+  - alias: "Alert: Fridge Running Too Long"
+    use_blueprint:
+      path: notifications/repeating_alert.yaml
+      input:
+        watched_entity: binary_sensor.fridge_too_active
+        acknowledge_boolean: input_boolean.alert_ack_fridge_too_active
+        event: fridge_too_active
+        message: "Fridge Running for 90 Minutes - Check Door"
+        done_message: "Fridge Power Dropped"
+        repeat_minutes: [60]
+
+  - alias: "Alert: Freezer Running Too Long"
+    use_blueprint:
+      path: notifications/repeating_alert.yaml
+      input:
+        watched_entity: binary_sensor.freezer_too_active
+        acknowledge_boolean: input_boolean.alert_ack_freezer_too_active
+        event: freezer_too_active
+        message: "Freezer Running for 90 Minutes - Check Door"
+        done_message: "Freezer Power Dropped"
+        repeat_minutes: [60]
+
+  - alias: "Alert: Fridge Not Running - Lost Power"
+    use_blueprint:
+      path: notifications/repeating_alert.yaml
+      input:
+        watched_entity: binary_sensor.fridge_too_inactive
+        acknowledge_boolean: input_boolean.alert_ack_fridge_too_inactive
+        event: fridge_too_inactive
+        message: "Fridge Not Running for 2 Hours - Lost Power"
+        done_message: "Fridge Power Resumed"
+        repeat_minutes: [60]
+
+  - alias: "Alert: Freezer Not Running - Lost Power"
+    use_blueprint:
+      path: notifications/repeating_alert.yaml
+      input:
+        watched_entity: binary_sensor.freezer_too_inactive
+        acknowledge_boolean: input_boolean.alert_ack_freezer_too_inactive
+        event: freezer_too_inactive
+        message: "Freezer Not Running for 4 Hours - Lost Power"
+        done_message: "Freezer Power Resumed"
+        repeat_minutes: [60]
+
+  - alias: "Alert: Water Heater Backup Activated"
+    use_blueprint:
+      path: notifications/repeating_alert.yaml
+      input:
+        watched_entity: binary_sensor.water_heater_backup_active
+        acknowledge_boolean: input_boolean.alert_ack_water_heater_backup
+        event: water_heater_backup
+        message: "Water Heater Backup Activated - Reset Thermostat"
+        done_message: "Water Heater Fixed"
+        repeat_minutes: [10, 30, 60, 1440]
+
+  - alias: "Alert: Aurora Visible"
+    use_blueprint:
+      path: notifications/repeating_alert.yaml
+      input:
+        watched_entity: binary_sensor.aurora_visible
+        acknowledge_boolean: input_boolean.alert_ack_aurora_visible
+        event: aurora_visible
+        message: "Aurora Visibility Above 50% Chance"
+        done_message: "No Longer Visible"
+        repeat_minutes: [10, 30]
+
+  - alias: "Alert: Device Overheating"
+    use_blueprint:
+      path: notifications/repeating_alert.yaml
+      input:
+        watched_entity: binary_sensor.device_overheating
+        acknowledge_boolean: input_boolean.alert_ack_device_overheating
+        event: device_overheating
+        message: >-
+          Device over 80°C: {{ state_attr('binary_sensor.device_overheating', 'devices')
+          or 'check the Shelly admin page' }}
+        done_message: "All devices back below 80°C"
+        repeat_minutes: [30, 60]
+
+  # Links the CNC "finished cutting" pulse sensor (above) to the mini-squares
+  # notification script - both existed already but nothing triggered the
+  # script when the sensor fired.
+  - id: "cnc_machine_finished_cutting_notify"
+    alias: "CNC Machine Finished Cutting Notification"
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.cnc_machine_finished_cutting
+        to: "on"
+    actions:
+      - action: script.notify_mini_squares_cnc_status
+        data:
+          message: "Finished"
+
+  - id: "washing_machine_finished"
+    alias: "Washing Machine Finished"
+    use_blueprint:
+      path: notifications/device_finished.yaml
+      input:
+        activity_sensor: binary_sensor.washing_machine_active
+        message: "Washing Machine Finished"
+
+  - id: "tumble_dryer_finished"
+    alias: "Tumble Dryer Finished"
+    use_blueprint:
+      path: notifications/device_finished.yaml
+      input:
+        activity_sensor: binary_sensor.tumble_dryer_active
+        message: "Tumble Dryer Finished"
+
+  - id: "dishwasher_finished"
+    alias: "Dishwasher Finished"
+    use_blueprint:
+      path: notifications/device_finished.yaml
+      input:
+        activity_sensor: binary_sensor.dishwasher_active
+        message: "Dishwasher Finished"
+
+  - id: "printer_ink_low"
+    alias: "Printer Ink Low"
+    mode: single
+    triggers:
+      - trigger: numeric_state
+        entity_id:
+          - sensor.hp_envy_6000_series_black_cartridge
+          - sensor.hp_envy_6000_series_tri_color_cartridge
+        below: 10
+    actions:
+      - action: script.notify_dispatch
+        data:
+          event: ink_low
+          message: "{{ trigger.to_state.name }} is low: {{ trigger.to_state.state }}%"
+
+  # Bin collection reminder: moved to packages/bins.yaml (Nov 2026).
+

@@ -1,0 +1,128 @@
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      common: &common
+        package: "Calendar"
+
+    # Template Sensors
+    sensor.date_time_*:
+      <<: *common
+      icon: "mdi:calendar-month"
+
+  customize:
+    sensor.season:
+      <<: *common
+
+sensor:
+  - platform: time_date
+    display_options:
+      - "date_time_iso"
+template:
+  - sensor:
+      - default_entity_id: sensor.date_time_weekday
+        name: "Date: Weekday"
+        state: "{{ as_timestamp(states('sensor.date_time_iso')) | timestamp_custom('%A') }}"
+      - default_entity_id: sensor.date_time_date
+        name: "Date: String"
+        state: >-
+          {% set day = now().strftime("%-d") %}
+          {%- if day | int(0) == 1 or day | int(0) == 21 or day | int(0) == 31 -%}
+            {{ day }}st
+          {%- elif day | int(0) == 2 or day | int(0) == 22 -%}
+            {{ day }}nd
+          {%- elif day | int(0) == 3 or day | int(0) == 23 -%}
+            {{ day }}rd
+          {%- else -%}
+            {{ day }}th
+          {%- endif %}
+      - default_entity_id: sensor.date_time_month
+        name: "Date: Month String"
+        state: >-
+          {% set month_full_name = now().strftime("%B") %}
+          {{ month_full_name }}
+      - default_entity_id: sensor.date_time_24h
+        name: "Date: 24h Time"
+        state: "{{ as_timestamp(states('sensor.date_time_iso')) | timestamp_custom('%H:%M') }}"
+      - default_entity_id: sensor.date_time_12h
+        name: "Date: 12h Time"
+        state: "{{ as_timestamp(states('sensor.date_time_iso')) | timestamp_custom('%I:%M %p') }}"
+      - default_entity_id: sensor.date_time_string
+        name: "Date: Full String"
+        state: "{{ states('sensor.date_time_date') }} {{ states('sensor.date_time_month') }}"
+
+  # "This week" on the Home view (added 18 Nov 2026): the next 7 days from
+  # every calendar (bank holidays, birthdays, ...) plus bin collections
+  # (which come from packages/bins.yaml sensors, not a calendar). Refreshed
+  # every 15 min; new calendars are picked up automatically.
+  - triggers:
+      - trigger: time_pattern
+        minutes: "/15"
+      - trigger: homeassistant
+        event: start
+      - trigger: event
+        event_type: event_template_reloaded
+    actions:
+      - action: calendar.get_events
+        target:
+          entity_id: "{{ states.calendar | map(attribute='entity_id') | list }}"
+        data:
+          start_date_time: "{{ today_at().isoformat() }}"
+          duration:
+            days: 7
+        response_variable: cal
+      - variables:
+          week_end: "{{ (today_at() + timedelta(days=7)).isoformat() }}"
+          events: >-
+            {% set ns = namespace(e=[]) %}
+            {% for cid, r in cal.items() %}
+              {% for ev in r.events %}
+                {% set ns.e = ns.e + [{'start': ev.start, 'summary': ev.summary, 'cal': cid.split('.')[1],
+                                       'all_day': 'T' not in ev.start}] %}
+              {% endfor %}
+            {% endfor %}
+            {% for b, label in [('black', 'Black bin · general waste'), ('green', 'Green bin · metal & plastics'),
+                                ('blue', 'Blue bin · paper & card')] %}
+              {% set t = as_datetime(states('sensor.' ~ b ~ '_bin_next_collection')) %}
+              {% if t and today_at() <= t < as_datetime(week_end) %}
+                {% set ns.e = ns.e + [{'start': (t | as_local).isoformat(), 'summary': label, 'cal': 'bins_' ~ b, 'all_day': true}] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.e | sort(attribute='start') }}
+    sensor:
+      - name: This Week
+        default_entity_id: sensor.this_week
+        unique_id: this_week_events
+        icon: mdi:calendar-week
+        state: "{{ events | count }}"
+        attributes:
+          events: "{{ events }}"
+
+automation:
+  # Clock change reminder (18 Nov 2026): 7pm the evening before the UK
+  # clocks change. The dates are also in calendar.household (2027-2036).
+  - id: clock_change_reminder
+    alias: "Reminder: Clocks Change Tonight"
+    mode: single
+    triggers:
+      - trigger: time
+        at: "19:00:00"
+    conditions:
+      # Tomorrow has a different UTC offset from today
+      - condition: template
+        value_template: >-
+          {% set a = today_at('12:00') %}{% set b = a + timedelta(days=1) %}
+          {{ a.utcoffset() != b.utcoffset() }}
+    actions:
+      - variables:
+          forward: >-
+            {% set a = today_at('12:00') %}{% set b = a + timedelta(days=1) %}
+            {{ b.utcoffset() > a.utcoffset() }}
+      - action: script.notify_dispatch
+        data:
+          event: clock_change
+          title: "{{ 'Clocks go forward tonight' if forward else 'Clocks go back tonight' }}"
+          message: >-
+            {{ 'The clocks go forward an hour tonight (1am becomes 2am), so one less hour in bed.'
+               if forward else
+               'The clocks go back an hour tonight (2am becomes 1am), so an extra hour in bed.' }}
+            Phones and the house update themselves; remember the oven, microwave and car clocks.

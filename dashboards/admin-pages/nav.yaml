@@ -1,0 +1,23 @@
+button_card_templates: !include ../button_card_templates.yaml
+title: Admin
+
+views:
+  - !include ../lovelace/home.yaml
+  - !include ../lovelace/overview.yaml
+  - !include ../lovelace/electrical.yaml
+  - !include ../lovelace/maritime.yaml
+  - !include ../lovelace/extension.yaml
+  - !include ../lovelace/ground_floor.yaml
+  - !include ../lovelace/other_floors.yaml
+  - !include ../lovelace/climates.yaml
+  - !include ../lovelace/humidity.yaml
+  - !include ../lovelace/cctv.yaml
+  - !include garage.yaml
+  - !include machine_room.yaml
+  - !include ../lovelace/leds.yaml
+  - !include screens.yaml
+  - !include hue.yaml
+  - !include shelly.yaml
+  - !include network.yaml
+  - !include ../lovelace/light_control.yaml
+  - !include notifications.yaml

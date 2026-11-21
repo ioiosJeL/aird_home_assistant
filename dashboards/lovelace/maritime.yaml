@@ -1,0 +1,340 @@
+path: maritime
+title: Maritime
+icon: mdi:ferry
+# Each column is one vertical stack, so cards pack tightly (masonry style)
+# with no gaps from lining rows up across columns.
+type: custom:grid-layout
+layout:
+  grid-template-columns: 2fr 1fr 1fr
+  grid-template-areas: '"a b c"'
+  align-items: start
+  mediaquery:
+    "(max-width: 1100px)":
+      grid-template-columns: 1fr 1fr
+      grid-template-areas: |
+        "a a"
+        "b c"
+    "(max-width: 700px)":
+      grid-template-columns: 1fr
+      grid-template-areas: |
+        "a"
+        "b"
+        "c"
+cards:
+  # ======================================== Column A: Map and sky
+  - type: vertical-stack
+    view_layout:
+      grid-area: a
+    cards:
+      # ------------------------------------------------------------ Live AIS map
+      - type: vertical-stack
+        cards:
+          - type: iframe
+            url: /local/maritime/ais.html?v=11
+            aspect_ratio: 85%
+            allow: fullscreen
+
+      # --------------------------------------------------------- Sky & weather
+      - type: vertical-stack
+        cards:
+          - type: weather-forecast
+            entity: weather.portree
+            forecast_type: hourly
+            show_forecast: true
+          - type: custom:horizon-card
+
+  # ======================================== Column B: Sea, wind and links
+  - type: vertical-stack
+    view_layout:
+      grid-area: b
+    cards:
+      # --------------------------------------------------------------- Sea state
+      - type: vertical-stack
+        cards:
+          - type: glance
+            title: Sea state
+            columns: 3
+            state_color: false
+            entities:
+              - entity: sensor.sea_wave_height
+                name: Waves
+              - entity: sensor.sea_swell_height
+                name: Swell
+              - entity: sensor.sea_wave_period
+                name: Period
+              - entity: sensor.sea_temperature
+                name: Sea temp
+              - entity: sensor.sea_current_speed
+                name: Current
+              - entity: sensor.marine_visibility
+                name: Visibility
+          - type: custom:mini-graph-card
+            name: Waves & swell, 48h
+            icon: mdi:waves
+            hours_to_show: 48
+            points_per_hour: 2
+            line_width: 2
+            show:
+              labels: true
+              points: false
+            entities:
+              - entity: sensor.sea_wave_height
+                name: Waves
+              - entity: sensor.sea_swell_height
+                name: Swell
+
+      # -------------------------------------------------------------------- Wind
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: >-
+              {% set kn = states('sensor.marine_wind_speed') %}
+              {% set g = states('sensor.marine_wind_gusts') %}
+              {% set d = state_attr('sensor.marine_wind_direction','wind_direction_10m') | float(0) %}
+              {% set f = states('sensor.marine_beaufort') %}
+              ### <ha-icon icon="mdi:weather-windy"></ha-icon> Wind
+
+              **{{ kn }} kn** gusting **{{ g }} kn** from the
+              **{{ states('sensor.marine_wind_direction') }}** ({{ d | round(0) | int }}°)
+
+              Force **{{ f }}**, {{ state_attr('sensor.marine_beaufort','description') | lower }}.
+              Pressure {{ states('sensor.marine_pressure') }} hPa.
+              Peak gust in the next 24h: **{{ states('sensor.marine_wind_peak_24h') }} kn**.
+          - type: custom:mini-graph-card
+            name: Wind, 24h
+            icon: mdi:weather-windy-variant
+            hours_to_show: 24
+            points_per_hour: 2
+            line_width: 2
+            show:
+              labels: true
+              points: false
+            entities:
+              - entity: sensor.marine_wind_speed
+                name: Wind
+              - entity: sensor.marine_wind_gusts
+                name: Gusts
+
+      # ------------------------------------------------------------------- Links
+      - type: markdown
+        content: |
+          ### <ha-icon icon="mdi:anchor"></ha-icon> Shipping links
+
+          - [CalMac service status](https://www.calmac.co.uk/service-status) (Uig–Lochmaddy/Tarbert)
+          - [Shipping forecast: Hebrides](https://weather.metoffice.gov.uk/specialist-forecasts/coast-and-sea/shipping-forecast)
+          - [Inshore waters forecast](https://weather.metoffice.gov.uk/specialist-forecasts/coast-and-sea/inshore-waters-forecast)
+          - [Full-screen live AIS map](https://www.vesselfinder.com/)
+          - [Admiralty EasyTide](https://easytide.admiralty.co.uk/)
+
+  # ======================================== Column C: Tide and inshore forecast
+  - type: vertical-stack
+    view_layout:
+      grid-area: c
+    cards:
+      # -------------------------------------------------------------------- Tide
+      - type: custom:stack-in-card
+        mode: vertical
+        cards:
+          # Current height, trend and next turn of the tide
+          - type: custom:button-card
+            entity: sensor.tide_height
+            triggers_update:
+              - sensor.date_time_24h
+            show_name: false
+            show_icon: false
+            show_state: false
+            tap_action:
+              action: more-info
+            styles:
+              card:
+                - padding: 14px 16px 4px
+              grid:
+                - grid-template-areas: '"body"'
+                - grid-template-columns: 1fr
+              custom_fields:
+                body:
+                  - justify-self: stretch
+                  - text-align: left
+            custom_fields:
+              body: |
+                [[[
+                  const a = entity.attributes || {};
+                  const up = (a.upcoming || []);
+                  const h = parseFloat(entity.state);
+                  const rising = a.trend === 'rising';
+                  const col = rising ? 'var(--blue-color)' : 'var(--teal-color, var(--cyan-color))';
+                  const next = up[0];
+                  const fmt = (t) => new Date(t).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+                  let eta = '';
+                  if (next) {
+                    const m = Math.max(0, Math.round((new Date(next.time) - Date.now()) / 60000));
+                    eta = m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
+                  }
+                  const hs = up.map(e => e.height);
+                  const lo = Math.min(...hs, h), hi = Math.max(...hs, h);
+                  const pct = hi > lo ? Math.round((h - lo) / (hi - lo) * 100) : 50;
+                  return `
+                  <style>
+                    .t{font-size:.85rem;color:var(--secondary-text-color);display:flex;align-items:center;gap:6px}
+                    .t ha-icon{--mdc-icon-size:18px}
+                    .row{display:flex;align-items:baseline;justify-content:space-between;margin-top:2px}
+                    .v{font-size:2rem;font-weight:700;font-variant-numeric:tabular-nums}
+                    .v small{font-size:1rem;font-weight:500;color:var(--secondary-text-color);margin-left:2px}
+                    .chip{font-size:.8rem;font-weight:600;padding:3px 10px;border-radius:999px;
+                          background:color-mix(in srgb,${col} 18%,transparent);color:${col};display:flex;align-items:center;gap:4px}
+                    .chip ha-icon{--mdc-icon-size:16px}
+                    .s{font-size:.85rem;color:var(--secondary-text-color);margin-top:2px}
+                    .s b{color:var(--primary-text-color)}
+                    .bar{height:6px;border-radius:3px;background:color-mix(in srgb,var(--primary-text-color) 8%,transparent);margin:10px 0 2px;overflow:hidden}
+                    .bar div{height:100%;width:${pct}%;border-radius:3px;background:${col}}
+                    .ends{display:flex;justify-content:space-between;font-size:.72rem;color:var(--secondary-text-color)}
+                  </style>
+                  <div class="t"><ha-icon icon="mdi:waves"></ha-icon>Tide</div>
+                  <div class="row">
+                    <div class="v">${isNaN(h) ? '–' : h.toFixed(2)}<small>m</small></div>
+                    <div class="chip"><ha-icon icon="${rising ? 'mdi:arrow-up' : 'mdi:arrow-down'}"></ha-icon>${rising ? 'Rising' : 'Falling'}</div>
+                  </div>
+                  ${next ? `<div class="s">${next.type === 'high' ? 'High' : 'Low'} water <b>${fmt(next.time)}</b> · in ${eta}</div>` : ''}
+                  <div class="bar"><div></div></div>
+                  <div class="ends"><span>Low</span><span>High</span></div>`;
+                ]]]
+
+          # Tide curve
+          - type: custom:mini-graph-card
+            entities:
+              - entity: sensor.tide_height
+                color: var(--blue-color)
+            hours_to_show: 24
+            points_per_hour: 4
+            line_width: 2
+            smoothing: true
+            height: 90
+            show:
+              name: false
+              icon: false
+              state: false
+              labels: false
+              points: false
+              legend: false
+              fill: fade
+            card_mod:
+              style: |
+                ha-card { box-shadow: none; border: none; background: none; }
+
+          # Next four high/low waters
+          - type: custom:button-card
+            entity: sensor.tide_height
+            show_name: false
+            show_icon: false
+            show_state: false
+            tap_action:
+              action: none
+            styles:
+              card:
+                - padding: 4px 16px 14px
+              grid:
+                - grid-template-areas: '"body"'
+                - grid-template-columns: 1fr
+              custom_fields:
+                body:
+                  - justify-self: stretch
+            custom_fields:
+              body: |
+                [[[
+                  const up = (entity.attributes.upcoming || []).slice(0, 4);
+                  const day = (t) => new Date(t).toLocaleDateString([], {weekday: 'short'});
+                  const today = day(Date.now());
+                  const cell = (e) => {
+                    const hi = e.type === 'high';
+                    const c = hi ? 'var(--blue-color)' : 'var(--secondary-text-color)';
+                    const d = day(e.time);
+                    return `<div class="c">
+                      <ha-icon icon="${hi ? 'mdi:arrow-up-bold' : 'mdi:arrow-down-bold'}" style="color:${c}"></ha-icon>
+                      <div class="tm">${new Date(e.time).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</div>
+                      <div class="ht">${e.height.toFixed(1)} m${d !== today ? ' · ' + d : ''}</div>
+                    </div>`;
+                  };
+                  return `
+                  <style>
+                    .g{display:grid;grid-template-columns:repeat(${Math.max(up.length, 1)},1fr);gap:6px}
+                    .c{text-align:center;padding:8px 2px;border-radius:12px;background:color-mix(in srgb,var(--primary-text-color) 5%,transparent)}
+                    .c ha-icon{--mdc-icon-size:18px}
+                    .tm{font-weight:600;font-variant-numeric:tabular-nums}
+                    .ht{font-size:.72rem;color:var(--secondary-text-color)}
+                  </style>
+                  <div class="g">${up.map(cell).join('')}</div>`;
+                ]]]
+
+      # ---------------------------------------------------------- Met Office text
+      - type: custom:button-card
+        entity: sensor.marine_inshore_forecast
+        show_name: false
+        show_icon: false
+        show_state: false
+        tap_action:
+          action: url
+          url_path: https://weather.metoffice.gov.uk/specialist-forecasts/coast-and-sea/inshore-waters-forecast
+        styles:
+          card:
+            - padding: 14px 16px
+          grid:
+            - grid-template-areas: '"body"'
+            - grid-template-columns: 1fr
+          custom_fields:
+            body:
+              - justify-self: stretch
+              - text-align: left
+              - white-space: normal
+              - min-width: 0
+              - width: 100%
+        custom_fields:
+          body: |
+            [[[
+              const a = entity.attributes || {};
+              const clean = (t) => t ? t.replace(/\.$/, '') : '–';
+              // "00:01 (UTC) on Sat 7 Nov 2026" -> "Sat 00:01 UTC"
+              const m = (a.issued || '').match(/^(\d\d:\d\d) \(UTC\) on (\w+)/);
+              const issued = m ? `${m[2]} ${m[1]} UTC` : (a.issued || '');
+              const row = (icon, label, now, later) => `
+                <div class="r">
+                  <div class="i"><ha-icon icon="${icon}"></ha-icon></div>
+                  <div>
+                    <div class="l">${label}</div>
+                    <div class="n">${clean(now)}</div>
+                    ${later && clean(later) !== clean(now) ? `<div class="o">Then ${clean(later).charAt(0).toLowerCase() + clean(later).slice(1)}</div>` : ''}
+                  </div>
+                </div>`;
+              return `
+              <style>
+                .hd{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:4px;flex-wrap:wrap}
+                .t{font-size:.85rem;color:var(--secondary-text-color);display:flex;align-items:center;gap:6px}
+                .t ha-icon{--mdc-icon-size:18px}
+                .is{font-size:.72rem;color:var(--secondary-text-color);white-space:nowrap}
+                .w{display:flex;gap:8px;align-items:center;margin:8px 0 4px;padding:8px 10px;border-radius:10px;font-size:.85rem;font-weight:600;
+                   background:color-mix(in srgb,var(--warning-color) 18%,transparent);color:var(--warning-color)}
+                .w ha-icon{--mdc-icon-size:18px}
+                .g{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:2px 20px}
+                .r{display:grid;grid-template-columns:32px minmax(0,1fr);gap:10px;align-items:start;padding:7px 0;min-width:0}
+                .r > div:last-child{min-width:0;white-space:normal;overflow-wrap:anywhere}
+                .i{width:32px;height:32px;flex:none;border-radius:10px;display:flex;align-items:center;justify-content:center;
+                   background:color-mix(in srgb,var(--blue-color) 14%,transparent)}
+                .i ha-icon{--mdc-icon-size:18px;color:var(--blue-color)}
+                .l{font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;color:var(--secondary-text-color)}
+                .n{font-weight:600;line-height:1.3}
+                .o{font-size:.8rem;color:var(--secondary-text-color);line-height:1.3;margin-top:1px}
+                .ft{font-size:.72rem;color:var(--secondary-text-color);margin-top:4px;white-space:normal}
+              </style>
+              <div class="hd">
+                <div class="t"><ha-icon icon="mdi:ferry"></ha-icon>Inshore waters</div>
+                <div class="is">${issued}</div>
+              </div>
+              ${a.warning ? `<div class="w"><ha-icon icon="mdi:alert"></ha-icon>${a.warning}</div>` : ''}
+              <div class="g">
+                ${row('mdi:weather-windy', 'Wind', a.wind, a.outlook_wind)}
+                ${row('mdi:waves', 'Sea', a.sea, a.outlook_sea)}
+                ${row('mdi:weather-partly-rainy', 'Weather', a.weather, a.outlook_weather)}
+                ${row('mdi:eye-outline', 'Visibility', a.visibility, a.outlook_visibility)}
+              </div>
+              <div class="ft">Met Office · ${a.area || ''} · next 24h, then following 24h</div>`;
+            ]]]
+

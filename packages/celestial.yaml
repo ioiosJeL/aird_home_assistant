@@ -1,0 +1,111 @@
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      common: &common
+        package: "Celestial"
+
+    # Template Sensors
+    sensor.solar_*:
+      <<: *common
+    sensor.circadian_*:
+      <<: *common
+
+  customize:
+    sensor.period_of_day:
+      <<: *common
+    sensor.moon:
+      <<: *common
+
+sun:
+template:
+  - sensor:
+      # Strip out the elevation and azimuth from the Sun object.
+      - default_entity_id: sensor.solar_elevation
+        name: "Solar Angle"
+        unit_of_measurement: "°"
+        state: "{{ '%+.2f' | format(state_attr('sun.sun', 'elevation')) | float(1) }}"
+        icon: "{{ 'mdi:angle-acute' }}"
+
+      # One day I might get solar panels :)
+      - default_entity_id: sensor.solar_azimuth
+        name: "Solar Azimuth"
+        unit_of_measurement: "°"
+        state: "{{ '%+.2f' | format(state_attr('sun.sun', 'azimuth')) | float(1) }}"
+        icon: "{{ 'mdi:angle-obtuse' }}"
+
+      # Calculate the highest elevation today for use in Circadian formula and to denote High Noon.
+      - default_entity_id: sensor.solar_max_elevation
+        name: "Maximum Solar Elevation Angle"
+        unit_of_measurement: "°"
+        icon: "{{ 'mdi:angle-acute' }}"
+        state: >
+          {% set deg = pi / 180.0 %}
+          {% set N = now().strftime("%j") | int(0) %}
+          {% set L = state_attr('zone.home','latitude') | float(1) %}
+          {% set D = (-1 * asin(0.39779 * cos(0.98565 * deg * (N + 10) + 1.914 * deg * sin(0.98565 * deg * (N - 2))))) / deg %}
+
+          {{ (asin(sin(L * deg) * sin(D * deg) + cos(L * deg) * cos(D * deg)) / deg) | round(2) }}
+
+      # ADAPTED AFTER STEALING FROM https://community.home-assistant.io/t/next-dawn-next-dusk-in-automation/45339/13?u=ioios-io
+      - default_entity_id: sensor.period_of_day
+        name: "Period of the Day"
+        state: >-
+          {% set elevation = state_attr('sun.sun', 'elevation') | float(1) %}
+          {% set max_elevation = states('sensor.solar_max_elevation') | float(90) %}
+          {% set rising = state_attr('sun.sun', 'rising') %}
+          {%- if elevation <= -18 -%}
+            Night
+          {%- elif -18 < elevation <= -12 -%}
+            {{ 'Astronomical Dawn' if rising else 'Astronomical Dusk' }}
+          {%- elif -12 < elevation <= -6 -%}
+            {{ 'Nautical Dawn' if rising else 'Nautical Dusk' }}
+          {%- elif -6 < elevation <= 0 -%}
+            {{ 'Civil Dawn' if rising else 'Civil Dusk' }}
+          {#- Within half a degree of today's peak - an exact match never
+              happens as elevation is only sampled every few minutes -#}
+          {%- elif elevation >= max_elevation - 0.5 -%}
+            High Noon
+          {%- else -%}
+            Day
+          {%- endif -%}
+        icon: >-
+          {% set elevation = state_attr('sun.sun', 'elevation') | float(1) %}
+          {% set max_elevation = states('sensor.solar_max_elevation') | float(90) %}
+          {% set rising = state_attr('sun.sun', 'rising') %}
+          {% set moon_icon = ['mdi:moon-', states('sensor.moon').replace('_', '-').replace('-moon', '')]|join %}
+          {%- if elevation <= -6 -%}
+            {{ moon_icon }}
+          {%- elif -6 < elevation <= 0 -%}
+            mdi:weather-sunset-{{ 'up' if rising else 'down' }}
+          {%- elif elevation >= max_elevation - 0.5 -%}
+            mdi:weather-sunny-alert
+          {%- else -%}
+            mdi:weather-sunny
+          {%- endif %}
+        attributes:
+          next_sunset: "{{ as_timestamp(states.sun.sun.attributes.next_setting) | timestamp_custom('%H:%M') }}"
+          next_sunrise: "{{ as_timestamp(states.sun.sun.attributes.next_rising) | timestamp_custom('%H:%M') }}"
+          sun_elevation: "{{ '%+.2f' | format(state_attr('sun.sun', 'elevation')) | float(1) }}"
+          sun: "{{ states('sun.sun') | replace('_',' ') | title }}"
+          moon_phase: "{{ states('sensor.moon') | replace('_',' ') | title }}"
+
+      # Calculate the mired value for (attempted) colour consistency throughout the day
+      - default_entity_id: sensor.circadian_light
+        name: "Calculated Circadian Light Value"
+        unit_of_measurement: "mired"
+        icon: "{{ 'mdi:shield-sun-outline' }}"
+        state: >
+          {% set mired_min = 170 %}
+          {% set mired_max = 420 %}
+          {% set elev_at_mired_max = -2 %}
+          {% set mired_night = 420 %}
+
+          {% if is_state('sun.sun', 'above_horizon') or is_state('sun.sun', 'below_horizon') %}
+            {% if states('sensor.solar_elevation') | int(0) > elev_at_mired_max %}
+              {{ (mired_max - (states('sensor.solar_elevation') | int(0) - elev_at_mired_max) * (mired_max - mired_min) / (states('sensor.solar_max_elevation') | int(0) - elev_at_mired_max) ) | int(0) }}
+            {% else %}
+              {{ mired_night }}
+            {% endif %}
+          {% else %}
+            {{ mired_night }}
+          {% endif %}

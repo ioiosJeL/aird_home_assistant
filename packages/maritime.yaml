@@ -1,0 +1,201 @@
+# Maritime: live sea state, marine wind and the Met Office inshore waters
+# forecast for the Maritime dashboard view. All sources are free, no keys.
+#  - Open-Meteo Marine API: waves, swell, sea temperature, surface current
+#  - Open-Meteo Forecast API: wind/gusts in knots, visibility, pressure
+#  - Met Office inshore waters forecast, area 17 (Ardnamurchan Pt to Cape Wrath)
+# Tides live in packages/tides.yaml. Live ship positions come from the
+# VesselFinder embed at /local/maritime/ais.html (rendered in the browser).
+
+homeassistant:
+  customize_glob:
+    sensor.sea_*:
+      package: "Maritime"
+    sensor.marine_*:
+      package: "Maritime"
+
+rest:
+  # ---------------------------------------------------------------- Sea state
+  # Location from the home zone (kept out of the repo)
+  - resource_template: >-
+      https://marine-api.open-meteo.com/v1/marine?latitude={{ state_attr('zone.home', 'latitude') | round(4) }}&longitude={{ state_attr('zone.home', 'longitude') | round(4) }}&current=wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_period,swell_wave_direction,sea_surface_temperature,ocean_current_velocity,ocean_current_direction&cell_selection=sea&timezone=auto
+    scan_interval: 900
+    timeout: 20
+    sensor:
+      - name: "Sea Wave Height"
+        unique_id: sea_wave_height
+        unit_of_measurement: "m"
+        device_class: distance
+        state_class: measurement
+        icon: mdi:waves
+        value_template: "{{ value_json.current.wave_height }}"
+        json_attributes_path: "$.current"
+        json_attributes:
+          - wave_direction
+          - wave_period
+      - name: "Sea Swell Height"
+        unique_id: sea_swell_height
+        unit_of_measurement: "m"
+        device_class: distance
+        state_class: measurement
+        icon: mdi:wave
+        value_template: "{{ value_json.current.swell_wave_height }}"
+        json_attributes_path: "$.current"
+        json_attributes:
+          - swell_wave_direction
+          - swell_wave_period
+      - name: "Sea Wave Period"
+        unique_id: sea_wave_period
+        unit_of_measurement: "s"
+        device_class: duration
+        state_class: measurement
+        icon: mdi:sine-wave
+        value_template: "{{ value_json.current.wave_period }}"
+      - name: "Sea Temperature"
+        unique_id: sea_temperature
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:thermometer-water
+        value_template: "{{ value_json.current.sea_surface_temperature }}"
+      - name: "Sea Current Speed"
+        unique_id: sea_current_speed
+        unit_of_measurement: "kn"
+        state_class: measurement
+        icon: mdi:current-ac
+        # API returns km/h
+        value_template: "{{ (value_json.current.ocean_current_velocity | float(0) / 1.852) | round(2) }}"
+        json_attributes_path: "$.current"
+        json_attributes:
+          - ocean_current_direction
+
+  # ------------------------------------------------------------- Marine wind
+  - resource_template: >-
+      https://api.open-meteo.com/v1/forecast?latitude={{ state_attr('zone.home', 'latitude') | round(4) }}&longitude={{ state_attr('zone.home', 'longitude') | round(4) }}&current=wind_speed_10m,wind_gusts_10m,wind_direction_10m,visibility,pressure_msl,weather_code&hourly=wind_speed_10m,wind_gusts_10m&wind_speed_unit=kn&forecast_hours=24&timezone=auto
+    scan_interval: 900
+    timeout: 20
+    sensor:
+      - name: "Marine Wind Speed"
+        unique_id: marine_wind_speed
+        unit_of_measurement: "kn"
+        device_class: wind_speed
+        state_class: measurement
+        icon: mdi:weather-windy
+        value_template: "{{ value_json.current.wind_speed_10m }}"
+        json_attributes_path: "$.current"
+        json_attributes:
+          - wind_direction_10m
+      - name: "Marine Wind Gusts"
+        unique_id: marine_wind_gusts
+        unit_of_measurement: "kn"
+        device_class: wind_speed
+        state_class: measurement
+        icon: mdi:weather-windy-variant
+        value_template: "{{ value_json.current.wind_gusts_10m }}"
+      - name: "Marine Wind Direction"
+        unique_id: marine_wind_direction
+        icon: mdi:compass-outline
+        value_template: >-
+          {% set d = value_json.current.wind_direction_10m | float(0) %}
+          {{ ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][((d + 11.25) / 22.5) | int % 16] }}
+        json_attributes_path: "$.current"
+        json_attributes:
+          - wind_direction_10m
+      - name: "Marine Visibility"
+        unique_id: marine_visibility
+        unit_of_measurement: "km"
+        device_class: distance
+        state_class: measurement
+        icon: mdi:eye-outline
+        value_template: "{{ (value_json.current.visibility | float(0) / 1000) | round(1) }}"
+      - name: "Marine Pressure"
+        unique_id: marine_pressure
+        unit_of_measurement: "hPa"
+        device_class: atmospheric_pressure
+        state_class: measurement
+        icon: mdi:gauge
+        value_template: "{{ value_json.current.pressure_msl }}"
+      - name: "Marine Wind Peak 24h"
+        unique_id: marine_wind_peak_24h
+        unit_of_measurement: "kn"
+        device_class: wind_speed
+        icon: mdi:weather-windy
+        value_template: "{{ value_json.hourly.wind_gusts_10m | max }}"
+        json_attributes_path: "$.hourly"
+        json_attributes:
+          - time
+          - wind_speed_10m
+          - wind_gusts_10m
+
+rest_command:
+  met_office_inshore_waters:
+    url: https://weather.metoffice.gov.uk/specialist-forecasts/coast-and-sea/inshore-waters-forecast
+    method: GET
+    timeout: 30
+
+template:
+  # Met Office inshore waters forecast, area 17 (covers Skye / Inner Sound).
+  - triggers:
+      - trigger: homeassistant
+        event: start
+      - trigger: time_pattern
+        minutes: 7
+    actions:
+      - action: rest_command.met_office_inshore_waters
+        response_variable: resp
+        continue_on_error: true
+      - variables:
+          fc: >-
+            {% set ok = resp is defined and resp.status == 200 and resp.content is string %}
+            {% set parts = resp.content.split('id="inshore-waters-17"') if ok else [] %}
+            {% if parts | count > 1 %}
+              {% set sec = parts[1].split('</section>')[0] %}
+              {% set dd = sec | regex_findall('<dd>([^<]*)</dd>') %}
+              {% set issued = resp.content | regex_findall('Issued at: <time>([^<]*)</time>') %}
+              {% set warn = sec | regex_findall('<h3>([^<]*[Ww]arning[^<]*)</h3>') %}
+              {{ {'issued': issued[0] if issued else none,
+                  'warning': warn[0] if warn else none,
+                  'wind': dd[0] if dd | count > 0 else none,
+                  'sea': dd[1] if dd | count > 1 else none,
+                  'weather': dd[2] if dd | count > 2 else none,
+                  'visibility': dd[3] if dd | count > 3 else none,
+                  'outlook_wind': dd[4] if dd | count > 4 else none,
+                  'outlook_sea': dd[5] if dd | count > 5 else none,
+                  'outlook_weather': dd[6] if dd | count > 6 else none,
+                  'outlook_visibility': dd[7] if dd | count > 7 else none} }}
+            {% else %}{{ none }}{% endif %}
+    sensor:
+      - name: "Marine Inshore Forecast"
+        unique_id: marine_inshore_forecast
+        icon: mdi:ferry
+        state: "{{ (fc.wind[:250] if fc and fc.wind) or this.state }}"
+        attributes:
+          area: "Ardnamurchan Point to Cape Wrath"
+          issued: "{{ fc.issued if fc else this.attributes.get('issued') }}"
+          warning: "{{ fc.warning if fc else this.attributes.get('warning') }}"
+          wind: "{{ fc.wind if fc else this.attributes.get('wind') }}"
+          sea: "{{ fc.sea if fc else this.attributes.get('sea') }}"
+          weather: "{{ fc.weather if fc else this.attributes.get('weather') }}"
+          visibility: "{{ fc.visibility if fc else this.attributes.get('visibility') }}"
+          outlook_wind: "{{ fc.outlook_wind if fc else this.attributes.get('outlook_wind') }}"
+          outlook_sea: "{{ fc.outlook_sea if fc else this.attributes.get('outlook_sea') }}"
+          outlook_weather: "{{ fc.outlook_weather if fc else this.attributes.get('outlook_weather') }}"
+          outlook_visibility: "{{ fc.outlook_visibility if fc else this.attributes.get('outlook_visibility') }}"
+
+  # Beaufort force from the marine wind speed.
+  - sensor:
+      - name: "Marine Beaufort"
+        unique_id: marine_beaufort
+        icon: mdi:windsock
+        state: >-
+          {% set kn = states('sensor.marine_wind_speed') | float(none) %}
+          {% if kn is none %}{{ none }}{% else %}
+            {% set ns = namespace(f=0) %}
+            {% for lim in [1,4,7,11,17,22,28,34,41,48,56,64] %}
+              {% if kn >= lim %}{% set ns.f = loop.index %}{% endif %}
+            {% endfor %}
+            {{ ns.f }}
+          {% endif %}
+        attributes:
+          description: >-
+            {% set f = this.state | int(0) %}
+            {{ ['Calm','Light air','Light breeze','Gentle breeze','Moderate breeze','Fresh breeze','Strong breeze','Near gale','Gale','Severe gale','Storm','Violent storm','Hurricane'][f] }}

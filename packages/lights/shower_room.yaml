@@ -1,0 +1,191 @@
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      double: &double
+        package: "Lights"
+        room: "Shower Room"
+
+    input_number.shower_room_lights_*:
+      <<: *double
+    light.shower_room_*:
+      <<: *double
+    timer.shower_room_scene_*:
+      <<: *double
+    sensor.shower_room_*_warmth:
+      <<: *double
+    sensor.shower_room_*_brightness:
+      <<: *double
+
+  customize:
+    input_select.shower_room_scenes:
+      <<: *double
+    input_text.shower_room_last_action:
+      <<: *double
+    input_text.shower_room_previous_scene:
+      <<: *double
+    input_boolean.shower_room_scene_changing:
+      <<: *double
+    sensor.shower_room_active_light_count:
+      <<: *double
+
+light:
+  - platform: group
+    name: Shower Room Lights Master
+    entities:
+      - light.shower_room_lights
+
+input_select:
+  # All scenes
+  shower_room_scenes:
+    name: Shower Room Scenes
+    options:
+      - "Bright"
+      - "Off"
+    icon: mdi:palette-outline
+
+input_text:
+  # The last action performed
+  shower_room_last_action:
+    name: "Last Action: Shower Room"
+    icon: mdi:gesture-tap-button
+    initial: "None: Boot"
+
+  # Previous scene before current
+  shower_room_previous_scene:
+    name: Previous Shower Room Scene
+    icon: mdi:palette
+    initial: "Reboot"
+
+input_number:
+  # Lux level below which brings on the auto lights
+  shower_room_lights_on_threshold:
+    name: Shower Room Threshold On
+    min: 1
+    max: 70
+
+input_boolean:
+  # Boolean which is on during scene change
+  shower_room_scene_changing:
+    name: Shower Room Scene Change In Progress
+    icon: mdi:repeat-once
+    initial: false
+
+  # Boolean which is on when lights are in auto mode
+  shower_room_auto_mode_active:
+    name: Shower Room Auto Mode
+    icon: mdi:refresh-auto
+
+  # Auto mode active
+  shower_room_automatic_lights:
+    name: Shower Room Automatic Lights Mode
+    icon: mdi:refresh-auto
+
+timer:
+  # Running after the lights went (or nearly went) off on someone who was
+  # still here; the motion timeout is doubled while it runs
+  shower_room_motion_extended:
+    name: Shower Room Motion Timeout Extended
+    icon: mdi:timer-plus-outline
+    duration: "00:30:00"
+
+  # Timer set during each scene on script for transitions
+  shower_room_scene_changing:
+    name: Time For Scene Change
+    icon: mdi:timer-sand-empty
+
+  # Timer to prevent lights from waiting for light sensor to update
+  shower_room_auto_off_override:
+    name: Timer To Prevent Waiting For Lux Sensor
+    icon: mdi:timer-sand-empty
+
+template:
+  - sensor:
+      # Determine if any lights in any group is currently on
+      - default_entity_id: sensor.shower_room_active_light_count
+        name: "Shower Room Active Light Count"
+        unit_of_measurement: Lights
+        state: >-
+          {{ expand('light.shower_room_lights_master') | selectattr('state', 'ne', 'off') | list | count }}
+
+automation:
+  - alias: Shower Room Lights Auto On
+    use_blueprint:
+      path: lights/motion_auto_on.yaml
+      input:
+        previous_scene_text: input_text.shower_room_previous_scene
+        room_prefix: shower_room
+        extend_timer: timer.shower_room_motion_extended
+        motion_sensor: binary_sensor.shower_room_motion
+        automatic_lights_boolean: input_boolean.shower_room_automatic_lights
+        scenes_select: input_select.shower_room_scenes
+        illuminance_sensor: sensor.hms_shower_room_illuminance
+        threshold_number: input_number.shower_room_lights_on_threshold
+        override_timer: timer.shower_room_auto_off_override
+        last_action_text: input_text.shower_room_last_action
+        auto_mode_boolean: input_boolean.shower_room_auto_mode_active
+        daytime_script: script.shower_room_scene_bright
+
+  - alias: Shower Room Lights Auto Off
+    use_blueprint:
+      path: lights/motion_auto_off.yaml
+      input:
+        # Don't time out on someone in the shower/bath
+        extra_condition: "{{ not is_state('binary_sensor.shower_room_bathing', 'on') }}"
+        extend_timer: timer.shower_room_motion_extended
+        motion_sensor: binary_sensor.shower_room_motion
+        motion_timeout_number: input_number.shower_room_motion_timeout
+        automatic_lights_boolean: input_boolean.shower_room_automatic_lights
+        auto_mode_boolean: input_boolean.shower_room_auto_mode_active
+        off_script: script.shower_room_scene_off
+        last_action_text: input_text.shower_room_last_action
+        override_timer: timer.shower_room_auto_off_override
+
+  - alias: Shower Room Lights Manual Off Detection
+    use_blueprint:
+      path: lights/manual_off_detection.yaml
+      input:
+        lights_master: light.shower_room_lights_master
+        scenes_select: input_select.shower_room_scenes
+        off_script: script.shower_room_scene_off
+        last_action_text: input_text.shower_room_last_action
+        auto_mode_boolean: input_boolean.shower_room_auto_mode_active
+
+  - alias: Shower Room Scene Select Changed
+    use_blueprint:
+      path: lights/scene_select_changed.yaml
+      input:
+        scenes_select: input_select.shower_room_scenes
+        scene_changing_boolean: input_boolean.shower_room_scene_changing
+        room_prefix: shower_room
+
+  - alias: Shower Room Light Toggle
+    use_blueprint:
+      path: lights/physical_toggle.yaml
+      input:
+        trigger:
+          - trigger: event
+            event_type: shelly.click
+            event_data:
+              click_type: single_push
+              device: shellyplus1pm-441793ce9ea4
+              channel: 1
+        changing_timer: timer.shower_room_scene_changing
+        scenes_select: input_select.shower_room_scenes
+        on_script: script.shower_room_scene_bright
+        off_script: script.shower_room_scene_off
+        auto_mode_boolean: input_boolean.shower_room_auto_mode_active
+
+  - alias: Shower Room Scene Scroll
+    use_blueprint:
+      path: lights/scene_scroll.yaml
+      input:
+        trigger:
+          - trigger: event
+            event_type: shelly.click
+            event_data:
+              click_type: long_push
+              device: shellyplus1pm-441793ce9ea4
+              channel: 1
+        changing_timer: timer.shower_room_scene_changing
+        scroll_script: script.shower_room_scene_scroll
+        auto_mode_boolean: input_boolean.shower_room_auto_mode_active

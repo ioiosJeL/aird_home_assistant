@@ -1,0 +1,88 @@
+script:
+  utility_room_scene_scroll:
+    alias: Utility Room Scene Progression
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: "input_select.select_{{ 'next' if is_state('input_boolean.status_nighttime', 'on') else 'previous' }}"
+        target:
+          entity_id: input_select.utility_room_scenes
+        data:
+          cycle: true
+      - action: script.turn_on
+        target:
+          entity_id: "script.utility_room_scene_{{ states('input_select.utility_room_scenes') | lower  }}"
+
+  utility_room_scene_change:
+    alias: Utility Room Scene Change
+    description: "Scene change functions"
+    mode: restart
+    fields:
+      scene_name:
+        description: "The title of the scene"
+        example: "Automatic"
+      scene_duration:
+        description: "The duration of scene change"
+        example: "5"
+    sequence:
+      - action: input_boolean.turn_on
+        data:
+          entity_id: input_boolean.utility_room_scene_changing
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.utility_room_previous_scene
+          value: "{{ states('input_select.utility_room_scenes') | string }}"
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.utility_room_last_action
+          value: "Scene Selected: {{ scene_name }}"
+
+      - action: input_select.select_option
+        data:
+          entity_id: input_select.utility_room_scenes
+          option: "{{ scene_name }}"
+
+      - action: timer.start
+        data:
+          entity_id: timer.utility_room_scene_changing
+          duration: "{{ scene_duration | int }}"
+
+      - wait_template: "{{ is_state('timer.utility_room_scene_changing', 'idle') }}"
+
+      - action: input_boolean.turn_off
+        data:
+          entity_id: input_boolean.utility_room_scene_changing
+
+  utility_room_scene_bright:
+    alias: Utility Room Bright Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.utility_room_scene_change
+        data:
+          variables:
+            scene_name: "Bright"
+            scene_duration: 1
+      - action: light.turn_on
+        data:
+          entity_id: light.utility_room_ceiling_lights
+
+  utility_room_scene_off:
+    alias: Utility Room Off Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.utility_room_scene_change
+        data:
+          variables:
+            scene_name: "Off"
+            scene_duration: 1
+      - action: light.turn_off
+        data:
+          entity_id: light.utility_room_ceiling_lights

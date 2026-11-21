@@ -1,0 +1,320 @@
+blueprint:
+  name: Lights - Motion Auto Off
+  description: >-
+    Turn a room's lights off after motion has been clear for the room's
+    configured timeout, as long as automatic lights are enabled and the
+    room's auto mode is currently active. Waits via a delay (rather than a
+    native "for:" trigger) so the timeout can come from an input_number that
+    users can adjust from the dashboard.
+
+    Improvements (all optional, inactive unless their inputs are given):
+      - Warning before off: dimmable lights drop to a fraction of their
+        brightness (and/or "stage" lights switch off first) for a short
+        grace period. Motion during it puts everything back exactly as it
+        was; otherwise the room's off script runs as normal.
+      - Learned timeout: while the extend timer is running (started when the
+        lights nearly/actually went off on someone), the timeout is
+        multiplied by extend_factor.
+      - Survives restarts/reloads: a pending auto-off is resumed after Home
+        Assistant starts or automations are reloaded, instead of being lost
+        (which left lights on until the hourly safety check).
+  domain: automation
+  input:
+    motion_sensor:
+      name: Motion Sensor
+      selector:
+        entity:
+          domain: binary_sensor
+    motion_timeout_number:
+      name: Motion Timeout, Minutes (input_number)
+      selector:
+        entity:
+          domain: input_number
+    automatic_lights_boolean:
+      name: Automatic Lights Mode (input_boolean)
+      selector:
+        entity:
+          domain: input_boolean
+    auto_mode_boolean:
+      name: Auto Mode Active (input_boolean)
+      selector:
+        entity:
+          domain: input_boolean
+    off_script:
+      name: Off Script
+      selector:
+        entity:
+          domain: script
+    last_action_text:
+      name: Last Action (input_text)
+      selector:
+        entity:
+          domain: input_text
+    override_timer:
+      name: Auto-Off Override Timer (optional)
+      default: ""
+      selector:
+        entity:
+          domain: timer
+    extra_condition:
+      name: Extra Condition Template (optional)
+      description: >-
+        An additional Jinja condition that must be true, e.g. to also check
+        a TV is off before switching lights off. Defaults to always-true.
+      default: "{{ true }}"
+      selector:
+        template: {}
+    extend_timer:
+      name: Extend Timer (optional, shared with motion_auto_on)
+      default: ""
+      selector:
+        entity:
+          domain: timer
+    extend_factor:
+      name: Timeout multiplier while the extend timer runs
+      default: 2
+      selector:
+        number:
+          min: 1
+          max: 4
+          step: 0.5
+    warning_lights:
+      name: Warning - lights to dim before off (dimmable only)
+      default: []
+      selector:
+        entity:
+          domain: light
+          multiple: true
+    warning_off_lights:
+      name: Warning - lights to switch off first (on/off lights, staged)
+      description: >-
+        Only used when another light in the room stays on, so the room never
+        goes fully dark during the warning.
+      default: []
+      selector:
+        entity:
+          domain: light
+          multiple: true
+    lights_master:
+      name: Lights Master (light group, needed for staged warning)
+      default: ""
+      selector:
+        entity:
+          domain: light
+    warning_seconds:
+      name: Warning length (seconds)
+      default: 30
+      selector:
+        number:
+          min: 5
+          max: 120
+          unit_of_measurement: s
+    warning_dim_pct:
+      name: Warning brightness (% of current)
+      default: 40
+      selector:
+        number:
+          min: 5
+          max: 90
+          unit_of_measurement: "%"
+    elsewhere_motion:
+      name: Early off - motion sensors in OTHER rooms (optional)
+      description: >-
+        If the room has gone quiet and one of these then sees movement,
+        someone has left - switch off after the early timeout instead of
+        waiting for the full one. Don't include this room's own sensor.
+      default: []
+      selector:
+        entity:
+          domain: binary_sensor
+          multiple: true
+    early_minutes:
+      name: Early off - quiet time before switching off once someone's moved elsewhere
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 60
+          unit_of_measurement: min
+
+mode: restart
+triggers:
+  - trigger: state
+    entity_id: !input motion_sensor
+    to: "off"
+    id: motion_off
+  - trigger: homeassistant
+    event: start
+    id: resume
+  - trigger: event
+    event_type: automation_reloaded
+    id: resume
+
+variables:
+  motion_sensor: !input motion_sensor
+  motion_timeout_number: !input motion_timeout_number
+  automatic_lights: !input automatic_lights_boolean
+  auto_mode_boolean_entity: !input auto_mode_boolean
+  override_timer: !input override_timer
+  last_action_text: !input last_action_text
+  extend_timer: !input extend_timer
+  extend_factor: !input extend_factor
+  warning_lights: !input warning_lights
+  warning_off_lights: !input warning_off_lights
+  lights_master: !input lights_master
+  warning_seconds: !input warning_seconds
+  warning_dim_pct: !input warning_dim_pct
+  extended: "{{ extend_timer != '' and is_state(extend_timer, 'active') }}"
+  timeout_seconds: >-
+    {{ ((states(motion_timeout_number) | int(0)) * 60
+        * ((extend_factor | float(1)) if extended else 1)) | int }}
+  # On resume, count the time the room has already been quiet
+  already_quiet: >-
+    {{ 0 if trigger.id == 'motion_off' or states[motion_sensor] is none
+       else (now() - states[motion_sensor].last_changed).total_seconds() | int }}
+  restore_scene_id: "restore_{{ this.entity_id.split('.')[1] }}"
+  elsewhere_motion: !input elsewhere_motion
+  early_minutes_input: !input early_minutes
+  early_seconds: "{{ (early_minutes_input | float(0) * 60) | int }}"
+  # Early off is skipped while the room is on its longer, learned timeout
+  # (it recently switched off on someone who was still there)
+  use_early: >-
+    {{ elsewhere_motion | count > 0 and early_seconds > 0
+       and early_seconds < timeout_seconds and not extended }}
+
+actions:
+  # A resume only matters if an auto-off would actually be pending
+  - condition: template
+    value_template: >-
+      {{ trigger.id == 'motion_off'
+         or (is_state(motion_sensor, 'off')
+             and states(automatic_lights) == 'on'
+             and is_state(auto_mode_boolean_entity, 'on')) }}
+  - if: "{{ use_early }}"
+    then:
+      # Wait out the full timeout, but wake up if someone moves in another
+      # room - then only the early timeout of quiet is needed here
+      - wait_for_trigger:
+          - trigger: state
+            entity_id: !input elsewhere_motion
+            to: "on"
+        timeout: "{{ [timeout_seconds - already_quiet, 0] | max }}"
+        continue_on_timeout: true
+      - if: "{{ wait.trigger is not none }}"
+        then:
+          - variables:
+              moved_to: "{{ wait.trigger.to_state.name | default('another room') }}"
+              quiet_now: >-
+                {{ (now() - states[motion_sensor].last_changed).total_seconds() | int
+                   if is_state(motion_sensor, 'off') else 0 }}
+          - delay: "{{ [early_seconds - quiet_now, 0] | max }}"
+          - if: "{{ is_state(motion_sensor, 'off') and is_state(auto_mode_boolean_entity, 'on') }}"
+            then:
+              - action: logbook.log
+                data:
+                  name: "{{ state_attr(this.entity_id, 'friendly_name') }}"
+                  message: >-
+                    switching off early: quiet here and movement in {{ moved_to }}
+                  entity_id: !input last_action_text
+    else:
+      - delay: "{{ [timeout_seconds - already_quiet, 0] | max }}"
+  - condition: template
+    value_template: >-
+      {{ is_state(motion_sensor, 'off')
+         and states(automatic_lights) == 'on'
+         and states(auto_mode_boolean_entity) == 'on' }}
+  - condition: template
+    value_template: !input extra_condition
+
+  # ---- Warning before off ------------------------------------------------
+  - variables:
+      dim_now: "{{ warning_lights | select('is_state', 'on') | list }}"
+      stage_now: "{{ warning_off_lights | select('is_state', 'on') | list }}"
+      others_on: >-
+        {{ (expand(lights_master) | selectattr('state', 'eq', 'on')
+            | map(attribute='entity_id') | reject('in', stage_now) | list)
+           if lights_master != '' else [] }}
+      stage: "{{ stage_now if others_on | count > 0 else [] }}"
+      do_warning: "{{ dim_now | count > 0 or stage | count > 0 }}"
+  - if: "{{ do_warning }}"
+    then:
+      - action: input_text.set_value
+        target:
+          entity_id: !input last_action_text
+        data:
+          value: "Automatic Mode: Dimming Before Off"
+      - action: scene.create
+        data:
+          scene_id: "{{ restore_scene_id }}"
+          snapshot_entities: "{{ dim_now + stage }}"
+      - repeat:
+          for_each: "{{ dim_now }}"
+          sequence:
+            - action: light.turn_on
+              target:
+                entity_id: "{{ repeat.item }}"
+              data:
+                brightness: >-
+                  {{ [((state_attr(repeat.item, 'brightness') | int(255))
+                        * (warning_dim_pct | int(40)) / 100) | int, 10] | max }}
+                transition: 1
+      # (floor of 10/255 ~ 4%: low enough to notice, high enough that
+      # Shelly dimmers / Hue bulbs don't cut out)
+      - if: "{{ stage | count > 0 }}"
+        then:
+          - action: light.turn_off
+            target:
+              entity_id: "{{ stage }}"
+      - wait_for_trigger:
+          - trigger: state
+            entity_id: !input motion_sensor
+            to: "on"
+          # Anything else touching the room (switch, dashboard, scene)
+          - trigger: state
+            entity_id: !input last_action_text
+        timeout:
+          seconds: "{{ warning_seconds | int(30) }}"
+        continue_on_timeout: true
+      - choose:
+          # Someone's still here: put it all back and learn from it
+          - conditions: "{{ wait.trigger is not none and wait.trigger.to_state.entity_id == motion_sensor }}"
+            sequence:
+              - action: scene.turn_on
+                target:
+                  entity_id: "scene.{{ restore_scene_id }}"
+                data:
+                  transition: 1
+              - action: input_text.set_value
+                target:
+                  entity_id: !input last_action_text
+                data:
+                  value: "Automatic Mode: Motion Returned"
+              - if: "{{ extend_timer != '' }}"
+                then:
+                  - action: timer.start
+                    target:
+                      entity_id: "{{ extend_timer }}"
+              - stop: Motion returned during warning
+          # Someone used a switch/dashboard: they're in charge now
+          - conditions: "{{ wait.trigger is not none }}"
+            sequence:
+              - stop: Room changed during warning
+
+  # ---- Off ---------------------------------------------------------------
+  - action: script.turn_on
+    data:
+      entity_id: !input off_script
+  - action: input_text.set_value
+    data:
+      entity_id: !input last_action_text
+      value: "Automatic Mode: Lights Off"
+  - action: input_boolean.turn_off
+    data:
+      entity_id: !input auto_mode_boolean
+  - if: "{{ override_timer != '' }}"
+    then:
+      - action: timer.start
+        data:
+          entity_id: "{{ override_timer }}"
+          duration:
+            seconds: 150

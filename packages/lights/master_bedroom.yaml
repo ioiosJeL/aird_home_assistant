@@ -1,0 +1,442 @@
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      double: &double
+        package: "Lights"
+        room: "Master Bedroom"
+
+    input_number.master_bedroom_lights_*:
+      <<: *double
+    light.master_bedroom_*:
+      <<: *double
+    timer.master_bedroom_scene_*:
+      <<: *double
+    sensor.master_bedroom_*_warmth:
+      <<: *double
+    sensor.master_bedroom_*_brightness:
+      <<: *double
+
+  customize:
+    input_select.master_bedroom_scenes:
+      <<: *double
+    input_text.master_bedroom_last_action:
+      <<: *double
+    input_text.master_bedroom_previous_scene:
+      <<: *double
+    input_boolean.master_bedroom_scene_changing:
+      <<: *double
+    sensor.master_bedroom_active_light_count:
+      <<: *double
+
+input_select:
+  # All scenes
+  master_bedroom_scenes:
+    name: Master Bedroom Scenes
+    options:
+      - "Bright"
+      - "Relax"
+      - "Cosy"
+      - "Special"
+      - "Off"
+    icon: mdi:palette-outline
+
+input_text:
+  # The last action performed
+  master_bedroom_last_action:
+    name: "Last Action: Master Bedroom"
+    icon: mdi:gesture-tap-button
+    initial: "None: Boot"
+
+  # Previous scene before current
+  master_bedroom_previous_scene:
+    name: Previous Master Bedroom Scene
+    icon: mdi:palette
+    initial: "Reboot"
+
+input_number:
+  # Lux level below which brings on the auto lights
+  master_bedroom_lights_on_threshold:
+    name: Master Bedroom Threshold On
+    min: 1
+    max: 70
+
+light:
+  # Lamps
+  - platform: group
+    name: Master Bedroom Lamps
+    entities:
+      - light.master_bedroom_bedside_left
+      - light.master_bedroom_bedside_right
+
+  # All lights
+  - platform: group
+    name: Master Bedroom Lights Master
+    entities:
+      - light.master_bedroom_bedside_left
+      - light.master_bedroom_bedside_right
+      - light.master_bedroom_ceiling_light
+
+input_boolean:
+  # On when the lights were changed outside HA (e.g. Hue app); motion
+  # leaves the room alone until it clears (see Manual Override Detection)
+  master_bedroom_manual_override:
+    name: Master Bedroom Manual Override
+    icon: mdi:hand-back-right
+
+  # Boolean which is on during scene change
+  master_bedroom_scene_changing:
+    name: Master Bedroom Scene Change In Progress
+    icon: mdi:repeat-once
+    initial: false
+
+  # Boolean which is on when lights are in auto mode
+  master_bedroom_auto_mode_active:
+    name: Master Bedroom Auto Mode
+    icon: mdi:refresh-auto
+
+  # Auto mode active
+  master_bedroom_automatic_lights:
+    name: Master Bedroom Automatic Lights Mode
+    icon: mdi:refresh-auto
+
+timer:
+  # Running after the lights went (or nearly went) off on someone who was
+  # still here; the motion timeout is doubled while it runs
+  master_bedroom_motion_extended:
+    name: Master Bedroom Motion Timeout Extended
+    icon: mdi:timer-plus-outline
+    duration: "00:30:00"
+
+  # Timer set during each scene on script for transitions
+  master_bedroom_scene_changing:
+    name: Time For Scene Change
+    icon: mdi:timer-sand-empty
+
+  # Timer to prevent lights from waiting for light sensor to update
+  master_bedroom_auto_off_override:
+    name: Timer To Prevent Waiting For Lux Sensor
+    icon: mdi:timer-sand-empty
+
+template:
+  - sensor:
+      # Determine if any lights in any group is currently on
+      - default_entity_id: sensor.master_bedroom_active_light_count
+        name: "Master Bedroom Active Light Count"
+        unit_of_measurement: Lights
+        state: >-
+          {{ expand('light.master_bedroom_lights_master') | selectattr('state', 'ne', 'off') | list | count }}
+
+automation:
+  - alias: Master Bedroom Lights Manual Override Detection
+    use_blueprint:
+      path: lights/manual_override_detection.yaml
+      input:
+        lights:
+          - light.master_bedroom_bedside_left
+          - light.master_bedroom_bedside_right
+          - light.master_bedroom_ceiling_light
+        lights_master: light.master_bedroom_lights_master
+        manual_boolean: input_boolean.master_bedroom_manual_override
+        scene_changing_boolean: input_boolean.master_bedroom_scene_changing
+        scenes_select: input_select.master_bedroom_scenes
+        auto_mode_boolean: input_boolean.master_bedroom_auto_mode_active
+        last_action_text: input_text.master_bedroom_last_action
+
+  - alias: Master Bedroom Lights Auto On
+    use_blueprint:
+      path: lights/motion_auto_on.yaml
+      input:
+        previous_scene_text: input_text.master_bedroom_previous_scene
+        room_prefix: master_bedroom
+        extend_timer: timer.master_bedroom_motion_extended
+        manual_override_boolean: input_boolean.master_bedroom_manual_override
+        motion_sensor: binary_sensor.master_bedroom_motion
+        automatic_lights_boolean: input_boolean.master_bedroom_automatic_lights
+        scenes_select: input_select.master_bedroom_scenes
+        illuminance_sensor: sensor.hms_master_bedroom_illuminance
+        threshold_number: input_number.master_bedroom_lights_on_threshold
+        override_timer: timer.master_bedroom_auto_off_override
+        last_action_text: input_text.master_bedroom_last_action
+        auto_mode_boolean: input_boolean.master_bedroom_auto_mode_active
+        daytime_script: script.master_bedroom_scene_bright
+        nighttime_script: script.master_bedroom_scene_relax
+        bedtime_boolean: input_boolean.status_bedtime_master
+
+  - alias: Master Bedroom Lights Auto Off
+    use_blueprint:
+      path: lights/motion_auto_off.yaml
+      input:
+        extend_timer: timer.master_bedroom_motion_extended
+        warning_lights:
+          - light.master_bedroom_bedside_left
+          - light.master_bedroom_bedside_right
+          - light.master_bedroom_ceiling_light
+        motion_sensor: binary_sensor.master_bedroom_motion
+        motion_timeout_number: input_number.master_bedroom_motion_timeout
+        automatic_lights_boolean: input_boolean.master_bedroom_automatic_lights
+        auto_mode_boolean: input_boolean.master_bedroom_auto_mode_active
+        off_script: script.master_bedroom_scene_off
+        last_action_text: input_text.master_bedroom_last_action
+        override_timer: timer.master_bedroom_auto_off_override
+
+  - alias: Master Bedroom Lights Manual Off Detection
+    use_blueprint:
+      path: lights/manual_off_detection.yaml
+      input:
+        manual_override_boolean: input_boolean.master_bedroom_manual_override
+        lights_master: light.master_bedroom_lights_master
+        scenes_select: input_select.master_bedroom_scenes
+        off_script: script.master_bedroom_scene_off
+        last_action_text: input_text.master_bedroom_last_action
+        auto_mode_boolean: input_boolean.master_bedroom_auto_mode_active
+
+  - alias: Master Bedroom Scene Select Changed
+    use_blueprint:
+      path: lights/scene_select_changed.yaml
+      input:
+        scenes_select: input_select.master_bedroom_scenes
+        scene_changing_boolean: input_boolean.master_bedroom_scene_changing
+        room_prefix: master_bedroom
+
+  # Wall switch (Shelly dimmer): press = whole room on/off (Bright by day,
+  # Relax at night), long press = next scene. Remotes: hold 4 = same toggle.
+  - alias: Master Bedroom Light Toggle
+    use_blueprint:
+      path: lights/physical_toggle.yaml
+      input:
+        trigger:
+          - trigger: event
+            event_type: shelly.click
+            event_data:
+              click_type: single
+              device: shellydimmer2-C45BBE792A62
+              channel: 1
+          - device_id: 846e6f34be49f2f88b817c7900804f66 #BEDSIDE RIGHT
+            domain: bthome
+            type: button_4
+            subtype: press
+            trigger: device
+          - device_id: 988587923f41e03f589ab30c43ed7d22 #BEDSIDE LEFT
+            domain: bthome
+            type: button_4
+            subtype: press
+            trigger: device
+        changing_timer: timer.master_bedroom_scene_changing
+        scenes_select: input_select.master_bedroom_scenes
+        on_script: script.master_bedroom_scene_bright
+        # Night Mode (21:00-09:30): same Relax scene motion uses at night
+        night_on_script: script.master_bedroom_scene_relax
+        off_script: script.master_bedroom_scene_off
+        auto_mode_boolean: input_boolean.master_bedroom_auto_mode_active
+
+  - alias: Master Bedroom Scene Scroll
+    use_blueprint:
+      path: lights/scene_scroll.yaml
+      input:
+        trigger:
+          - trigger: event
+            event_type: shelly.click
+            event_data:
+              click_type: long
+              device: shellydimmer2-C45BBE792A62
+              channel: 1
+        changing_timer: timer.master_bedroom_scene_changing
+        scroll_script: script.master_bedroom_scene_scroll
+        auto_mode_boolean: input_boolean.master_bedroom_auto_mode_active
+
+  # Bedside remotes (Shelly BLU 4-button), identical layout on both sides:
+  #   1  press: my lamp on/off            hold: dim <-> normal
+  #   2  press: other lamp on/off         hold: dim <-> normal
+  #   3  press: ceiling light on/off      hold: dim <-> normal
+  #   4  press: whole room on/off (above) hold: house shutdown
+  # Left remote = left lamp is "mine"; right remote = right lamp.
+  # Queued so quick double presses aren't dropped. If the light can't be
+  # reached the other lights blink once (script.master_bedroom_button_light).
+  - alias: Master Bedroom Bedside Remotes
+    mode: queued
+    max: 6
+    triggers:
+      - trigger: device
+        device_id: 988587923f41e03f589ab30c43ed7d22 # LEFT
+        domain: bthome
+        type: button_1
+        subtype: press
+        id: left_toggle
+      - trigger: device
+        device_id: 846e6f34be49f2f88b817c7900804f66 # RIGHT
+        domain: bthome
+        type: button_2
+        subtype: press
+        id: left_toggle
+      - trigger: device
+        device_id: 988587923f41e03f589ab30c43ed7d22 # LEFT
+        domain: bthome
+        type: button_1
+        subtype: long_press
+        id: left_dim
+      - trigger: device
+        device_id: 846e6f34be49f2f88b817c7900804f66 # RIGHT
+        domain: bthome
+        type: button_2
+        subtype: long_press
+        id: left_dim
+      - trigger: device
+        device_id: 846e6f34be49f2f88b817c7900804f66 # RIGHT
+        domain: bthome
+        type: button_1
+        subtype: press
+        id: right_toggle
+      - trigger: device
+        device_id: 988587923f41e03f589ab30c43ed7d22 # LEFT
+        domain: bthome
+        type: button_2
+        subtype: press
+        id: right_toggle
+      - trigger: device
+        device_id: 846e6f34be49f2f88b817c7900804f66 # RIGHT
+        domain: bthome
+        type: button_1
+        subtype: long_press
+        id: right_dim
+      - trigger: device
+        device_id: 988587923f41e03f589ab30c43ed7d22 # LEFT
+        domain: bthome
+        type: button_2
+        subtype: long_press
+        id: right_dim
+      - trigger: device
+        device_id: 988587923f41e03f589ab30c43ed7d22 # LEFT
+        domain: bthome
+        type: button_3
+        subtype: press
+        id: ceiling_toggle
+      - trigger: device
+        device_id: 846e6f34be49f2f88b817c7900804f66 # RIGHT
+        domain: bthome
+        type: button_3
+        subtype: press
+        id: ceiling_toggle
+      - trigger: device
+        device_id: 988587923f41e03f589ab30c43ed7d22 # LEFT
+        domain: bthome
+        type: button_3
+        subtype: long_press
+        id: ceiling_dim
+      - trigger: device
+        device_id: 846e6f34be49f2f88b817c7900804f66 # RIGHT
+        domain: bthome
+        type: button_3
+        subtype: long_press
+        id: ceiling_dim
+      - trigger: device
+        device_id: 988587923f41e03f589ab30c43ed7d22 # LEFT
+        domain: bthome
+        type: button_4
+        subtype: long_press
+        id: all_off
+      - trigger: device
+        device_id: 846e6f34be49f2f88b817c7900804f66 # RIGHT
+        domain: bthome
+        type: button_4
+        subtype: long_press
+        id: all_off
+    actions:
+      - if: "{{ trigger.id == 'all_off' }}"
+        then:
+          # Hold 4: whole house off + sleep state (packages/house_shutdown.yaml)
+          - action: script.house_shutdown
+            data:
+              bedroom: master
+        else:
+          - variables:
+              target: "{{ trigger.id.split('_')[0] }}"
+          - action: script.master_bedroom_button_light
+            data:
+              light: >-
+                {{ 'light.master_bedroom_ceiling_light' if target == 'ceiling'
+                   else 'light.master_bedroom_bedside_' ~ target }}
+              mode: "{{ trigger.id.split('_')[1] }}"
+              level: "{{ 200 if target == 'ceiling' else 100 }}"
+              dim_level: "{{ 40 if target == 'ceiling' else 25 }}"
+
+  # Once Night Mode is on, the first time motion clears for the room's
+  # motion timeout means we've gone to bed - set bedtime so moving in bed
+  # doesn't bring the lights on (auto-off still works; auto lights stay on).
+  # Covers lights switched on by hand too. Cleared by End Night Mode.
+  - alias: Master Bedroom Auto Lights Off After Bedtime
+    description: ""
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.master_bedroom_motion
+        to: "off"
+        for:
+          minutes: "{{ states('input_number.master_bedroom_motion_timeout') | int }}"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.status_nighttime
+        state: "on"
+    actions:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.status_bedtime_master
+
+script:
+  # One light from a bedside remote button. mode toggle: on (at level) /
+  # off; mode dim: off -> dim, bright -> dim, dim -> level. If the light
+  # is unreachable (e.g. the lamp's own switch is off) the other lights
+  # in the room blink once so the press isn't silently ignored.
+  master_bedroom_button_light:
+    alias: Master Bedroom Remote Button Light
+    mode: parallel
+    fields:
+      light:
+        selector:
+          entity:
+            domain: light
+      mode:
+        selector:
+          select:
+            options: [toggle, dim]
+      level:
+        selector:
+          number: {min: 1, max: 255}
+      dim_level:
+        selector:
+          number: {min: 1, max: 255}
+    sequence:
+      - if: "{{ states(light) in ['unavailable', 'unknown'] }}"
+        then:
+          - action: light.turn_on
+            target:
+              entity_id: >-
+                {{ ['light.master_bedroom_bedside_left', 'light.master_bedroom_bedside_right',
+                    'light.master_bedroom_ceiling_light']
+                   | reject('eq', light) | reject('is_state', 'unavailable') | list }}
+            data:
+              flash: short
+          - stop: Light unreachable
+      - variables:
+          was_on: "{{ is_state(light, 'on') }}"
+          b: "{{ state_attr(light, 'brightness') | int(0) }}"
+          new_b: >-
+            {% if mode == 'toggle' %}{{ 0 if was_on else level | int }}
+            {% elif not was_on or b > dim_level | int + 15 %}{{ dim_level | int }}
+            {% else %}{{ level | int }}{% endif %}
+      - if: "{{ new_b | int == 0 }}"
+        then:
+          - action: light.turn_off
+            target:
+              entity_id: "{{ light }}"
+        else:
+          - action: light.turn_on
+            target:
+              entity_id: "{{ light }}"
+            data:
+              brightness: "{{ new_b | int }}"
+      # Let the state catch up so a queued second press sees the result
+      - wait_template: "{{ is_state(light, 'off' if new_b | int == 0 else 'on') }}"
+        timeout: 3
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.master_bedroom_auto_mode_active

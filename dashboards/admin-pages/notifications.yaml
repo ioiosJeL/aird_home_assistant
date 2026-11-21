@@ -1,0 +1,639 @@
+# Notifications admin: who hears what, live alert state, snooze, per-alert
+# mutes, quiet hours and a history of everything sent. Channels are the
+# companion apps (John's iPhone + iPad, Elizabeth's phone) and the kitchen
+# speaker; Telegram was removed 21 Nov 2026. Mutes: sensor.notify_mutes /
+# script.notify_mute (packages/camera_alerts.yaml). Toggles are the
+# input_boolean.notify_<event>_<channel> helpers read by
+# script.notify_dispatch (packages/notification_preferences.yaml); alerts
+# live in packages/notifications.yaml, unifi.yaml and alerts.yaml.
+# Row/dot templates: notify_row, notify_row_ack, notify_dot, feed_list in
+# dashboards/button_card_templates.yaml.
+title: Notifications
+path: notification-preferences
+icon: mdi:bell-cog
+type: sections
+max_columns: 3
+sections:
+  # =====================================================================
+  # Column 1: control, live alerts, history
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: custom:button-card
+        template: section_title
+        grid_options:
+          columns: full
+          rows: auto
+        name: Notifications
+        variables:
+          subtitle: >-
+            Every alert goes to the phones and the kitchen speaker through one
+            dispatcher. Pick who hears each one, mute one for an hour (also from
+            the buttons on the phone notification), silence repeats, snooze
+            everything, or keep the kitchen speaker quiet overnight. Critical
+            alerts (smoke/CO) always get through.
+
+      # --- Right now: snooze and any muted alerts (tap a mute to clear it)
+      - type: custom:button-card
+        grid_options:
+          columns: full
+          rows: auto
+        template: status_list
+        triggers_update:
+          - sensor.notify_mutes
+          - timer.notify_snooze
+          - input_boolean.camera_alerts_person
+          - input_boolean.camera_alerts_vehicle
+          - input_boolean.camera_alerts_animal
+          - input_boolean.status_homewatch
+        variables:
+          title: Right now
+          empty_icon: mdi:bell-check-outline
+          empty_title: Everything is on
+          empty_detail: Nothing snoozed or muted
+          items: |
+            [[[
+              const tm = t => new Date(t).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true });
+              const nice = e => e.replace(/^camera_/, 'camera ').replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
+              const out = [];
+              const sn = states['timer.notify_snooze'];
+              if (sn?.state === 'active')
+                out.push({ icon: 'mdi:bell-sleep', color: 'amber', title: 'Everything snoozed',
+                  detail: `Until ${tm(sn.attributes.finishes_at)} · critical alerts still sent`, entity: 'timer.notify_snooze' });
+              const u = states['sensor.notify_mutes']?.attributes.until || {};
+              for (const [e, t] of Object.entries(u))
+                if (new Date(t) > new Date())
+                  out.push({ icon: 'mdi:bell-off-outline', color: 'red', title: `${nice(e)} muted`,
+                    detail: `Until ${tm(t)} · use its mute dot to unmute`, entity: 'sensor.notify_mutes' });
+              for (const [k, n] of [['person', 'People'], ['vehicle', 'Vehicle'], ['animal', 'Animal']])
+                if (states[`input_boolean.camera_alerts_${k}`]?.state === 'off')
+                  out.push({ icon: 'mdi:cctv-off', color: 'disabled-text', title: `${n} camera alerts off`,
+                    detail: 'Switched off · camera alert page', nav: '/lovelace/camera-alert' });
+              if (states['input_boolean.status_homewatch']?.state !== 'on')
+                out.push({ icon: 'mdi:shield-off-outline', color: 'disabled-text', title: 'Homewatch off',
+                  detail: 'No camera detection alerts until it is on', entity: 'input_boolean.status_homewatch' });
+              return out;
+            ]]]
+
+      # --- Snooze
+      - type: heading
+        heading: Snooze
+        icon: mdi:bell-sleep
+        badges:
+          - type: entity
+            entity: timer.notify_snooze
+            show_state: true
+            show_icon: true
+            color: amber
+            visibility:
+              - condition: state
+                entity: timer.notify_snooze
+                state: active
+      - type: grid
+        grid_options:
+          columns: full
+          rows: auto
+        columns: 4
+        square: false
+        cards:
+          - type: custom:button-card
+            template: room_pill
+            entity: timer.notify_snooze
+            name: 1 hour
+            icon: mdi:timer-sand
+            variables:
+              color: var(--amber-color)
+            tap_action:
+              action: perform-action
+              perform_action: timer.start
+              target:
+                entity_id: timer.notify_snooze
+              data:
+                duration: "01:00:00"
+          - type: custom:button-card
+            template: room_pill
+            entity: timer.notify_snooze
+            name: 4 hours
+            icon: mdi:timer-sand
+            variables:
+              color: var(--amber-color)
+            tap_action:
+              action: perform-action
+              perform_action: timer.start
+              target:
+                entity_id: timer.notify_snooze
+              data:
+                duration: "04:00:00"
+          - type: custom:button-card
+            template: room_pill
+            entity: timer.notify_snooze
+            name: Till 7:30
+            icon: mdi:weather-sunset-up
+            variables:
+              color: var(--amber-color)
+            tap_action:
+              action: perform-action
+              perform_action: timer.start
+              target:
+                entity_id: timer.notify_snooze
+              data:
+                duration: |
+                  [[[
+                    const n = new Date(), t = new Date(n);
+                    t.setHours(7, 30, 0, 0);
+                    if (t <= n) t.setDate(t.getDate() + 1);
+                    return Math.round((t - n) / 1000);
+                  ]]]
+          - type: custom:button-card
+            template: room_pill
+            entity: timer.notify_snooze
+            name: Resume
+            icon: mdi:bell-ring-outline
+            variables:
+              color: var(--green-color)
+              active: "[[[ return entity?.state !== 'active'; ]]]"
+            tap_action:
+              action: perform-action
+              perform_action: timer.cancel
+              target:
+                entity_id: timer.notify_snooze
+
+      # --- Kitchen speaker quiet hours
+      - type: heading
+        heading: Kitchen speaker quiet hours
+        icon: mdi:volume-off
+      - type: tile
+        entity: input_boolean.notify_quiet_hours
+        name: Quiet hours
+        grid_options:
+          columns: 12
+          rows: 1
+      - type: tile
+        entity: input_datetime.notify_quiet_start
+        name: From
+        icon: mdi:weather-night
+        grid_options:
+          columns: 6
+          rows: 1
+      - type: tile
+        entity: input_datetime.notify_quiet_end
+        name: Until
+        icon: mdi:weather-sunset-up
+        grid_options:
+          columns: 6
+          rows: 1
+
+      # --- Live repeating alerts
+      - type: custom:button-card
+        grid_options:
+          columns: full
+          rows: auto
+        template: status_list
+        triggers_update:
+          - binary_sensor.house_power_cut
+          - input_boolean.alert_ack_power_cut
+          - binary_sensor.electrical_fault
+          - input_boolean.alert_ack_electrical_fault
+          - binary_sensor.device_overheating
+          - input_boolean.alert_ack_device_overheating
+          - binary_sensor.fridge_off
+          - input_boolean.alert_ack_fridge_off
+          - binary_sensor.fridge_too_active
+          - input_boolean.alert_ack_fridge_too_active
+          - binary_sensor.fridge_too_inactive
+          - input_boolean.alert_ack_fridge_too_inactive
+          - binary_sensor.freezer_too_active
+          - input_boolean.alert_ack_freezer_too_active
+          - binary_sensor.freezer_too_inactive
+          - input_boolean.alert_ack_freezer_too_inactive
+          - binary_sensor.dishwasher_off
+          - input_boolean.alert_ack_dishwasher_off
+          - binary_sensor.water_heater_backup_active
+          - input_boolean.alert_ack_water_heater_backup
+          - binary_sensor.aurora_visible
+          - input_boolean.alert_ack_aurora_visible
+          - binary_sensor.network_device_offline
+          - input_boolean.alert_ack_network_offline
+          - binary_sensor.backups_stale
+          - input_boolean.alert_ack_backups_stale
+        variables:
+          title: Live alerts
+          empty_title: No alerts firing
+          empty_detail: Repeating alerts show here while their problem lasts
+          items: |
+            [[[
+              return [
+                ['binary_sensor.house_power_cut', 'input_boolean.alert_ack_power_cut', 'Power cut', 'mdi:flash-off'],
+                ['binary_sensor.electrical_fault', 'input_boolean.alert_ack_electrical_fault', 'Electrical fault', 'mdi:flash-alert'],
+                ['binary_sensor.device_overheating', 'input_boolean.alert_ack_device_overheating', 'Device overheating', 'mdi:thermometer-alert'],
+                ['binary_sensor.fridge_off', 'input_boolean.alert_ack_fridge_off', 'Fridge power off', 'mdi:fridge-alert'],
+                ['binary_sensor.fridge_too_active', 'input_boolean.alert_ack_fridge_too_active', 'Fridge running too long', 'mdi:fridge-alert'],
+                ['binary_sensor.fridge_too_inactive', 'input_boolean.alert_ack_fridge_too_inactive', 'Fridge not running', 'mdi:fridge-alert'],
+                ['binary_sensor.freezer_too_active', 'input_boolean.alert_ack_freezer_too_active', 'Freezer running too long', 'mdi:fridge-alert'],
+                ['binary_sensor.freezer_too_inactive', 'input_boolean.alert_ack_freezer_too_inactive', 'Freezer not running', 'mdi:fridge-alert'],
+                ['binary_sensor.dishwasher_off', 'input_boolean.alert_ack_dishwasher_off', 'Dishwasher power off', 'mdi:dishwasher-alert'],
+                ['binary_sensor.water_heater_backup_active', 'input_boolean.alert_ack_water_heater_backup', 'Water heater on backup', 'mdi:water-boiler-alert'],
+                ['binary_sensor.aurora_visible', 'input_boolean.alert_ack_aurora_visible', 'Aurora visible', 'mdi:aurora'],
+                ['binary_sensor.network_device_offline', 'input_boolean.alert_ack_network_offline', 'UniFi device offline', 'mdi:lan-disconnect'],
+                ['binary_sensor.backups_stale', 'input_boolean.alert_ack_backups_stale', 'Backups stale', 'mdi:backup-restore']
+              ].filter(([w]) => states[w]?.state === 'on').map(([w, a, n, i]) => {
+                const silenced = states[a]?.state === 'on';
+                return { icon: i, color: silenced ? 'grey' : 'red', title: n,
+                  detail: silenced ? 'Silenced - tap to resume reminders' : 'Repeating - tap to silence', entity: a };
+              });
+            ]]]
+
+      # --- History
+      - type: custom:button-card
+        grid_options:
+          columns: full
+          rows: auto
+        template: feed_list
+        entity: sensor.notification_log
+        triggers_update:
+          - sensor.date_time_24h
+        variables:
+          title: Recently sent
+          limit: 15
+          empty: Nothing sent since this log started
+
+      # --- "That was weird" reports (sensor.oddity_log, lights_insight.yaml).
+      # Each report, then the rooms that changed in the 15 min before it with
+      # their explanation at that moment; tap a room for its explanation history.
+      - type: custom:button-card
+        grid_options:
+          columns: full
+          rows: auto
+        template: status_list
+        triggers_update:
+          - sensor.oddity_log
+        variables:
+          title: Odd reports
+          empty_icon: mdi:emoticon-happy-outline
+          empty_title: No odd reports
+          empty_detail: Taps on "That was weird" (Home page) show here
+          items: |
+            [[[
+              const log = (states['sensor.oddity_log']?.attributes.log || []).slice(0, 10);
+              const when = t => new Date(t).toLocaleString('en-GB',
+                { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true });
+              const out = [];
+              for (const r of log) {
+                const changed = (r.rooms || []).filter(x => (r.recent || []).includes(x.room));
+                out.push({ icon: 'mdi:alert-circle-check-outline', color: 'orange',
+                  title: `${r.who} · ${when(r.t)}`,
+                  detail: r.note ? `"${r.note}"` : (changed.length ? `${changed.length} room${changed.length > 1 ? 's' : ''} changed in the 15 min before` : 'No room changed in the 15 min before') });
+                for (const x of changed)
+                  out.push({ icon: 'mdi:subdirectory-arrow-right', color: 'disabled-text',
+                    title: `${x.room} · lights ${x.lights}`,
+                    detail: x.why || x.last_action,
+                    entity: `sensor.${x.room.toLowerCase().replace(/ /g, '_')}_lights_why` });
+              }
+              return out;
+            ]]]
+
+  # =====================================================================
+  # Column 2: preferences - safety and appliances
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: custom:button-card
+        grid_options:
+          columns: full
+          rows: auto
+        show_icon: false
+        show_name: false
+        show_state: false
+        tap_action:
+          action: none
+        custom_fields:
+          lg: |
+            [[[
+              const k = (i, c, t) => `<span><b style="background:color-mix(in srgb, var(--${c}-color) 22%, transparent);color:var(--${c}-color)"><ha-icon icon="${i}"></ha-icon></b>${t}</span>`;
+              return k('mdi:cellphone', 'green', "John's iPhone + iPad") +
+                k('mdi:cellphone-text', 'pink', "Elizabeth's phone") + k('mdi:speaker-message', 'amber', 'Kitchen speaker') +
+                k('mdi:bell-sleep', 'red', 'Mute for an hour') + k('mdi:bell-off', 'red', 'Silence repeats until it clears');
+            ]]]
+        styles:
+          card:
+            - padding: 10px 12px
+          grid:
+            - grid-template-areas: '"lg"'
+          custom_fields:
+            lg:
+              - justify-self: stretch
+        extra_styles: |
+          #lg { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.75rem; color: var(--secondary-text-color); }
+          #lg span { display: inline-flex; align-items: center; gap: 6px; }
+          #lg b { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 22px; border-radius: 7px; }
+          #lg ha-icon { --mdc-icon-size: 14px; width: 14px; height: 14px; margin: 0; }
+      # --- Camera detections: per type on/off + mute timers, then who hears them
+      - type: heading
+        heading: Camera detections
+        icon: mdi:cctv
+        tap_action:
+          action: navigate
+          navigation_path: /lovelace/camera-alert
+        badges:
+          - type: entity
+            entity: input_boolean.status_homewatch
+            name: Homewatch
+            show_name: true
+            show_state: true
+            show_icon: true
+            color: blue
+            tap_action:
+              action: toggle
+      - type: custom:stack-in-card
+        grid_options:
+          columns: full
+          rows: auto
+        mode: vertical
+        cards:
+          - type: custom:button-card
+            template: camera_alert_type
+            name: People
+            icon: mdi:walk
+            variables:
+              kind: person
+          - type: custom:button-card
+            template: camera_alert_type
+            name: Vehicles
+            icon: mdi:car
+            variables:
+              kind: vehicle
+          - type: custom:button-card
+            template: camera_alert_type
+            name: Animals
+            icon: mdi:paw
+            variables:
+              kind: animal
+      - type: custom:stack-in-card
+        grid_options:
+          columns: full
+          rows: auto
+        mode: vertical
+        cards:
+          - type: custom:button-card
+            template: notify_row
+            name: Person detected
+            icon: mdi:walk
+            variables:
+              event: camera_person
+          - type: custom:button-card
+            template: notify_row
+            name: Vehicle detected
+            icon: mdi:car
+            variables:
+              event: camera_vehicle
+          - type: custom:button-card
+            template: notify_row
+            name: Animal detected
+            icon: mdi:paw
+            variables:
+              event: camera_animal
+
+      - type: heading
+        heading: Security & safety
+        icon: mdi:shield-alert-outline
+      - type: custom:stack-in-card
+        grid_options:
+          columns: full
+          rows: auto
+        mode: vertical
+        cards:
+          - type: custom:button-card
+            template: notify_row
+            name: Smoke/CO alarm heard
+            icon: mdi:smoke-detector-alert
+            variables:
+              event: safety_alarm
+          - type: custom:button-card
+            template: notify_row
+            name: Camera offline
+            icon: mdi:cctv-off
+            variables:
+              event: camera_offline
+          - type: custom:button-card
+            template: notify_row
+            name: NVR storage low (automation off)
+            icon: mdi:harddisk
+            variables:
+              event: nvr_storage_low
+          - type: custom:button-card
+            template: notify_row_ack
+            name: Power cut
+            icon: mdi:flash-off
+            variables:
+              event: power_cut
+              ack: input_boolean.alert_ack_power_cut
+          - type: custom:button-card
+            template: notify_row_ack
+            name: Electrical fault (Shelly)
+            icon: mdi:flash-alert
+            variables:
+              event: electrical_fault
+              ack: input_boolean.alert_ack_electrical_fault
+          - type: custom:button-card
+            template: notify_row_ack
+            name: Device overheating
+            icon: mdi:thermometer-alert
+            variables:
+              event: device_overheating
+              ack: input_boolean.alert_ack_device_overheating
+      - type: heading
+        heading: Kitchen & appliances
+        icon: mdi:fridge-outline
+      - type: custom:stack-in-card
+        grid_options:
+          columns: full
+          rows: auto
+        mode: vertical
+        cards:
+          - type: custom:button-card
+            template: notify_row_ack
+            name: Fridge power off
+            icon: mdi:fridge-alert
+            variables:
+              event: fridge_off
+              ack: input_boolean.alert_ack_fridge_off
+          - type: custom:button-card
+            template: notify_row_ack
+            name: Fridge running too long
+            icon: mdi:fridge-alert
+            variables:
+              event: fridge_too_active
+              ack: input_boolean.alert_ack_fridge_too_active
+          - type: custom:button-card
+            template: notify_row_ack
+            name: Fridge not running
+            icon: mdi:fridge-alert
+            variables:
+              event: fridge_too_inactive
+              ack: input_boolean.alert_ack_fridge_too_inactive
+          - type: custom:button-card
+            template: notify_row_ack
+            name: Freezer running too long
+            icon: mdi:fridge-alert
+            variables:
+              event: freezer_too_active
+              ack: input_boolean.alert_ack_freezer_too_active
+          - type: custom:button-card
+            template: notify_row_ack
+            name: Freezer not running
+            icon: mdi:fridge-alert
+            variables:
+              event: freezer_too_inactive
+              ack: input_boolean.alert_ack_freezer_too_inactive
+          - type: custom:button-card
+            template: notify_row_ack
+            name: Dishwasher power off
+            icon: mdi:dishwasher-alert
+            variables:
+              event: dishwasher_off
+              ack: input_boolean.alert_ack_dishwasher_off
+          - type: custom:button-card
+            template: notify_row_ack
+            name: Water heater on backup
+            icon: mdi:water-boiler-alert
+            variables:
+              event: water_heater_backup
+              ack: input_boolean.alert_ack_water_heater_backup
+          - type: custom:button-card
+            template: notify_row
+            name: Washer/dryer/dishwasher done
+            icon: mdi:washing-machine
+            variables:
+              event: appliance_finished
+
+  # =====================================================================
+  # Column 3: preferences - home, workshop, system
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: heading
+        heading: Home & people
+        icon: mdi:home-heart
+      - type: custom:stack-in-card
+        grid_options:
+          columns: full
+          rows: auto
+        mode: vertical
+        cards:
+          - type: custom:button-card
+            template: notify_row
+            name: House mode changed
+            icon: mdi:home-switch-outline
+            variables:
+              event: house_mode
+          - type: custom:button-card
+            template: notify_row
+            name: Lights left on while away
+            icon: mdi:lightbulb-alert-outline
+            variables:
+              event: left_on_away
+          - type: custom:button-card
+            template: notify_row
+            name: While you were out
+            icon: mdi:hand-wave
+            variables:
+              event: away_summary
+          - type: custom:button-card
+            template: notify_row
+            name: Bin day reminder
+            icon: mdi:trash-can-outline
+            variables:
+              event: bin_reminder
+          - type: custom:button-card
+            template: notify_row
+            name: Frost tonight
+            icon: mdi:snowflake-alert
+            variables:
+              event: frost_warning
+          - type: custom:button-card
+            template: notify_row_ack
+            name: Aurora visible
+            icon: mdi:aurora
+            variables:
+              event: aurora_visible
+              ack: input_boolean.alert_ack_aurora_visible
+          - type: custom:button-card
+            template: notify_row
+            name: Military jet low overhead
+            icon: mdi:airplane-alert
+            variables:
+              event: military_aircraft
+      - type: heading
+        heading: Workshop
+        icon: mdi:printer-3d
+      - type: custom:stack-in-card
+        grid_options:
+          columns: full
+          rows: auto
+        mode: vertical
+        cards:
+          - type: custom:button-card
+            template: notify_row
+            name: 3D print error
+            icon: mdi:printer-3d-nozzle-alert
+            variables:
+              event: print_error
+          - type: custom:button-card
+            template: notify_row
+            name: 3D print finished
+            icon: mdi:printer-3d-nozzle
+            variables:
+              event: print_finished
+          - type: custom:button-card
+            template: notify_row
+            name: Printer ink low
+            icon: mdi:printer-alert
+            variables:
+              event: ink_low
+      - type: heading
+        heading: System
+        icon: mdi:server-network
+      - type: custom:stack-in-card
+        grid_options:
+          columns: full
+          rows: auto
+        mode: vertical
+        cards:
+          - type: custom:button-card
+            template: notify_row_ack
+            name: UniFi device offline
+            icon: mdi:lan-disconnect
+            variables:
+              event: network_offline
+              ack: input_boolean.alert_ack_network_offline
+          - type: custom:button-card
+            template: notify_row_ack
+            name: Backups stale
+            icon: mdi:backup-restore
+            variables:
+              event: backups_stale
+              ack: input_boolean.alert_ack_backups_stale
+          - type: custom:button-card
+            template: notify_row
+            name: New low battery
+            icon: mdi:battery-alert-variant-outline
+            variables:
+              event: battery_low
+          - type: custom:button-card
+            template: notify_row
+            name: Weekly digest (Sun 10:00)
+            icon: mdi:email-newsletter
+            variables:
+              event: weekly_digest
+          - type: custom:button-card
+            template: notify_row
+            name: Something odd reported
+            icon: mdi:alert-circle-check-outline
+            variables:
+              event: oddity_report
+          - type: custom:button-card
+            template: notify_row
+            name: Clocks change tonight (7pm)
+            icon: mdi:clock-time-two-outline
+            variables:
+              event: clock_change

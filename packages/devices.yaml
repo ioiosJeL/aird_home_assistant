@@ -1,0 +1,203 @@
+wake_on_lan:
+
+homeassistant:
+  customize_glob:
+    package.node_anchors.screen_theme_options: &screen_theme_options
+      options:
+        - Home Assistant
+        - Nordic
+        - noctis
+        - Google Theme
+        - Graphite
+        - Graphite Light
+      icon: mdi:shape
+
+input_boolean:
+  screens_popup_active:
+    name: Screen Pop-Up Is Active
+    icon: mdi:monitor-arrow-down
+
+  master_bedroom_screen_camera_switching:
+    name: Master Bedroom Screen Subscribe To Camera Detection Switching
+    icon: mdi:monitor-shimmer
+
+  garage_screen_camera_switching:
+    name: Garage Screen Subscribe To Camera Detection Switching
+    icon: mdi:monitor-shimmer
+
+input_select:
+  master_bedroom_screen_themes:
+    <<: *screen_theme_options
+    name: Master Bedroom Screen Theme List
+
+automation:
+  - alias: Reboot Screens After Restart
+    mode: single
+    triggers:
+      - trigger: homeassistant
+        event: start
+    actions:
+      - action: button.press
+        target:
+          entity_id: button.kitchen_kiosk_restart_browser
+
+  - alias: Change Screens For Outside Motion
+    mode: single
+    triggers:
+      - trigger: event
+        event_type: timer.started
+        event_data:
+          entity_id: timer.since_detected_object
+        context: {}
+    actions:
+      action: script.camera_detection_screen_popup
+
+  - alias: Update Screens On Camera Change
+    mode: restart
+    triggers:
+      trigger: state
+      entity_id: input_text.last_object_camera
+    condition: "{{ is_state('input_boolean.screens_popup_active', 'on') }}"
+    actions:
+      action: script.camera_detection_screen_update
+
+  - alias: Change Screens Back From Outside Motion
+    mode: single
+    triggers:
+      - trigger: event
+        event_type: timer.finished
+        event_data:
+          entity_id: timer.since_detected_object
+        context: {}
+    actions:
+      action: script.camera_detection_screen_return
+
+  - alias: Bedroom Tablet Theme Change
+    mode: single
+    triggers:
+      trigger: state
+      entity_id: input_select.master_bedroom_screen_themes
+    actions:
+      action: browser_mod.set_theme
+      target:
+        device_id: "Master Bedroom Screen"
+      data:
+        theme: "{{ states('input_select.master_bedroom_screen_themes') }}"
+
+  - alias: Bedroom Tablet Power Cycle After Lockup
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.master_bedroom_screen
+        to: "unavailable"
+        for:
+          seconds: 600
+    actions:
+      - action: button.press
+        target:
+          entity_id: button.kitchen_kiosk_restart_browser
+
+script:
+  camera_detection_screen_popup:
+    alias: Change Screens For Camera Activity
+    description: "Change screens on as many screens as configured"
+    mode: single
+    sequence:
+      - choose:
+          - conditions: "{{ states('input_boolean.master_bedroom_screen_camera_switching') == 'on' }}"
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.screens_popup_active
+              - action: browser_mod.popup
+                data:
+                  title: Camera Movement
+                  content:
+                    show_state: false
+                    show_name: false
+                    camera_view: live
+                    type: picture-entity
+                    entity: camera.{{ states('input_text.last_object_camera') }}_medium
+                    camera_image: camera.{{ states('input_text.last_object_camera') }}_medium
+                  size: wide
+                target:
+                  device_id: "Master Bedroom Screen"
+      - choose:
+          - conditions: "{{ states('input_boolean.garage_screen_camera_switching') == 'on' }}"
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.screens_popup_active
+              - action: browser_mod.popup
+                data:
+                  title: Camera Movement
+                  content:
+                    show_state: false
+                    show_name: false
+                    camera_view: live
+                    type: picture-entity
+                    entity: camera.{{ states('input_text.last_object_camera') }}_medium
+                    camera_image: camera.{{ states('input_text.last_object_camera') }}_medium
+                  size: wide
+                target:
+                  device_id: "Garage Screen"
+
+  camera_detection_screen_update:
+    alias: Update Screens For Camera Activity
+    description: "Update screen camera feed on as many screens as configured"
+    mode: restart
+    sequence:
+      - choose:
+          - conditions: "{{ states('input_boolean.screens_popup_active') == 'on' }}"
+            sequence:
+              - choose:
+                  - conditions: "{{ states('input_boolean.master_bedroom_screen_camera_switching') == 'on' }}"
+                    sequence:
+                      - action: browser_mod.popup
+                        data:
+                          title: More Camera Movement
+                          content:
+                            show_state: false
+                            show_name: false
+                            camera_view: live
+                            type: picture-entity
+                            entity: camera.{{ states('input_text.last_object_camera') }}_medium
+                            camera_image: camera.{{ states('input_text.last_object_camera') }}_medium
+                          size: wide
+                        target:
+                          device_id: "Master Bedroom Screen"
+
+              - choose:
+                  - conditions: "{{ states('input_boolean.garage_screen_camera_switching') == 'on' }}"
+                    sequence:
+                      - action: browser_mod.popup
+                        data:
+                          title: More Camera Movement
+                          content:
+                            show_state: false
+                            show_name: false
+                            camera_view: live
+                            type: picture-entity
+                            entity: camera.{{ states('input_text.last_object_camera') }}_medium
+                            camera_image: camera.{{ states('input_text.last_object_camera') }}_medium
+                          size: wide
+                        target:
+                          device_id: "Garage Screen"
+
+  camera_detection_screen_return:
+    alias: Return Screens From Camera Activity
+    description: "Change screens on as many screens as configured"
+    mode: single
+    sequence:
+      - choose:
+          - conditions: "{{ states('input_boolean.screens_popup_active') == 'on' }}"
+            sequence:
+              - action: browser_mod.close_popup
+                target:
+                  device_id: "Master Bedroom Screen"
+              - action: browser_mod.close_popup
+                target:
+                  device_id: "Garage Screen"
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.screens_popup_active

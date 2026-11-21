@@ -1,0 +1,49 @@
+blueprint:
+  name: Climate - Boost Timer Expired
+  description: >-
+    When a room's heating boost timer finishes, turn off its "boost active"
+    flag and drop the thermostat's target temperature back down by the
+    room's configured boost value.
+  domain: automation
+  input:
+    boost_timer:
+      name: Boost Timer
+      selector:
+        entity:
+          domain: timer
+    boost_active_boolean:
+      name: Boost Active (input_boolean)
+      selector:
+        entity:
+          domain: input_boolean
+    climate_entity:
+      name: Climate Entity
+      selector:
+        entity:
+          domain: climate
+    boost_value_number:
+      name: Boost Value, Degrees (input_number)
+      selector:
+        entity:
+          domain: input_number
+
+mode: single
+triggers:
+  - trigger: event
+    event_type: timer.finished
+    event_data:
+      entity_id: !input boost_timer
+    context: {}
+
+variables:
+  climate_entity: !input climate_entity
+  boost_value_number: !input boost_value_number
+
+actions:
+  - action: input_boolean.turn_off
+    target:
+      entity_id: !input boost_active_boolean
+  - action: climate.set_temperature
+    data:
+      entity_id: "{{ climate_entity }}"
+      temperature: "{{ state_attr(climate_entity, 'temperature') - states(boost_value_number) | int }}"

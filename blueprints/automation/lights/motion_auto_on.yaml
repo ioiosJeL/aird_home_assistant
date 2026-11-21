@@ -1,0 +1,317 @@
+blueprint:
+  name: Lights - Motion Auto On
+  description: >-
+    Turn a room's lights on when motion is detected, if automatic lights are
+    enabled, the room's scene is currently "Off", and it's dark enough (or an
+    auto-off override timer is running). Optionally picks a different scene
+    at night, and optionally respects/sets a bedtime flag.
+
+    Smarter re-entry (all optional, off unless the inputs are given):
+      - Return restore: if the room was switched off by the motion timeout a
+        few minutes ago, put back the scene that was on (e.g. Music, Cosy)
+        instead of the default one.
+      - False-off learning: if motion comes back within 3 minutes of an
+        automatic off, someone was still there - start the extend timer so
+        the next timeout is longer (see motion_auto_off).
+      - Exit grace: just after the lights were switched off by hand (wall
+        switch, dashboard), don't turn them straight back on as the person
+        walks out past the sensor.
+  domain: automation
+  source_url: https://github.com/
+  input:
+    motion_sensor:
+      name: Motion Sensor
+      selector:
+        entity:
+          domain: binary_sensor
+    automatic_lights_boolean:
+      name: Automatic Lights Mode (input_boolean)
+      selector:
+        entity:
+          domain: input_boolean
+    scenes_select:
+      name: Scenes (input_select)
+      selector:
+        entity:
+          domain: input_select
+    illuminance_sensor:
+      name: Illuminance Sensor
+      selector:
+        entity:
+          domain: sensor
+    threshold_number:
+      name: Lights-On Threshold (input_number)
+      selector:
+        entity:
+          domain: input_number
+    last_action_text:
+      name: Last Action (input_text)
+      selector:
+        entity:
+          domain: input_text
+    auto_mode_boolean:
+      name: Auto Mode Active (input_boolean)
+      selector:
+        entity:
+          domain: input_boolean
+    daytime_script:
+      name: Script to run (daytime, or only scene)
+      selector:
+        entity:
+          domain: script
+    override_timer:
+      name: Auto-Off Override Timer (optional)
+      default: ""
+      selector:
+        entity:
+          domain: timer
+    nighttime_script:
+      name: Script to run at night (optional - leave blank to always use the daytime script)
+      default: ""
+      selector:
+        entity:
+          domain: script
+    nighttime_boolean:
+      name: Nighttime Status (input_boolean)
+      default: input_boolean.status_nighttime
+      selector:
+        entity:
+          domain: input_boolean
+    manual_override_boolean:
+      name: Manual Override (input_boolean, optional)
+      description: When on, the room was changed outside HA - leave it alone.
+      default: ""
+      selector:
+        entity:
+          domain: input_boolean
+    previous_scene_text:
+      name: Previous Scene (input_text, optional - enables return restore)
+      default: ""
+      selector:
+        entity:
+          domain: input_text
+    room_prefix:
+      name: Room script prefix (e.g. dining_room, needed for return restore)
+      default: ""
+      selector:
+        text: {}
+    restore_minutes:
+      name: Return restore window (minutes after an automatic off)
+      default: 10
+      selector:
+        number:
+          min: 0
+          max: 60
+          unit_of_measurement: min
+    restorable_scenes:
+      name: Scenes that may be restored on return
+      default: [Bright, Relax, Cosy, Music, Special, Movie]
+      selector:
+        text:
+          multiple: true
+    extend_timer:
+      name: Extend Timer (timer, optional - shared with motion_auto_off)
+      default: ""
+      selector:
+        entity:
+          domain: timer
+    extend_minutes:
+      name: How long a false off keeps the longer timeout (minutes)
+      default: 30
+      selector:
+        number:
+          min: 5
+          max: 180
+          unit_of_measurement: min
+    exit_grace_seconds:
+      name: Exit grace after a manual switch-off (seconds, 0 = off)
+      default: 30
+      selector:
+        number:
+          min: 0
+          max: 300
+          unit_of_measurement: s
+    bedtime_boolean:
+      name: Bedtime Flag (optional - set when the nighttime scene is used)
+      default: ""
+      selector:
+        entity:
+          domain: input_boolean
+    house_asleep_boolean:
+      name: House asleep flag
+      description: >-
+        On after House Shutdown (packages/house_shutdown.yaml). While it's on
+        this room's motion doesn't switch the lights on, unless wakes_house
+        is set for the room.
+      default: input_boolean.house_asleep
+      selector:
+        entity:
+          domain: input_boolean
+    wakes_house:
+      name: Motion here wakes the house
+      description: >-
+        This room's motion still works after House Shutdown (and the house
+        wakes from it). For the rooms you'd walk into first.
+      default: false
+      selector:
+        boolean: {}
+    late_night_lights:
+      name: Late-night dim lights (optional)
+      description: >-
+        While Night Mode is on (nighttime_boolean), turn these lights on at
+        late_night_brightness instead of running the scene script (so there
+        is no bright flash first). Leave empty to disable.
+      default: []
+      selector:
+        entity:
+          domain: light
+          multiple: true
+    late_night_brightness:
+      name: Late-night brightness (%)
+      default: 30
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+    late_night_change_script:
+      name: Scene change script for late-night mode (e.g. script.hall_scene_change)
+      description: Keeps the room's scene selector in step without re-running a scene.
+      default: ""
+      selector:
+        entity:
+          domain: script
+    late_night_scene_name:
+      name: Scene name to record in late-night mode
+      default: "Cosy"
+      selector:
+        text: {}
+
+mode: single
+triggers:
+  - trigger: state
+    entity_id: !input motion_sensor
+    to: "on"
+
+variables:
+  automatic_lights: !input automatic_lights_boolean
+  scenes_select: !input scenes_select
+  illuminance_sensor: !input illuminance_sensor
+  threshold_number: !input threshold_number
+  override_timer: !input override_timer
+  nighttime_script: !input nighttime_script
+  daytime_script: !input daytime_script
+  nighttime_boolean: !input nighttime_boolean
+  bedtime_boolean: !input bedtime_boolean
+  house_asleep_boolean: !input house_asleep_boolean
+  wakes_house: !input wakes_house
+  manual_override_boolean: !input manual_override_boolean
+  late_night_lights: !input late_night_lights
+  late_night_brightness: !input late_night_brightness
+  late_night_change_script: !input late_night_change_script
+  late_night_scene_name: !input late_night_scene_name
+  last_action_text: !input last_action_text
+  previous_scene_text: !input previous_scene_text
+  room_prefix: !input room_prefix
+  restore_minutes: !input restore_minutes
+  restorable_scenes: !input restorable_scenes
+  extend_timer: !input extend_timer
+  extend_minutes: !input extend_minutes
+  exit_grace_seconds: !input exit_grace_seconds
+  # What happened last in this room, and how long ago (evaluated before
+  # this run writes its own "Automatic Mode: Lights On")
+  last_action: "{{ states(last_action_text) }}"
+  last_action_age: >-
+    {{ (now() - states[last_action_text].last_changed).total_seconds() | int
+       if states[last_action_text] is not none else 999999 }}
+  after_auto_off: "{{ last_action == 'Automatic Mode: Lights Off' }}"
+  false_off: "{{ after_auto_off and last_action_age < 180 }}"
+  just_switched_off: >-
+    {{ last_action == 'Scene Selected: Off'
+       and last_action_age < exit_grace_seconds | int(0) }}
+  previous_scene: "{{ states(previous_scene_text) if previous_scene_text != '' else '' }}"
+  restore_scene: >-
+    {{ previous_scene
+       if (after_auto_off and room_prefix != ''
+           and last_action_age < (restore_minutes | int(0)) * 60
+           and previous_scene in restorable_scenes)
+       else '' }}
+  # Dim whenever Night Mode is on (21:00-07:00, packages/core.yaml)
+  late_night: "{{ (late_night_lights | count > 0) and is_state(nighttime_boolean, 'on') }}"
+
+conditions:
+  - condition: template
+    value_template: >-
+      {{ (states(automatic_lights) == 'on')
+         and (states(scenes_select) == 'Off')
+         and (bedtime_boolean == '' or states(bedtime_boolean) == 'off')
+         and (wakes_house or house_asleep_boolean == ''
+              or not is_state(house_asleep_boolean, 'on'))
+         and (manual_override_boolean == '' or states(manual_override_boolean) == 'off')
+         and not just_switched_off
+         and (states(illuminance_sensor) | int(999) <= states(threshold_number) | int(0)
+              or (override_timer != '' and not is_state(override_timer, 'idle')))
+      }}
+
+actions:
+  - action: input_text.set_value
+    data:
+      entity_id: !input last_action_text
+      value: "Automatic Mode: Lights On"
+  - action: input_boolean.turn_on
+    data:
+      entity_id: !input auto_mode_boolean
+  # Lights went off on someone who was still here: lengthen the timeout
+  - if: "{{ false_off and extend_timer != '' }}"
+    then:
+      - action: timer.start
+        target:
+          entity_id: "{{ extend_timer }}"
+        data:
+          duration:
+            minutes: "{{ extend_minutes | int(30) }}"
+  - choose:
+      - conditions: "{{ late_night }}"
+        sequence:
+          - if: "{{ late_night_change_script != '' }}"
+            then:
+              - action: script.turn_on
+                target:
+                  entity_id: "{{ late_night_change_script }}"
+                data:
+                  variables:
+                    scene_name: "{{ late_night_scene_name }}"
+                    scene_duration: 2
+          - action: light.turn_on
+            target:
+              entity_id: "{{ late_night_lights }}"
+            data:
+              brightness_pct: "{{ late_night_brightness | int }}"
+              transition: 1
+      # Back within a few minutes of an automatic off: same scene as before
+      - conditions: "{{ restore_scene != '' }}"
+        sequence:
+          - action: script.turn_on
+            data:
+              entity_id: "script.{{ room_prefix }}_scene_{{ restore_scene | lower }}"
+          - if: "{{ bedtime_boolean != '' and is_state(nighttime_boolean, 'on') }}"
+            then:
+              - action: input_boolean.turn_on
+                data:
+                  entity_id: "{{ bedtime_boolean }}"
+      - conditions: "{{ nighttime_script != '' and is_state(nighttime_boolean, 'on') }}"
+        sequence:
+          - action: script.turn_on
+            data:
+              entity_id: "{{ nighttime_script }}"
+          # Bedtime only blocks further auto-on (people moving in bed);
+          # auto mode stays on so the motion timeout still turns them off
+          - if: "{{ bedtime_boolean != '' }}"
+            then:
+              - action: input_boolean.turn_on
+                data:
+                  entity_id: "{{ bedtime_boolean }}"
+    default:
+      - action: script.turn_on
+        data:
+          entity_id: "{{ daytime_script }}"

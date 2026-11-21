@@ -1,0 +1,294 @@
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      double: &double
+        package: "Lights"
+        room: "Double Bedroom"
+
+    input_number.double_bedroom_lights_*:
+      <<: *double
+    light.double_bedroom_*:
+      <<: *double
+    timer.double_bedroom_scene_*:
+      <<: *double
+    sensor.double_bedroom_*_warmth:
+      <<: *double
+    sensor.double_bedroom_*_brightness:
+      <<: *double
+
+  customize:
+    input_select.double_bedroom_scenes:
+      <<: *double
+    input_text.double_bedroom_last_action:
+      <<: *double
+    input_text.double_bedroom_previous_scene:
+      <<: *double
+    input_boolean.double_bedroom_scene_changing:
+      <<: *double
+    sensor.double_bedroom_active_light_count:
+      <<: *double
+
+input_select:
+  # All scenes
+  double_bedroom_scenes:
+    name: Double Bedroom Scenes
+    options:
+      - "Bright"
+      - "Relax"
+      - "Cosy"
+      - "Off"
+    icon: mdi:palette-outline
+
+input_text:
+  # The last action performed
+  double_bedroom_last_action:
+    name: "Last Action: Double Bedroom"
+    icon: mdi:gesture-tap-button
+    initial: "None: Boot"
+
+  # Previous scene before current
+  double_bedroom_previous_scene:
+    name: Previous Double Bedroom Scene
+    icon: mdi:palette
+    initial: "Reboot"
+
+input_number:
+  # Lux level below which brings on the auto lights
+  double_bedroom_lights_on_threshold:
+    name: Double Bedroom Threshold On
+    min: 1
+    max: 70
+
+light:
+  # Lamps
+  - platform: group
+    name: Double Bedroom Lamps
+    entities:
+      - light.double_bedroom_bedside
+
+  # All lights
+  - platform: group
+    name: Double Bedroom Lights Master
+    entities:
+      - light.double_bedroom_bedside
+      - light.double_bedroom_wall
+
+input_boolean:
+  # On when the lights were changed outside HA (e.g. Hue app); motion
+  # leaves the room alone until it clears (see Manual Override Detection)
+  double_bedroom_manual_override:
+    name: Double Bedroom Manual Override
+    icon: mdi:hand-back-right
+
+  # Boolean which is on during scene change
+  double_bedroom_scene_changing:
+    name: Double Bedroom Scene Change In Progress
+    icon: mdi:repeat-once
+    initial: false
+
+  # Boolean which is on when lights are in auto mode
+  double_bedroom_auto_mode_active:
+    name: Double Bedroom Auto Mode
+    icon: mdi:refresh-auto
+
+  # Auto mode active
+  double_bedroom_automatic_lights:
+    name: Double Bedroom Automatic Lights Mode
+    icon: mdi:refresh-auto
+
+timer:
+  # Running after the lights went (or nearly went) off on someone who was
+  # still here; the motion timeout is doubled while it runs
+  double_bedroom_motion_extended:
+    name: Double Bedroom Motion Timeout Extended
+    icon: mdi:timer-plus-outline
+    duration: "00:30:00"
+
+  # Timer set during each scene on script for transitions
+  double_bedroom_scene_changing:
+    name: Time For Scene Change
+    icon: mdi:timer-sand-empty
+
+  # Timer to prevent lights from waiting for light sensor to update
+  double_bedroom_auto_off_override:
+    name: Timer To Prevent Waiting For Lux Sensor
+    icon: mdi:timer-sand-empty
+
+template:
+  - sensor:
+      # Determine if any lights in any group is currently on
+      - default_entity_id: sensor.double_bedroom_active_light_count
+        name: "Double Bedroom Active Light Count"
+        unit_of_measurement: Lights
+        state: >-
+          {{ expand('light.double_bedroom_lights_master') | selectattr('state', 'ne', 'off') | list | count }}
+
+automation:
+  - alias: Double Bedroom Lights Manual Override Detection
+    use_blueprint:
+      path: lights/manual_override_detection.yaml
+      input:
+        lights:
+          - light.double_bedroom_bedside
+          - light.double_bedroom_wall
+        lights_master: light.double_bedroom_lights_master
+        manual_boolean: input_boolean.double_bedroom_manual_override
+        scene_changing_boolean: input_boolean.double_bedroom_scene_changing
+        scenes_select: input_select.double_bedroom_scenes
+        auto_mode_boolean: input_boolean.double_bedroom_auto_mode_active
+        last_action_text: input_text.double_bedroom_last_action
+
+  - alias: Double Bedroom Lights Auto On
+    use_blueprint:
+      path: lights/motion_auto_on.yaml
+      input:
+        previous_scene_text: input_text.double_bedroom_previous_scene
+        room_prefix: double_bedroom
+        extend_timer: timer.double_bedroom_motion_extended
+        manual_override_boolean: input_boolean.double_bedroom_manual_override
+        motion_sensor: binary_sensor.double_bedroom_motion
+        automatic_lights_boolean: input_boolean.double_bedroom_automatic_lights
+        scenes_select: input_select.double_bedroom_scenes
+        illuminance_sensor: sensor.hms_double_bedroom_illuminance
+        threshold_number: input_number.double_bedroom_lights_on_threshold
+        override_timer: timer.double_bedroom_auto_off_override
+        last_action_text: input_text.double_bedroom_last_action
+        auto_mode_boolean: input_boolean.double_bedroom_auto_mode_active
+        daytime_script: script.double_bedroom_scene_bright
+        nighttime_script: script.double_bedroom_scene_relax
+        bedtime_boolean: input_boolean.status_bedtime_double
+
+  - alias: Double Bedroom Lights Auto Off
+    use_blueprint:
+      path: lights/motion_auto_off.yaml
+      input:
+        # Early off (17 Nov 2026): once it's quiet here and someone moves in
+        # another room, switch off after 7 min instead of the full timeout
+        early_minutes: 7
+        elsewhere_motion:
+          - binary_sensor.bathroom_motion
+          - binary_sensor.dining_room_motion
+          - binary_sensor.hall_motion
+          - binary_sensor.kitchen_motion
+          - binary_sensor.landing_motion
+          - binary_sensor.living_room_motion
+          - binary_sensor.master_bedroom_motion
+          - binary_sensor.shower_room_motion
+          - binary_sensor.single_bedroom_motion
+          - binary_sensor.sunroom_motion
+          - binary_sensor.utility_room_motion
+        extend_timer: timer.double_bedroom_motion_extended
+        warning_lights:
+          - light.double_bedroom_bedside
+          - light.double_bedroom_wall
+        motion_sensor: binary_sensor.double_bedroom_motion
+        motion_timeout_number: input_number.double_bedroom_motion_timeout
+        automatic_lights_boolean: input_boolean.double_bedroom_automatic_lights
+        auto_mode_boolean: input_boolean.double_bedroom_auto_mode_active
+        off_script: script.double_bedroom_scene_off
+        last_action_text: input_text.double_bedroom_last_action
+        override_timer: timer.double_bedroom_auto_off_override
+
+  # Night Mode + room quiet for its motion timeout = gone to bed: set
+  # bedtime so moving in bed doesn't bring the lights on. Auto-off still
+  # works. Cleared by End Night Mode (core.yaml).
+  - alias: Double Bedroom Bedtime After Quiet
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.double_bedroom_motion
+        to: "off"
+        for:
+          minutes: "{{ states('input_number.double_bedroom_motion_timeout') | int }}"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.status_nighttime
+        state: "on"
+    actions:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.status_bedtime_double
+
+  - alias: Double Bedroom Lights Manual Off Detection
+    use_blueprint:
+      path: lights/manual_off_detection.yaml
+      input:
+        manual_override_boolean: input_boolean.double_bedroom_manual_override
+        lights_master: light.double_bedroom_lights_master
+        scenes_select: input_select.double_bedroom_scenes
+        off_script: script.double_bedroom_scene_off
+        last_action_text: input_text.double_bedroom_last_action
+        auto_mode_boolean: input_boolean.double_bedroom_auto_mode_active
+
+  - alias: Double Bedroom Scene Select Changed
+    use_blueprint:
+      path: lights/scene_select_changed.yaml
+      input:
+        scenes_select: input_select.double_bedroom_scenes
+        scene_changing_boolean: input_boolean.double_bedroom_scene_changing
+        room_prefix: double_bedroom
+
+  - alias: Double Bedroom Light Toggle
+    use_blueprint:
+      path: lights/physical_toggle.yaml
+      input:
+        trigger:
+          - trigger: event
+            event_type: hue_event
+            event_data:
+              id: hds_double_bedroom_button
+              type: short_release
+              subtype: 1
+        changing_timer: timer.double_bedroom_scene_changing
+        scenes_select: input_select.double_bedroom_scenes
+        on_script: script.double_bedroom_scene_bright
+        off_script: script.double_bedroom_scene_off
+        auto_mode_boolean: input_boolean.double_bedroom_auto_mode_active
+
+  - alias: Double Bedroom Bedside Toggle
+    use_blueprint:
+      path: lights/physical_toggle.yaml
+      input:
+        trigger:
+          - trigger: event
+            event_type: hue_event
+            event_data:
+              id: hsb_double_bedroom_left_button
+              type: long_release
+              subtype: 1
+        changing_timer: timer.double_bedroom_scene_changing
+        scenes_select: input_select.double_bedroom_scenes
+        on_script: script.double_bedroom_scene_bright
+        off_script: script.double_bedroom_scene_quickly_off
+        auto_mode_boolean: input_boolean.double_bedroom_auto_mode_active
+
+  - alias: Double Bedroom BLU H&T Button Toggle
+    use_blueprint:
+      path: lights/physical_toggle.yaml
+      input:
+        trigger:
+          - device_id: 574cac96d8d6f82dba4940dd9f3aee7c
+            domain: bthome
+            type: button
+            subtype: press
+            trigger: device
+        changing_timer: timer.double_bedroom_scene_changing
+        scenes_select: input_select.double_bedroom_scenes
+        on_script: script.double_bedroom_scene_bright
+        off_script: script.double_bedroom_scene_off
+        auto_mode_boolean: input_boolean.double_bedroom_auto_mode_active
+
+  - alias: Double Bedroom Scene Scroll
+    use_blueprint:
+      path: lights/scene_scroll.yaml
+      input:
+        trigger:
+          - trigger: event
+            event_type: hue_event
+            event_data:
+              id: hds_double_bedroom_button
+              type: short_release
+              subtype: 4
+        changing_timer: timer.double_bedroom_scene_changing
+        scroll_script: script.double_bedroom_scene_scroll
+        auto_mode_boolean: input_boolean.double_bedroom_auto_mode_active

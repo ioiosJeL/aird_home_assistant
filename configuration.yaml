@@ -1,0 +1,33 @@
+#################################################################
+## Home Assistant Core
+#################################################################
+homeassistant:
+  name: Aird Point
+  unit_system: metric
+  time_zone: "Europe/London"
+  currency: GBP
+  country: GB
+  external_url: !secret externalURL
+  internal_url: "http://192.168.1.10:8123"
+  auth_providers:
+    - type: homeassistant
+  allowlist_external_dirs:
+    - "/config/cache"
+  customize: !include custom/custom.yaml
+  customize_glob: !include custom/custom_global.yaml
+  packages: !include_dir_named packages/
+
+config:
+system_health:
+tag:
+person:
+counter:
+timer:
+input_boolean:
+input_datetime:
+input_number:
+input_select:
+input_text:
+input_button:
+group:
+cloud:

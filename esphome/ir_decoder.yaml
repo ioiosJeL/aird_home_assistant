@@ -1,0 +1,43 @@
+substitutions:
+  deviceName: ir_decoder
+  deviceUpper: IR Decoder Box
+
+  # WIFI AND OTHER CREDENTIALS. USE SECRETS WHERE POSSIBLE
+  wifiPass: !secret wifiPassESP
+  wifiSSID: !secret wifiSSIDESP
+  passOTA: !secret passOTA
+  
+  # ESP DECLARATION
+  boardPlatform: ESP8266
+  boardName: d1_mini
+  
+  # PIN MAPPING.
+  pirPin: D4
+  
+esphome:
+  name: ${deviceName}
+  friendly_name: ${deviceUpper}
+
+esp8266:
+  board: ${boardName}
+
+wifi:
+  ssid: ${wifiSSID}
+  password: ${wifiPass}
+  fast_connect: false
+
+captive_portal:
+logger:
+ota:
+  platform: esphome
+  password: ${passOTA}
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret api_key_ir_decoder
+
+
+remote_receiver:
+  pin: ${pirPin}
+  dump: pronto

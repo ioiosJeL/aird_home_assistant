@@ -1,0 +1,51 @@
+frontend:
+  extra_module_url:
+    - /local/community/hass-hue-icons/hass-hue-icons.js
+  themes: !include_dir_merge_named ../themes/
+
+lovelace:
+  resource_mode: yaml
+
+  resources:
+    - url: /local/community/mini-graph-card/mini-graph-card-bundle.js
+      type: module
+    - url: /local/community/lovelace-multiple-entity-row/multiple-entity-row.js
+      type: module
+    - url: /local/community/mini-media-player/mini-media-player-bundle.js
+      type: module
+    - url: /local/community/button-card/button-card.js
+      type: module
+    - url: /local/community/lovelace-auto-entities/auto-entities.js
+      type: module
+    - url: /local/community/stack-in-card/stack-in-card.js
+      type: module
+    - url: /local/community/lovelace-state-switch/state-switch.js
+      type: module
+    - url: /local/community/lovelace-layout-card/layout-card.js
+      type: module
+    - url: /local/community/lovelace-card-mod/card-mod.js
+      type: module
+    - url: /local/community/lovelace-paper-buttons-row/paper-buttons-row.js
+      type: module
+    - url: /local/community/scheduler-card/scheduler-card.js
+      type: module
+    - url: /local/community/timer-bar-card/timer-bar-card.js
+      type: module
+    - url: /local/community/lovelace-horizon-card/lovelace-horizon-card.js
+      type: module
+
+  dashboards:
+    lovelace:
+      mode: yaml
+      filename: ui-lovelace.yaml
+      title: Overview
+      icon: mdi:view-dashboard
+      show_in_sidebar: true
+
+    admin-pages:
+      mode: yaml
+      title: Admins
+      icon: mdi:security
+      show_in_sidebar: true
+      require_admin: true
+      filename: dashboards/admin-pages/nav.yaml

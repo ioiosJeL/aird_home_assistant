@@ -1,0 +1,165 @@
+script:
+  sunroom_scene_scroll:
+    alias: Sunroom Scene Progression
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: "input_select.select_{{ 'next' if is_state('input_boolean.status_nighttime', 'on') else 'previous' }}"
+        target:
+          entity_id: input_select.sunroom_scenes
+        data:
+          cycle: true
+      - action: script.turn_on
+        target:
+          entity_id: "script.sunroom_scene_{{ states('input_select.sunroom_scenes') | lower  }}"
+
+  sunroom_scene_change:
+    alias: Sunroom Scene Change
+    description: "Scene change functions"
+    mode: single
+    fields:
+      scene_name:
+        description: "The title of the scene"
+        example: "Automatic"
+      scene_duration:
+        description: "The duration of scene change"
+        example: "5"
+    sequence:
+      - action: input_boolean.turn_on
+        data:
+          entity_id: input_boolean.sunroom_scene_changing
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.sunroom_previous_scene
+          value: "{{ states('input_select.sunroom_scenes') | string }}"
+
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.sunroom_last_action
+          value: "Scene Selected: {{ scene_name }}"
+
+      - action: input_select.select_option
+        data:
+          entity_id: input_select.sunroom_scenes
+          option: "{{ scene_name }}"
+
+      - action: timer.start
+        data:
+          entity_id: timer.sunroom_scene_changing
+          duration: "{{ scene_duration | int }}"
+
+      - wait_template: "{{ is_state('timer.sunroom_scene_changing', 'idle') }}"
+
+      - action: input_boolean.turn_off
+        data:
+          entity_id: input_boolean.sunroom_scene_changing
+
+  sunroom_scene_bright:
+    alias: Sunroom Bright Scene Extras
+    description: "Scene functions beyond light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.sunroom_scene_change
+        data:
+          variables:
+            scene_name: "Bright"
+            scene_duration: 1
+
+      - action: hue.activate_scene
+        entity_id: scene.sunroom_blossom
+        data:
+          transition: 1
+
+  sunroom_scene_relax:
+    alias: Sunroom Relax Scene Extras
+    description: "Scene functions beyond light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.sunroom_scene_change
+        data:
+          variables:
+            scene_name: "Relax"
+            scene_duration: 5
+
+      - action: hue.activate_scene
+        entity_id: scene.sunroom_nebula
+        data:
+          transition: 5
+
+  sunroom_scene_cosy:
+    alias: Sunroom Cosy Scene Extras
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.sunroom_scene_change
+        data:
+          variables:
+            scene_name: "Cosy"
+            scene_duration: 3
+
+      - action: hue.activate_scene
+        entity_id: scene.sunroom_arctic_aurora
+        data:
+          transition: 3
+
+  sunroom_scene_movie:
+    alias: Sunroom Movie Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.sunroom_scene_change
+        data:
+          variables:
+            scene_name: "Movie"
+            scene_duration: 5
+      - action: light.turn_on
+        data:
+          entity_id: light.sunroom_ceiling_lights
+          brightness: 0
+          transition: 3
+
+  sunroom_scene_quickly_off:
+    alias: Sunroom Off Scene Quickly
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.sunroom_scene_change
+        data:
+          variables:
+            scene_name: "Off"
+            scene_duration: 2
+      - action: light.turn_on
+        data:
+          entity_id: light.sunroom_ceiling_lights
+          brightness: 0
+          transition: 1
+
+  sunroom_scene_off:
+    alias: Sunroom Off Scene
+    description: "Scene functions & light settings"
+    mode: single
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.sunroom_scene_change
+        data:
+          variables:
+            scene_name: "Off"
+            scene_duration: 10
+      - action: light.turn_on
+        data:
+          entity_id: light.sunroom_ceiling_lights
+          brightness: 0
+          transition: 10

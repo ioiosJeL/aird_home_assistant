@@ -1,0 +1,355 @@
+# Dog sound desensitisation (Nov 2026).
+#
+# Plays a random track from the "dog desensitisation" YouTube playlist
+# (PLIli3pA83khepdcZWmI8V8r-R4cyKB6kr, tracks 01-10) or the extra trigger
+# sounds added Nov 2026 (tracks 11-24: thunder, doorbells, knocking, vacuum,
+# sirens, babies, mowers, cars, motorbikes, barking, power tools, trains,
+# leaf blowers, children; all trimmed to one hour), saved in
+# /media/dog_desensitisation/ as 64 kbps mono AAC (~28 MB each; re-encoded
+# from 128k stereo on 17 Nov 2026 to halve the backup size - ffmpeg
+# -c:a aac -b:a 64k -ac 1), on the Kitchen Sonos, at random times while
+# John and Elizabeth are both out and guest mode is off, between 09:00 and
+# 23:00. Each session starts at a random point in the hour-long track,
+# runs for input_number.dog_audio_minutes at input_number.dog_audio_volume,
+# and stops early (restoring the Sonos) if anyone gets home.
+#
+# timer.dog_audio_pause: 24-hour pause (Home view button); stops a session
+# in progress and skips slots while active.
+# sensor.dog_audio_log: the last 60 sessions (file, start, planned/played
+# minutes, how it ended) from the script's dog_audio_started/_finished
+# events. The Home view card (dashboards/lovelace/home.yaml, templates
+# dog_audio_status / dog_audio_row) shows status, stats and recent plays
+# with a link to listen to each file.
+#
+# Limits: sessions are at most 15 min, and at most one starts per hour.
+#
+# Scheduling: input_datetime.dog_audio_next holds the next slot. Each slot
+# picks the one after it at random, 60-150 min later (60-75 min after 17:00
+# if fewer than two sessions have played today, so a long day out gets at
+# least two). Leaving the house pulls the next slot to 10-40 min away, but
+# never sooner than an hour after the last session started.
+# Slots that land while someone is home or outside 09:00-23:00 are skipped
+# and rescheduled.
+
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      common: &common
+        package: "Dog Audio"
+    "*.dog_audio_*":
+      <<: *common
+
+input_boolean:
+  dog_audio_enabled:
+    name: "Dog Audio Enabled"
+    icon: mdi:dog
+
+input_number:
+  dog_audio_volume:
+    name: "Dog Audio Volume"
+    icon: mdi:volume-medium
+    min: 5
+    max: 100
+    step: 5
+    unit_of_measurement: "%"
+  # Sessions played today (reset at midnight); used to make sure a long
+  # day out gets at least two.
+  dog_audio_sessions_today:
+    name: "Dog Audio Sessions Today"
+    icon: mdi:counter
+    min: 0
+    max: 50
+    step: 1
+    mode: box
+  dog_audio_minutes:
+    name: "Dog Audio Session Length"
+    icon: mdi:timer-outline
+    min: 5
+    max: 15
+    step: 1
+    unit_of_measurement: min
+
+timer:
+  dog_audio_pause:
+    name: "Dog Audio Paused"
+    icon: mdi:pause-circle-outline
+    duration: "24:00:00"
+    restore: true
+
+input_datetime:
+  dog_audio_next:
+    name: "Dog Audio Next Slot"
+    icon: mdi:calendar-clock
+    has_date: true
+    has_time: true
+
+
+script:
+  dog_audio_play:
+    alias: "Dog Audio: Play Session"
+    description: >-
+      Play one random desensitisation track on the Kitchen Sonos for the set
+      session length, then restore whatever the Sonos was doing. Stops early
+      if anyone arrives home or Dog Audio is switched off.
+    mode: single
+    fields:
+      minutes:
+        description: "Session length (defaults to input_number.dog_audio_minutes)"
+        example: 20
+    sequence:
+      - variables:
+          tracks:
+            - "01_city.m4a"
+            - "02_war.m4a"
+            - "03_rain.m4a"
+            - "04_construction.m4a"
+            - "05_kids_and_barking_dogs.m4a"
+            - "06_jungle_and_safari.m4a"
+            - "07_rainforest.m4a"
+            - "08_busy_streets.m4a"
+            - "09_rainy_streets.m4a"
+            - "10_fireworks.m4a"
+            - "11_thunderstorm.m4a"
+            - "12_doorbells.m4a"
+            - "13_door_knocking.m4a"
+            - "14_vacuum_cleaners.m4a"
+            - "15_sirens.m4a"
+            - "16_crying_babies.m4a"
+            - "17_lawn_mowers.m4a"
+            - "18_car_engines.m4a"
+            - "19_motorcycles.m4a"
+            - "20_dogs_barking.m4a"
+            - "21_power_tools.m4a"
+            - "22_trains.m4a"
+            - "23_leaf_blowers.m4a"
+            - "24_children_playing.m4a"
+          track: "{{ tracks | random }}"
+          # Hard cap: never more than 15 minutes per session
+          mins: "{{ [minutes | default(states('input_number.dog_audio_minutes')) | int(15), 15] | min }}"
+          # Start somewhere in the hour so repeats of a track differ
+          start_at: "{{ range(0, [3600 - mins * 60, 60] | max) | random }}"
+      - action: sonos.snapshot
+        data:
+          entity_id: media_player.kitchen_sonos
+          with_group: false
+      - action: media_player.unjoin
+        target:
+          entity_id: media_player.kitchen_sonos
+        continue_on_error: true
+      - action: media_player.volume_set
+        target:
+          entity_id: media_player.kitchen_sonos
+        data:
+          volume_level: "{{ states('input_number.dog_audio_volume') | float(20) / 100 }}"
+      - action: media_player.play_media
+        target:
+          entity_id: media_player.kitchen_sonos
+        data:
+          media_content_id: "media-source://media_source/local/dog_desensitisation/{{ track }}"
+          media_content_type: music
+      - wait_template: "{{ is_state('media_player.kitchen_sonos', 'playing') }}"
+        timeout: "00:00:20"
+        continue_on_timeout: true
+      - action: media_player.media_seek
+        target:
+          entity_id: media_player.kitchen_sonos
+        data:
+          seek_position: "{{ start_at }}"
+        continue_on_error: true
+      - action: input_number.increment
+        target:
+          entity_id: input_number.dog_audio_sessions_today
+      - variables:
+          started_ts: "{{ now().timestamp() }}"
+      - event: dog_audio_started
+        event_data:
+          file: "{{ track }}"
+          planned: "{{ mins }}"
+          start_at: "{{ start_at }}"
+      - action: logbook.log
+        data:
+          name: "Dog audio"
+          message: >-
+            playing {{ track[3:-4] | replace('_', ' ') }} for {{ mins }} min
+            from {{ (start_at // 60) }}:{{ '%02d' % (start_at % 60) }}
+          entity_id: media_player.kitchen_sonos
+      - wait_for_trigger:
+          - trigger: state
+            entity_id:
+              - person.john_lumley
+              - person.elizabeth_munsie
+            to: "home"
+          - trigger: state
+            entity_id: input_boolean.dog_audio_enabled
+            to: "off"
+          - trigger: state
+            entity_id: timer.dog_audio_pause
+            to: "active"
+        timeout:
+          minutes: "{{ mins }}"
+      - event: dog_audio_finished
+        event_data:
+          played: "{{ ((now().timestamp() - started_ts) / 60) | round(0) | int }}"
+          reason: >-
+            {% set t = wait.trigger %}
+            {% if t is none %}completed
+            {% elif t.entity_id.startswith('person.') %}someone home
+            {% elif t.entity_id.startswith('timer.') %}paused
+            {% else %}switched off{% endif %}
+      - action: media_player.media_stop
+        target:
+          entity_id: media_player.kitchen_sonos
+        continue_on_error: true
+      - action: sonos.restore
+        data:
+          entity_id: media_player.kitchen_sonos
+          with_group: false
+        continue_on_error: true
+
+automation:
+  - id: "dog_audio_slot"
+    alias: "Dog Audio: Scheduled Slot"
+    mode: single
+    triggers:
+      - trigger: time
+        at: input_datetime.dog_audio_next
+    actions:
+      # Always book the next slot first, whether or not this one plays
+      - variables:
+          late_and_short: "{{ now().hour >= 17 and states('input_number.dog_audio_sessions_today') | int(0) < 2 }}"
+          # Start-to-start gap; 60 min minimum keeps it to one per hour
+          gap: "{{ range(60, 76) | random if late_and_short else range(60, 151) | random }}"
+          mins: "{{ [states('input_number.dog_audio_minutes') | int(15), 15] | min }}"
+          last_start: >-
+            {% set l = state_attr('sensor.dog_audio_log', 'log') or [] %}
+            {{ as_timestamp(l[0].start, 0) if l else 0 }}
+          # Never run past 23:00
+          until_11: "{{ ((today_at('23:00') - now()).total_seconds() // 60) | int }}"
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.dog_audio_next
+        data:
+          timestamp: "{{ (now() + timedelta(minutes=gap)).timestamp() }}"
+      - condition: state
+        entity_id: input_boolean.dog_audio_enabled
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.status_guests
+        state: "off"
+      - condition: template
+        value_template: "{{ not is_state('timer.dog_audio_pause', 'active') }}"
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: person.john_lumley
+            state: "home"
+          - condition: state
+            entity_id: person.elizabeth_munsie
+            state: "home"
+      - condition: time
+        after: "09:00:00"
+        before: "22:50:00"
+      # Belt and braces for the one-per-hour limit
+      - condition: template
+        value_template: "{{ now().timestamp() - last_start >= 3600 }}"
+      - action: script.turn_on
+        target:
+          entity_id: script.dog_audio_play
+        data:
+          variables:
+            minutes: "{{ [mins, until_11] | min }}"
+
+  - id: "dog_audio_left_home"
+    alias: "Dog Audio: Bring Next Slot Forward on Leaving"
+    mode: single
+    triggers:
+      - trigger: template
+        value_template: >-
+          {{ not is_state('person.john_lumley', 'home')
+             and not is_state('person.elizabeth_munsie', 'home') }}
+        for:
+          minutes: 2
+      - trigger: homeassistant
+        event: start
+      - trigger: state
+        entity_id: input_boolean.dog_audio_enabled
+        to: "on"
+    actions:
+      - variables:
+          last_start: >-
+            {% set l = state_attr('sensor.dog_audio_log', 'log') or [] %}
+            {{ as_timestamp(l[0].start, 0) | int if l else 0 }}
+          soon: "{{ [(now() + timedelta(minutes=range(10, 41) | random)).timestamp() | int, last_start + 3600] | max }}"
+          current: "{{ state_attr('input_datetime.dog_audio_next', 'timestamp') | int(0) }}"
+      # Keep an earlier slot if one is already booked; replace one that is
+      # in the past (missed while HA was down) or further off than "soon".
+      - condition: template
+        value_template: "{{ current < now().timestamp() or current > soon }}"
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.dog_audio_next
+        data:
+          timestamp: "{{ soon }}"
+
+  # The Home view volume slider applies straight away to a session in
+  # progress (the Sonos's own volume is restored when the session ends).
+  - id: "dog_audio_volume_live"
+    alias: "Dog Audio: Apply Volume During Session"
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: input_number.dog_audio_volume
+    conditions:
+      - condition: state
+        entity_id: script.dog_audio_play
+        state: "on"
+    actions:
+      - action: media_player.volume_set
+        target:
+          entity_id: media_player.kitchen_sonos
+        data:
+          volume_level: "{{ states('input_number.dog_audio_volume') | float(20) / 100 }}"
+
+  - id: "dog_audio_reset_counter"
+    alias: "Dog Audio: Reset Daily Count"
+    triggers:
+      - trigger: time
+        at: "00:00:00"
+    actions:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.dog_audio_sessions_today
+        data:
+          value: 0
+
+template:
+  # Session history for the Home view card. Newest first; the entry for a
+  # session in progress has reason "playing" until it finishes.
+  - triggers:
+      - trigger: event
+        event_type: dog_audio_started
+        id: started
+      - trigger: event
+        event_type: dog_audio_finished
+        id: finished
+    sensor:
+      - name: "Dog Audio Log"
+        unique_id: dog_audio_log
+        icon: mdi:playlist-music
+        state: >-
+          {% set f = trigger.event.data.file if trigger.id == 'started'
+             else (this.attributes.log | default([{}]))[0].get('file', '') %}
+          {{ f[3:-4] | replace('_', ' ') | capitalize }}
+        attributes:
+          log: >-
+            {% set log = this.attributes.log | default([]) %}
+            {% if trigger.id == 'started' %}
+              {{ ([{'file': trigger.event.data.file, 'start': now().isoformat(),
+                   'planned': trigger.event.data.planned | int(0), 'played': none,
+                   'reason': 'playing'}] + log)[:60] }}
+            {% elif log and log[0].reason == 'playing' %}
+              {{ [dict(log[0], played=trigger.event.data.played | int(0),
+                       reason=trigger.event.data.reason | trim)] + log[1:] }}
+            {% else %}
+              {{ log }}
+            {% endif %}

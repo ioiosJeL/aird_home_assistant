@@ -1,0 +1,45 @@
+blueprint:
+  name: Lights - Scene Scroll
+  description: >-
+    Run a room's "scroll" script (cycle to the next scene) from a physical
+    switch/button press, as long as the room isn't mid scene transition.
+  domain: automation
+  input:
+    trigger:
+      name: Trigger
+      description: The physical switch/button event(s) that should scroll scenes.
+      selector:
+        trigger: {}
+    changing_timer:
+      name: Scene Changing Timer
+      selector:
+        entity:
+          domain: timer
+    scroll_script:
+      name: Scroll Script
+      selector:
+        entity:
+          domain: script
+    auto_mode_boolean:
+      name: Auto Mode Active (input_boolean)
+      selector:
+        entity:
+          domain: input_boolean
+
+mode: single
+triggers: !input trigger
+
+variables:
+  changing_timer: !input changing_timer
+
+conditions:
+  - condition: template
+    value_template: "{{ is_state(changing_timer, 'idle') }}"
+
+actions:
+  - action: script.turn_on
+    data:
+      entity_id: !input scroll_script
+  - action: input_boolean.turn_off
+    data:
+      entity_id: !input auto_mode_boolean

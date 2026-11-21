@@ -1,0 +1,103 @@
+substitutions:
+  deviceName: debug_box
+  deviceUpper: Debug Camera Box
+  ipAddress: 192.168.40.12
+
+  # WIFI AND OTHER CREDENTIALS. USE SECRETS WHERE POSSIBLE
+  wifiPass: !secret wifiPassESP
+  wifiSSID: !secret wifiSSIDESP
+  passOTA: !secret passOTA
+  
+  # ESP DECLARATION
+  boardName: esp32dev
+  
+  # PIN MAPPING.
+  i2cData: GPIO13
+  i2cClock: GPIO15
+  pirPin: GPIO014
+  
+esphome:
+  name: ${deviceName}
+  friendly_name: ${deviceUpper}
+
+esp32:
+  board: ${boardName}
+
+  framework:
+    type: esp-idf
+
+wifi:
+  ssid: ${wifiSSID}
+  password: ${wifiPass}
+  fast_connect: true
+  power_save_mode: none
+  manual_ip:
+    static_ip: ${ipAddress}
+    gateway: 192.168.40.1
+    subnet: 255.255.255.0
+    dns1: 192.168.1.1
+
+captive_portal:
+logger:
+ota:
+  platform: esphome
+  password: ${passOTA}
+
+i2c:
+  - id: stdi2c
+    sda: ${i2cData}
+    scl: ${i2cClock}
+    scan: True
+
+  - id: cami2c
+    sda: GPIO26
+    scl: GPIO27
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret api_key_debug_box
+
+switch:
+  - platform: restart
+    name: "ESP Restart"
+
+sensor:
+  - platform: wifi_signal
+    name: ESP Signal
+    filters:
+      - or:
+          - throttle: 600s
+          - delta: 5.0
+    update_interval: 10s
+
+  - platform: uptime
+    name: ESP Uptime
+    update_interval: 60s
+
+
+binary_sensor:
+  - platform: status
+    name: Status
+
+psram:
+
+esp32_camera:
+  external_clock:
+    pin: GPIO0
+    frequency: 8MHz
+  i2c_id: cami2c
+  data_pins: [GPIO5, GPIO18, GPIO19, GPIO21, GPIO36, GPIO39, GPIO34, GPIO35]
+  vsync_pin: GPIO25
+  href_pin: GPIO23
+  pixel_clock_pin: GPIO22
+  power_down_pin: GPIO32
+
+  # Image settings
+  name: Camera
+  vertical_flip: False
+  horizontal_mirror: False
+  brightness: 0
+  ae_level: 2
+  max_framerate: 5 fps
+  idle_framerate: 0.05 fps
+  resolution: 800x600

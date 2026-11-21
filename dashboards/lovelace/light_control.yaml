@@ -1,0 +1,239 @@
+path: light-control
+title: Light Control
+icon: mdi:wrench-cog
+type: custom:masonry-layout
+layout:
+  width: 350
+  max_width: 5000
+  max_cols: 4
+cards:
+  - type: custom:button-card
+    template: section_title
+    name: Light Control
+    variables:
+      subtitle: Automation settings, scenes and live status for every room
+  - type: grid
+    columns: 3
+    square: false
+    cards:
+      - type: custom:button-card
+        template: room_toggle
+        entity: input_boolean.master_automatic_lights
+        name: Auto Lights
+        icon: mdi:refresh-auto
+        variables:
+          color: var(--green-color)
+        double_tap_action:
+          action: more-info
+      - type: custom:button-card
+        template: room_pill
+        entity: input_boolean.master_lights_off
+        name: All Off
+        icon: mdi:power-standby
+        variables:
+          color: var(--red-color)
+          active: '[[[ return entity?.state === ''on''; ]]]'
+        tap_action:
+          action: perform-action
+          perform_action: input_boolean.turn_on
+          data:
+            entity_id: input_boolean.master_lights_off
+      - type: custom:button-card
+        template: room_pill
+        entity: light.house_lights
+        icon: mdi:lightbulb-group
+        triggers_update:
+          - light.house_lights
+          - light.dining_room_lights_master
+          - light.living_room_lights_master
+          - light.kitchen_lights_master
+          - light.utility_room_lights_master
+          - light.hall_lights_master
+          - light.bathroom_lights_master
+          - light.shower_room_lights_master
+          - light.single_bedroom_lights_master
+          - light.double_bedroom_lights_master
+          - light.master_bedroom_lights_master
+          - light.sunroom_lights_master
+        variables:
+          color: var(--amber-color)
+          'on': '[[[ return (entity?.attributes.entity_id || []).filter(e => states[e] && states[e].state !== ''off'').length; ]]]'
+          active: '[[[ return variables.on > 0; ]]]'
+        name: '[[[ return `${variables.on} On`; ]]]'
+        tap_action:
+          action: more-info
+  - type: custom:stack-in-card
+    mode: vertical
+    keep:
+      border_radius: false
+      background: false
+    cards:
+      - type: custom:button-card
+        template: section_title
+        name: Automatic Lights
+        variables:
+          subtitle: Enable/disable motion automation per room
+      - type: custom:auto-entities
+        card:
+          type: entities
+          state_color: true
+        filter:
+          template: |
+            {%- set ns = namespace(r=[]) -%}
+            {%- for s in states.input_boolean if s.entity_id is match('^input_boolean[.].*_automatic_lights$')
+                 and s.entity_id not in ['input_boolean.master_automatic_lights'] -%}
+              {%- set ns.r = ns.r + [{'e': s.entity_id, 'v': s.entity_id}] -%}
+            {%- endfor -%}
+            {{ (ns.r | sort(attribute='v', reverse=false) | map(attribute='e') | list) }}
+  - type: custom:stack-in-card
+    mode: vertical
+    keep:
+      border_radius: false
+      background: false
+    cards:
+      - type: custom:button-card
+        template: section_title
+        name: Scene Selection
+        variables:
+          subtitle: Jump straight to a scene in any room
+      - type: custom:auto-entities
+        card:
+          type: entities
+          state_color: true
+        filter:
+          template: |
+            {%- set ns = namespace(r=[]) -%}
+            {%- for s in states.input_select if s.entity_id is match('^input_select[.].*_scenes$') -%}
+              {%- set ns.r = ns.r + [{'e': s.entity_id, 'v': s.entity_id}] -%}
+            {%- endfor -%}
+            {{ (ns.r | sort(attribute='v', reverse=false) | map(attribute='e') | list) }}
+  - type: custom:stack-in-card
+    mode: vertical
+    keep:
+      border_radius: false
+      background: false
+    cards:
+      - type: custom:button-card
+        template: section_title
+        name: Auto Mode Status
+        variables:
+          subtitle: Whether each room is currently running automatically
+      - type: custom:auto-entities
+        card:
+          type: entities
+          state_color: true
+        filter:
+          template: |
+            {%- set ns = namespace(r=[]) -%}
+            {%- for s in states.input_boolean if s.entity_id is match('^input_boolean[.].*_auto_mode_active$') -%}
+              {%- set ns.r = ns.r + [{'e': s.entity_id, 'v': s.entity_id}] -%}
+            {%- endfor -%}
+            {{ (ns.r | sort(attribute='v', reverse=false) | map(attribute='e') | list) }}
+  - type: custom:stack-in-card
+    mode: vertical
+    keep:
+      border_radius: false
+      background: false
+    cards:
+      - type: custom:button-card
+        template: section_title
+        name: Active Light Count
+        variables:
+          subtitle: Lights currently on, by room
+      # Ranked in the browser over the per-room counters (was a server-side
+      # scan of every sensor)
+      - type: custom:button-card
+        template: power_board
+        name: " "
+        variables:
+          unit: " on"
+          decimals: 0
+          total: false
+          min: 1
+          limit: 10
+          color: var(--amber-color)
+          items:
+            - [sensor.dining_room_active_light_count, Dining Room]
+            - [sensor.double_bedroom_active_light_count, Double Bedroom]
+            - [sensor.front_porch_active_light_count, Front Porch]
+            - [sensor.kitchen_active_light_count, Kitchen]
+            - [sensor.living_room_active_light_count, Living Room]
+            - [sensor.master_bedroom_active_light_count, Master Bedroom]
+            - [sensor.shower_room_active_light_count, Shower Room]
+            - [sensor.single_bedroom_active_light_count, Single Bedroom]
+            - [sensor.sunroom_active_light_count, Sunroom]
+            - [sensor.utility_room_active_light_count, Utility Room]
+        triggers_update:
+          - sensor.dining_room_active_light_count
+          - sensor.double_bedroom_active_light_count
+          - sensor.front_porch_active_light_count
+          - sensor.kitchen_active_light_count
+          - sensor.living_room_active_light_count
+          - sensor.master_bedroom_active_light_count
+          - sensor.shower_room_active_light_count
+          - sensor.single_bedroom_active_light_count
+          - sensor.sunroom_active_light_count
+          - sensor.utility_room_active_light_count
+  - type: custom:stack-in-card
+    mode: vertical
+    keep:
+      border_radius: false
+      background: false
+    cards:
+      - type: custom:button-card
+        template: section_title
+        name: Lights-On Thresholds
+        variables:
+          subtitle: Lux level below which auto lights switch on
+      - type: custom:auto-entities
+        card:
+          type: entities
+        filter:
+          template: |
+            {%- set ns = namespace(r=[]) -%}
+            {%- for s in states.input_number if s.entity_id is match('^input_number[.].*_lights_on_threshold$') -%}
+              {%- set ns.r = ns.r + [{'e': s.entity_id, 'v': s.entity_id}] -%}
+            {%- endfor -%}
+            {{ (ns.r | sort(attribute='v', reverse=false) | map(attribute='e') | list) }}
+  - type: custom:stack-in-card
+    mode: vertical
+    keep:
+      border_radius: false
+      background: false
+    cards:
+      - type: custom:button-card
+        template: section_title
+        name: Motion Timeouts
+        variables:
+          subtitle: Minutes of no motion before auto lights switch off
+      - type: custom:auto-entities
+        card:
+          type: entities
+        filter:
+          template: |
+            {%- set ns = namespace(r=[]) -%}
+            {%- for s in states.input_number if s.entity_id is match('^input_number[.].*_motion_timeout$') -%}
+              {%- set ns.r = ns.r + [{'e': s.entity_id, 'v': s.entity_id}] -%}
+            {%- endfor -%}
+            {{ (ns.r | sort(attribute='v', reverse=false) | map(attribute='e') | list) }}
+  - type: custom:stack-in-card
+    mode: vertical
+    keep:
+      border_radius: false
+      background: false
+    cards:
+      - type: custom:button-card
+        template: section_title
+        name: Auto Minimum Brightness
+        variables:
+          subtitle: Floor brightness kept while a room is in auto mode
+      - type: custom:auto-entities
+        card:
+          type: entities
+        filter:
+          template: |
+            {%- set ns = namespace(r=[]) -%}
+            {%- for s in states.input_number if s.entity_id is match('^input_number[.].*_lights_auto_minimum$') -%}
+              {%- set ns.r = ns.r + [{'e': s.entity_id, 'v': s.entity_id}] -%}
+            {%- endfor -%}
+            {{ (ns.r | sort(attribute='v', reverse=false) | map(attribute='e') | list) }}

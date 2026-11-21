@@ -1,0 +1,317 @@
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      common: &common
+        package: "Workspace"
+
+    sensor.cnc_*:
+      <<: *common
+    binary_sensor.cnc_*:
+      <<: *common
+
+  customize:
+    sensor.cnc_machine_state:
+      <<: *common
+
+light:
+  - platform: group
+    name: Workspace Lights Master
+    entities:
+      - light.workshop_light
+      - light.machine_room_light
+      - light.garage_light
+
+input_boolean:
+  # Auto mode active
+  garage_automatic_lights:
+    name: Garage Automatic Lights Mode
+    icon: mdi:refresh-auto
+  workshop_automatic_lights:
+    name: Workshop Automatic Lights Mode
+    icon: mdi:refresh-auto
+  machine_room_automatic_lights:
+    name: Machine Room Automatic Lights Mode
+    icon: mdi:refresh-auto
+
+template:
+  - switch:
+      # Exposed to HomeKit so Siri can "turn on/off the workshop"
+      - name: "Workshop"
+        unique_id: workshop_power_switch
+        icon: mdi:hammer-wrench
+        state: >
+          {{ state_attr('climate.workshop', 'temperature') | float(0) > 5 }}
+        turn_on:
+          - action: script.turn_on
+            target:
+              entity_id: script.workspace_startup
+        turn_off:
+          - action: script.turn_off
+            target:
+              entity_id: script.workspace_startup
+          - action: script.turn_on
+            target:
+              entity_id: script.workspace_shutdown_slow
+  - sensor:
+      - name: "CNC Machine State"
+        icon: "mdi:state-machine"
+        state: >-
+          {% set power = states('sensor.cnc_machine_power') | int(0) %}
+          {%- if power == 0 -%}
+            Off
+          {%- elif power < 70 -%}
+            E-Stopped
+          {%- elif power < 160 -%}
+            Standby
+          {%- elif power < 2300 -%}
+            Cutting
+          {%- else -%}
+            Loading...
+          {%- endif %}
+
+  # --- CNC stats (feeds the CNC admin page) ---------------------------------
+  - binary_sensor:
+      # Cutting or the brief >2300W "Loading..." spikes, held so a spindle
+      # surge or a pause between passes doesn't split one cut into several.
+      - name: "CNC Machine Cutting"
+        unique_id: cnc_machine_cutting
+        icon: mdi:saw-blade
+        state: "{{ states('sensor.cnc_machine_state') in ['Cutting', 'Loading...'] }}"
+        delay_on:
+          seconds: 5
+        delay_off:
+          seconds: 30
+    sensor:
+      # Price matches the Energy dashboard's fixed grid tariff.
+      - name: "CNC Energy Cost Today"
+        unique_id: cnc_energy_cost_today
+        icon: mdi:currency-gbp
+        device_class: monetary
+        unit_of_measurement: GBP
+        state: "{{ (states('sensor.daily_cnc_machine_energy') | float(0) * 0.2604) | round(2) }}"
+
+  - triggers:
+      - trigger: state
+        entity_id: binary_sensor.cnc_machine_cutting
+        from: "on"
+        to: "off"
+    sensor:
+      - name: "CNC Last Cut"
+        unique_id: cnc_last_cut
+        icon: mdi:timer-check-outline
+        device_class: duration
+        unit_of_measurement: min
+        state: "{{ ((trigger.to_state.last_changed - trigger.from_state.last_changed).total_seconds() / 60) | round(1) }}"
+        attributes:
+          started: "{{ trigger.from_state.last_changed.isoformat() }}"
+          finished: "{{ trigger.to_state.last_changed.isoformat() }}"
+
+script:
+  workspace_startup:
+    alias: Wake Workshop Up
+    mode: restart
+    sequence:
+      - action: light.turn_on
+        target:
+          entity_id:
+            - light.garage_light
+            - light.workshop_light
+      - action: climate.set_temperature
+        target:
+          entity_id: climate.workshop
+        data:
+          temperature: 20
+          hvac_mode: heat
+
+      # IR power toggle (same button as shutdown) - flips the TV off if it was already on
+      - action: button.press
+        target:
+          entity_id: button.workshop_far_sensor_power_toggle
+      - action: media_player.select_source
+        target:
+          entity_id: media_player.garage_garage_roku
+        data:
+          source: YouTube
+
+      - delay:
+          minutes: 10
+
+      - action: light.turn_off
+        target:
+          entity_id: light.garage_light
+
+  workspace_shutdown_slow:
+    alias: Send Workshop to Sleep
+    mode: single
+    sequence:
+      - action: light.turn_on
+        target:
+          entity_id: light.garage_light
+      - action: climate.set_temperature
+        target:
+          entity_id: climate.workshop
+        data:
+          temperature: 5
+          hvac_mode: heat
+      - action: switch.turn_off
+        target:
+          entity_id: switch.workshop_fan
+
+      - action: button.press
+        target:
+          entity_id: button.workshop_far_sensor_power_toggle
+
+      - delay:
+          seconds: 10
+
+      - action: light.turn_off
+        target:
+          entity_id: light.workshop_light
+      - action: light.turn_off
+        target:
+          entity_id: light.machine_room_light
+
+      - delay:
+          seconds: 10
+
+      - action: light.turn_off
+        target:
+          entity_id: light.garage_light
+
+automation:
+  - alias: Garage Lights Auto On
+    use_blueprint:
+      path: lights/basic_motion_light_on.yaml
+      input:
+        motion_sensor: binary_sensor.garage_motion
+        automatic_lights_boolean: input_boolean.garage_automatic_lights
+        light_target: light.garage_light
+
+  - alias: Garage Lights Auto Off
+    use_blueprint:
+      path: lights/basic_motion_light_off.yaml
+      input:
+        motion_sensor: binary_sensor.garage_motion
+        motion_timeout_number: input_number.garage_motion_timeout
+        automatic_lights_boolean: input_boolean.garage_automatic_lights
+        light_target: light.garage_light
+
+  - alias: Workshop Lights Auto On
+    use_blueprint:
+      path: lights/basic_motion_light_on.yaml
+      input:
+        motion_sensor: binary_sensor.workshop_motion
+        automatic_lights_boolean: input_boolean.workshop_automatic_lights
+        light_target: light.workshop_light
+
+  - alias: Workshop Lights Auto Off
+    use_blueprint:
+      path: lights/basic_motion_light_off.yaml
+      input:
+        motion_sensor: binary_sensor.workshop_motion
+        motion_timeout_number: input_number.workshop_motion_timeout
+        automatic_lights_boolean: input_boolean.workshop_automatic_lights
+        light_target: light.workshop_light
+
+  - alias: Machine Room Lights Auto On
+    use_blueprint:
+      path: lights/basic_motion_light_on.yaml
+      input:
+        motion_sensor: binary_sensor.machine_room_motion
+        automatic_lights_boolean: input_boolean.machine_room_automatic_lights
+        light_target: light.machine_room_light
+
+  - alias: Machine Room Lights Auto Off
+    use_blueprint:
+      path: lights/basic_motion_light_off.yaml
+      input:
+        motion_sensor: binary_sensor.machine_room_motion
+        motion_timeout_number: input_number.machine_room_motion_timeout
+        automatic_lights_boolean: input_boolean.machine_room_automatic_lights
+        light_target: light.machine_room_light
+
+  - alias: Garage Single Push
+    description: ""
+    mode: single
+    triggers:
+      - trigger: event
+        event_type: shelly.click
+        event_data:
+          click_type: single_push
+          device: shellyplus1-1c6920079860
+          channel: 1
+    actions:
+      - action: light.toggle
+        target:
+            entity_id: light.garage_light
+
+  - alias: Machine Room Single Push
+    description: ""
+    mode: single
+    triggers:
+      - trigger: event
+        event_type: shelly.click
+        event_data:
+          click_type: single_push
+          device: shellyplus1-1c6920020d3c
+          channel: 1
+    actions:
+      - action: light.toggle
+        target:
+            entity_id: light.machine_room_light
+
+  - alias: Machine Room Double Push
+    description: ""
+    mode: single
+    triggers:
+      - trigger: event
+        event_type: shelly.click
+        event_data:
+          click_type: double_push
+          device: shellyplus1-1c6920020d3c
+          channel: 1
+    actions:
+      - action: switch.toggle
+        target:
+            entity_id: switch.cnc_machine
+
+sensor:
+  - platform: history_stats
+    name: CNC Cutting Time Today
+    unique_id: cnc_cutting_time_today
+    entity_id: binary_sensor.cnc_machine_cutting
+    state: "on"
+    type: time
+    start: "{{ today_at() }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: CNC Cutting Time This Week
+    unique_id: cnc_cutting_time_this_week
+    entity_id: binary_sensor.cnc_machine_cutting
+    state: "on"
+    type: time
+    start: "{{ today_at() - timedelta(days=now().weekday()) }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: CNC Powered Time Today
+    unique_id: cnc_powered_time_today
+    entity_id: switch.cnc_machine
+    state: "on"
+    type: time
+    start: "{{ today_at() }}"
+    end: "{{ now() }}"
+
+utility_meter:
+  daily_cnc_machine_energy:
+    source: sensor.cnc_machine_energy
+    name: Daily CNC Machine Energy
+    unique_id: daily_cnc_machine_energy
+    cycle: daily
+
+  monthly_cnc_machine_energy:
+    source: sensor.cnc_machine_energy
+    name: Monthly CNC Machine Energy
+    unique_id: monthly_cnc_machine_energy
+    cycle: monthly

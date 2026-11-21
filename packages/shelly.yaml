@@ -1,0 +1,120 @@
+# Fleet-health roll-ups for the Shelly devices, used by the Shelly admin
+# page (dashboards/admin-pages/shelly.yaml) and available for automations.
+# Display-name and offline-detection logic lives in custom_templates/shelly.jinja.
+
+template:
+  - sensor:
+      # Devices with every entity unavailable. integration_entities() can't
+      # be used here: it drops devices whose config entry failed to load,
+      # which is exactly the offline ones.
+      - default_entity_id: sensor.shelly_devices_offline
+        name: Shelly Devices Offline
+        icon: mdi:lan-disconnect
+        unit_of_measurement: devices
+        state: >-
+          {% from 'shelly.jinja' import shelly_offline %}
+          {% set off = shelly_offline() %}
+          {{ off.split(', ') | count if off else 0 }}
+        attributes:
+          devices: >-
+            {% from 'shelly.jinja' import shelly_offline %}
+            {{ shelly_offline() }}
+
+      - default_entity_id: sensor.shelly_updates_available
+        name: Shelly Updates Available
+        icon: mdi:package-up
+        unit_of_measurement: updates
+        state: >-
+          {{ integration_entities('shelly') | select('match', 'update\.')
+             | select('is_state', 'on') | list | count }}
+        attributes:
+          devices: >-
+            {% from 'shelly.jinja' import shelly_name %}
+            {% set ns = namespace(n=[]) %}
+            {% for e in integration_entities('shelly') | select('match', 'update\.') | select('is_state', 'on') %}
+              {% set ns.n = ns.n + [shelly_name(e)] %}
+            {% endfor %}
+            {{ ns.n | sort | join(', ') }}
+
+      # Overheating / overpowering / overvoltage / overcurrent protections
+      - default_entity_id: sensor.shelly_safety_alerts
+        name: Shelly Safety Alerts
+        icon: mdi:flash-alert
+        unit_of_measurement: alerts
+        state: >-
+          {{ integration_entities('shelly')
+             | select('match', 'binary_sensor\..*_over(heating|powering|voltage|current)$')
+             | select('is_state', 'on') | list | count }}
+        attributes:
+          alerts: >-
+            {% from 'shelly.jinja' import shelly_name %}
+            {% set ns = namespace(n=[]) %}
+            {% for e in integration_entities('shelly')
+                 | select('match', 'binary_sensor\..*_over(heating|powering|voltage|current)$')
+                 | select('is_state', 'on') %}
+              {% set ns.n = ns.n + [shelly_name(e) ~ ' ' ~ e.split('_')[-1]] %}
+            {% endfor %}
+            {{ ns.n | sort | join(', ') }}
+
+      - default_entity_id: sensor.shelly_hottest_device
+        name: Shelly Hottest Device
+        icon: mdi:thermometer-high
+        device_class: temperature
+        state_class: measurement
+        unit_of_measurement: "°C"
+        state: >-
+          {% set t = integration_entities('shelly') | select('search', 'temperature_watchdog$')
+             | select('has_value') | map('states') | map('float') | list %}
+          {{ t | max if t else none }}
+        attributes:
+          device: >-
+            {% from 'shelly.jinja' import shelly_name %}
+            {% set t = integration_entities('shelly') | select('search', 'temperature_watchdog$')
+               | select('has_value') | list %}
+            {% set ns = namespace(e=none, v=-999) %}
+            {% for e in t if states(e) | float > ns.v %}
+              {% set ns.e, ns.v = e, states(e) | float %}
+            {% endfor %}
+            {{ shelly_name(ns.e) if ns.e else '' }}
+
+      - default_entity_id: sensor.shelly_weakest_signal
+        name: Shelly Weakest Signal
+        icon: mdi:wifi-strength-1-alert
+        device_class: signal_strength
+        state_class: measurement
+        unit_of_measurement: dBm
+        state: >-
+          {% set r = integration_entities('shelly') | select('search', '_rssi$')
+             | select('has_value') | map('states') | map('int') | list %}
+          {{ r | min if r else none }}
+        attributes:
+          device: >-
+            {% from 'shelly.jinja' import shelly_name %}
+            {% set r = integration_entities('shelly') | select('search', '_rssi$')
+               | select('has_value') | list %}
+            {% set ns = namespace(e=none, v=999) %}
+            {% for e in r if states(e) | int < ns.v %}
+              {% set ns.e, ns.v = e, states(e) | int %}
+            {% endfor %}
+            {{ shelly_name(ns.e) if ns.e else '' }}
+
+      # Device-side uptime, so this catches power blips and crashes rather
+      # than HA restarts
+      - default_entity_id: sensor.shelly_recent_restarts
+        name: Shelly Restarts (24h)
+        icon: mdi:restart-alert
+        unit_of_measurement: devices
+        state: >-
+          {% set cutoff = now() - timedelta(days=1) %}
+          {{ integration_entities('shelly') | select('search', '_uptime$') | select('has_value')
+             | map('states') | map('as_datetime') | select('gt', cutoff) | list | count }}
+        attributes:
+          devices: >-
+            {% from 'shelly.jinja' import shelly_name %}
+            {% set cutoff = now() - timedelta(days=1) %}
+            {% set ns = namespace(n=[]) %}
+            {% for e in integration_entities('shelly') | select('search', '_uptime$') | select('has_value')
+                 if as_datetime(states(e)) > cutoff %}
+              {% set ns.n = ns.n + [shelly_name(e)] %}
+            {% endfor %}
+            {{ ns.n | sort | join(', ') }}

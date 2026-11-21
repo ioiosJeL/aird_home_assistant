@@ -1,0 +1,183 @@
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      double: &double
+        package: "Lights"
+        room: "Front Porch"
+
+    input_number.front_porch_lights_*:
+      <<: *double
+    light.front_porch_*:
+      <<: *double
+    timer.front_porch_scene_*:
+      <<: *double
+    sensor.front_porch_*_warmth:
+      <<: *double
+    sensor.front_porch_*_brightness:
+      <<: *double
+
+  customize:
+    input_select.front_porch_scenes:
+      <<: *double
+    input_text.front_porch_last_action:
+      <<: *double
+    input_text.front_porch_previous_scene:
+      <<: *double
+    input_boolean.front_porch_scene_changing:
+      <<: *double
+    sensor.front_porch_active_light_count:
+      <<: *double
+
+input_select:
+  # All scenes
+  front_porch_scenes:
+    name: Front Porch Scenes
+    options:
+      - "Bright"
+      - "Off"
+    icon: mdi:palette-outline
+
+light:
+  - platform: group
+    name: Front Porch Lights Master
+    entities:
+      - light.front_porch
+
+input_text:
+  # The last action performed
+  front_porch_last_action:
+    name: "Last Action: Front Porch"
+    icon: mdi:gesture-tap-button
+    initial: "None: Boot"
+
+  # Previous scene before current
+  front_porch_previous_scene:
+    name: Previous Front Porch Scene
+    icon: mdi:palette
+    initial: "Reboot"
+
+input_number:
+  # Lux level below which brings on the auto lights
+  front_porch_lights_on_threshold:
+    name: Front Porch Threshold On
+    min: 1
+    max: 70
+
+input_boolean:
+  # On when the lights were changed outside HA (e.g. Hue app); motion
+  # leaves the room alone until it clears (see Manual Override Detection)
+  front_porch_manual_override:
+    name: Front Porch Manual Override
+    icon: mdi:hand-back-right
+
+  # Boolean which is on during scene change
+  front_porch_scene_changing:
+    name: Front Porch Scene Change In Progress
+    icon: mdi:repeat-once
+    initial: false
+
+  # Boolean which is on when lights are in auto mode
+  front_porch_auto_mode_active:
+    name: Front Porch Auto Mode
+    icon: mdi:refresh-auto
+
+  # Auto mode active
+  front_porch_automatic_lights:
+    name: Front Porch Automatic Lights Mode
+    icon: mdi:refresh-auto
+
+timer:
+  # Running after the lights went (or nearly went) off on someone who was
+  # still here; the motion timeout is doubled while it runs
+  front_porch_motion_extended:
+    name: Front Porch Motion Timeout Extended
+    icon: mdi:timer-plus-outline
+    duration: "00:30:00"
+
+  # Timer set during each scene on script for transitions
+  front_porch_scene_changing:
+    name: Time For Scene Change
+    icon: mdi:timer-sand-empty
+
+  # Timer to prevent lights from waiting for light sensor to update
+  front_porch_auto_off_override:
+    name: Timer To Prevent Waiting For Lux Sensor
+    icon: mdi:timer-sand-empty
+
+template:
+  - sensor:
+      # Determine if any lights in any group is currently on
+      - default_entity_id: sensor.front_porch_active_light_count
+        name: "Front Porch Active Light Count"
+        unit_of_measurement: Lights
+        state: >-
+          {{ expand('light.front_porch_lights_master') | selectattr('state', 'ne', 'off') | list | count }}
+
+automation:
+  - alias: Front Porch Lights Manual Override Detection
+    use_blueprint:
+      path: lights/manual_override_detection.yaml
+      input:
+        lights:
+          - light.front_porch
+        lights_master: light.front_porch_lights_master
+        manual_boolean: input_boolean.front_porch_manual_override
+        scene_changing_boolean: input_boolean.front_porch_scene_changing
+        scenes_select: input_select.front_porch_scenes
+        auto_mode_boolean: input_boolean.front_porch_auto_mode_active
+        last_action_text: input_text.front_porch_last_action
+
+  - alias: Front Porch Lights Auto On
+    use_blueprint:
+      path: lights/motion_auto_on.yaml
+      input:
+        # Keeps working after House Shutdown (night-time arrivals) without
+        # waking the house: not gated by input_boolean.house_asleep
+        house_asleep_boolean: ""
+        previous_scene_text: input_text.front_porch_previous_scene
+        room_prefix: front_porch
+        extend_timer: timer.front_porch_motion_extended
+        manual_override_boolean: input_boolean.front_porch_manual_override
+        motion_sensor: binary_sensor.front_porch_motion
+        automatic_lights_boolean: input_boolean.front_porch_automatic_lights
+        scenes_select: input_select.front_porch_scenes
+        illuminance_sensor: sensor.hms_front_porch_illuminance
+        threshold_number: input_number.front_porch_lights_on_threshold
+        override_timer: timer.front_porch_auto_off_override
+        last_action_text: input_text.front_porch_last_action
+        auto_mode_boolean: input_boolean.front_porch_auto_mode_active
+        daytime_script: script.front_porch_scene_bright
+
+  - alias: Front Porch Lights Auto Off
+    use_blueprint:
+      path: lights/motion_auto_off.yaml
+      input:
+        extend_timer: timer.front_porch_motion_extended
+        warning_lights:
+          - light.front_porch
+        motion_sensor: binary_sensor.front_porch_motion
+        motion_timeout_number: input_number.front_porch_motion_timeout
+        automatic_lights_boolean: input_boolean.front_porch_automatic_lights
+        auto_mode_boolean: input_boolean.front_porch_auto_mode_active
+        off_script: script.front_porch_scene_off
+        last_action_text: input_text.front_porch_last_action
+        override_timer: timer.front_porch_auto_off_override
+
+  - alias: Front Porch Lights Manual Off Detection
+    use_blueprint:
+      path: lights/manual_off_detection.yaml
+      input:
+        manual_override_boolean: input_boolean.front_porch_manual_override
+        lights_master: light.front_porch_lights_master
+        scenes_select: input_select.front_porch_scenes
+        off_script: script.front_porch_scene_off
+        last_action_text: input_text.front_porch_last_action
+        auto_mode_boolean: input_boolean.front_porch_auto_mode_active
+
+  - alias: Front Porch Scene Select Changed
+    use_blueprint:
+      path: lights/scene_select_changed.yaml
+      input:
+        scenes_select: input_select.front_porch_scenes
+        scene_changing_boolean: input_boolean.front_porch_scene_changing
+        room_prefix: front_porch

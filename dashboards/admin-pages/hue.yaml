@@ -1,0 +1,424 @@
+path: hue
+title: Hue
+icon: hue:bridge-v2
+type: sections
+max_columns: 4
+# Roll-up sensors: packages/hue.yaml. Device kinds and display names in the
+# tables come from custom_templates/hue.jinja, keyed off the device registry
+# so new Hue devices show up here without editing this page.
+sections:
+  # ---------------------------------------------------------------------
+  # Fleet health
+  # ---------------------------------------------------------------------
+  - type: grid
+    cards:
+      - type: heading
+        heading: Fleet Health
+        icon: mdi:heart-pulse
+      - type: custom:button-card
+        template: health_tile
+        entity: sensor.hue_devices_offline
+        name: Offline
+        icon: mdi:lan-disconnect
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: health_tile
+        entity: sensor.hue_low_batteries
+        name: Low Batteries
+        icon: mdi:battery-alert-variant-outline
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: health_tile
+        entity: sensor.hue_lights_unreachable
+        name: Lights Unreachable
+        icon: mdi:lightbulb-alert-outline
+        variables:
+          # Usually just switched off at the wall, so never red
+          crit: 999
+          ok_text: All reachable
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: health_tile
+        entity: sensor.hue_sensing_disabled
+        name: Sensing Disabled
+        icon: mdi:motion-sensor-off
+        variables:
+          ok_text: All sensors enabled
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: health_tile
+        entity: sensor.hue_lights_on
+        name: Lights On
+        icon: mdi:lightbulb-group
+        variables:
+          warn: 999
+          crit: 999
+          ok_text: All off
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: health_tile
+        entity: sensor.hue_coldest_room
+        name: Coldest Room
+        icon: mdi:thermometer-low
+        variables:
+          detail: device
+          invert: true
+          warn: 14
+          crit: 10
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: markdown
+        visibility:
+          - condition: or
+            conditions:
+              - condition: numeric_state
+                entity: sensor.hue_devices_offline
+                above: 0
+              - condition: numeric_state
+                entity: sensor.hue_low_batteries
+                above: 0
+              - condition: numeric_state
+                entity: sensor.hue_sensing_disabled
+                above: 0
+        content: |-
+          {%- set off = state_attr('sensor.hue_devices_offline', 'devices') -%}
+          {%- set low = state_attr('sensor.hue_low_batteries', 'devices') -%}
+          {%- set dis = state_attr('sensor.hue_sensing_disabled', 'devices') -%}
+          {%- if off %}<ha-alert alert-type="error">**Offline:** {{ off }}</ha-alert>{% endif %}
+          {%- if low %}<ha-alert alert-type="warning">**Replace battery:** {{ low }}</ha-alert>{% endif %}
+          {%- if dis %}<ha-alert alert-type="warning">**Sensing turned off:** {{ dis }}</ha-alert>{% endif %}
+
+      - type: heading
+        heading: Lights
+        icon: mdi:lightbulb-group-outline
+      - type: custom:button-card
+        template: light_map
+        name: The house in light
+        grid_options:
+          columns: full
+          rows: auto
+        triggers_update:
+          - light.dining_room_ceiling_door
+          - light.dining_room_ceiling_piano
+          - light.dining_room_ceiling_window
+          - light.dining_room_lamp_right
+          - light.double_bedroom_bedside
+          - light.double_bedroom_wall
+          - light.front_porch
+          - light.hall
+          - light.landing_ceiling
+          - light.dining_room_lamp_left
+          - light.fairy_lights
+          - light.living_room_lamp
+          - light.master_bedroom_bedside_left
+          - light.master_bedroom_bedside_right
+          - light.master_bedroom_ceiling_light
+          - light.single_bedroom_wall
+          - light.sunroom_ceiling_ambience
+          - light.sunroom_ceiling_spot_1
+          - light.sunroom_ceiling_spot_2
+        variables:
+          rooms:
+            - name: Dining Room
+              lights:
+                - light.dining_room_ceiling_door
+                - light.dining_room_ceiling_piano
+                - light.dining_room_ceiling_window
+                - light.dining_room_lamp_right
+            - name: Double Bedroom
+              lights:
+                - light.double_bedroom_bedside
+                - light.double_bedroom_wall
+            - name: Front Porch
+              lights:
+                - light.front_porch
+            - name: Hall
+              lights:
+                - light.hall
+            - name: Landing
+              lights:
+                - light.landing_ceiling
+            - name: Living Room
+              lights:
+                - light.dining_room_lamp_left
+                - light.fairy_lights
+                - light.living_room_lamp
+            - name: Master Bedroom
+              lights:
+                - light.master_bedroom_bedside_left
+                - light.master_bedroom_bedside_right
+                - light.master_bedroom_ceiling_light
+            - name: Single Bedroom
+              lights:
+                - light.single_bedroom_wall
+            - name: Sunroom
+              lights:
+                - light.sunroom_ceiling_ambience
+                - light.sunroom_ceiling_spot_1
+                - light.sunroom_ceiling_spot_2
+  # ---------------------------------------------------------------------
+  # Batteries
+  # ---------------------------------------------------------------------
+  - type: grid
+    cards:
+      - type: heading
+        heading: Batteries
+        icon: mdi:battery-60
+      - type: markdown
+        content: |-
+          {%- from 'hue.jinja' import hue_devices, hue_kind, hue_battery -%}
+          {%- set labels = {'sensor': 'Motion', 'outdoor': 'Outdoor', 'remote': 'Remote'} -%}
+          {%- set ns = namespace(rows=[]) -%}
+          {%- for d in hue_devices('sensor,outdoor,remote') | from_json -%}
+            {%- set b = hue_battery(d) -%}
+            {%- if b -%}
+              {%- set ns.rows = ns.rows + [{'d': d, 'n': device_attr(d, 'name_by_user') or device_attr(d, 'name'),
+                   'k': labels[hue_kind(d)], 'v': states(b) | float(-1)}] -%}
+            {%- endif -%}
+          {%- endfor -%}
+          | | Device | Type | % |
+          |:-:|:--|:--|--:|
+          {% for r in ns.rows | sort(attribute='v') -%}
+          | {{ '⚫' if r.v < 0 else '🔴' if r.v < 10 else '🟠' if r.v < 30 else '🟢' }} | [{{ r.n }}](/config/devices/device/{{ r.d }}) | {{ r.k }} | {{ '—' if r.v < 0 else r.v | int }} |
+          {% endfor %}
+          <sub>🔴 under 10% replace now · 🟠 under 30% get one in · ⚫ offline</sub>
+      - type: custom:auto-entities
+        show_empty: false
+        card:
+          type: custom:mini-graph-card
+          name: Lowest working batteries (30 days)
+          icon: mdi:battery-clock-outline
+          hours_to_show: 720
+          update_interval: 300
+          points_per_hour: 0.1
+          line_width: 2
+          smoothing: true
+          lower_bound: 0
+          upper_bound: 100
+          show:
+            labels: true
+            legend: true
+        # The dead ones (5% or less) are already flat-lining in the table above
+        filter:
+          template: |-
+            {%- set ns = namespace(r=[]) -%}
+            {%- for e in integration_entities('hue') if e.startswith('sensor.')
+                 and is_state_attr(e, 'device_class', 'battery')
+                 and states(e) | is_number and states(e) | float > 5 -%}
+              {%- set ns.r = ns.r + [{'e': e, 'v': states(e) | float}] -%}
+            {%- endfor -%}
+            {{ (ns.r | sort(attribute='v') | map(attribute='e') | list)[:4] }}
+
+  # ---------------------------------------------------------------------
+  # Motion sensors
+  # ---------------------------------------------------------------------
+  - type: grid
+    cards:
+      - type: heading
+        heading: Motion Sensors
+        icon: hue:motion-sensor
+      - type: markdown
+        content: |-
+          {%- from 'hue.jinja' import hue_devices, hue_kind, hue_battery -%}
+          {%- set ns = namespace(rows=[]) -%}
+          {%- for d in hue_devices('sensor,outdoor') | from_json -%}
+            {%- set ents = device_entities(d) -%}
+            {%- set m = ents | select('match', 'binary_sensor\..*_motion$') | first | default('') -%}
+            {%- set t = ents | select('match', 'sensor\..*_temperature$') | first | default('') -%}
+            {%- set l = ents | select('match', 'sensor\..*_illuminance$') | first | default('') -%}
+            {%- set b = hue_battery(d) -%}
+            {%- set ns.rows = ns.rows + [{
+                 'd': d, 'n': area_name(d) or (device_attr(d, 'name_by_user') or device_attr(d, 'name')) | regex_replace('^HO?MS ', ''), 'out': hue_kind(d) == 'outdoor',
+                 's': states(m), 'when': states[m].last_changed if m and states[m] else as_datetime(0),
+                 't': states(t), 'l': states(l), 'b': states(b),
+                 'off': ents | select('match', 'switch\.') | select('is_state', 'off') | list | count > 0}] -%}
+          {%- endfor -%}
+          | | Room | Last change | °C | lux | 🔋 |
+          |:-:|:--|--:|--:|--:|--:|
+          {% for r in ns.rows | sort(attribute='n') | sort(attribute='when', reverse=true) -%}
+          {%- set ok = r.s not in ['unavailable', 'unknown', ''] -%}
+          | {{ '⚠️' if not ok else '🚫' if r.off else '🟢' if r.s == 'on' else '⚪' }} | [{{ r.n }}{{ ' 🌳' if r.out else '' }}](/config/devices/device/{{ r.d }}) | {{ time_since(r.when) if ok else '—' }} | {{ r.t if ok else '—' }} | {{ r.l if ok else '—' }} | {{ (r.b | int ~ '%') if ok and r.b | is_number else '—' }} |
+          {% endfor %}
+          <sub>🟢 motion now · ⚪ clear · 🚫 motion or light sensing disabled · ⚠️ offline · 🌳 outdoor. "Last change" resets when Home Assistant restarts.</sub>
+
+  # ---------------------------------------------------------------------
+  # Room temperatures from the motion sensors
+  # ---------------------------------------------------------------------
+  - type: grid
+    cards:
+      - type: heading
+        heading: Room Temperatures
+        icon: mdi:home-thermometer-outline
+        badges:
+          - type: entity
+            entity: sensor.hue_coldest_room
+            show_state: true
+            show_icon: true
+      - type: custom:auto-entities
+        card:
+          type: history-graph
+          title: Indoor · last 24h
+          hours_to_show: 24
+        # Alphabetical rather than warmest-first: reordering made the graph
+        # rebuild and refetch its history every time two rooms swapped places
+        filter:
+          template: |-
+            {{ integration_entities('hue') | select('match', 'sensor[.]')
+               | select('is_state_attr', 'device_class', 'temperature')
+               | reject('match', 'sensor[.](homs_|hms_front_porch_)')
+               | sort | list }}
+      - type: custom:mini-graph-card
+        name: Outdoor · last 7 days
+        icon: mdi:sun-thermometer-outline
+        hours_to_show: 168
+        update_interval: 300
+        points_per_hour: 1
+        line_width: 2
+        smoothing: true
+        show:
+          labels: true
+          legend: true
+        entities:
+          - entity: sensor.homs_patio_temperature
+            name: Patio
+          - entity: sensor.homs_back_door_temperature
+            name: Back Door
+          - entity: sensor.hms_front_porch_temperature
+            name: Front Porch
+
+  # ---------------------------------------------------------------------
+  # Lights
+  # ---------------------------------------------------------------------
+  - type: grid
+    cards:
+      - type: heading
+        heading: Lights
+        icon: hue:bulb-group-classic
+        badges:
+          - type: entity
+            entity: sensor.hue_lights_on
+            show_state: true
+            show_icon: true
+      - type: markdown
+        content: |-
+          {%- from 'hue.jinja' import hue_devices -%}
+          {%- set ns = namespace(rows=[]) -%}
+          {%- for d in hue_devices('light') | from_json -%}
+            {%- set e = device_entities(d) | select('match', 'light\.') | first | default('') -%}
+            {%- if e -%}
+              {%- set ns.rows = ns.rows + [{'d': d, 'n': device_attr(d, 'name_by_user') or device_attr(d, 'name'),
+                   'a': area_name(d) or 'No area', 's': states(e), 'br': state_attr(e, 'brightness'),
+                   'm': (device_attr(d, 'model') or '') | replace('Hue ', '') | capitalize}] -%}
+            {%- endif -%}
+          {%- endfor -%}
+          | | Light | Room | Level | Type |
+          |:-:|:--|:--|--:|:--|
+          {% for r in ns.rows | sort(attribute='n') | sort(attribute='a') -%}
+          | {{ '💡' if r.s == 'on' else '⚠️' if r.s == 'unavailable' else '⚫' }} | [{{ r.n }}](/config/devices/device/{{ r.d }}) | {{ r.a }} | {{ ((r.br | int(0) / 2.55) | round(0) | int ~ '%') if r.s == 'on' and r.br else '' }} | {{ r.m }} |
+          {% endfor %}
+          <sub>💡 on · ⚫ off · ⚠️ unreachable (usually switched off at the wall)</sub>
+      - type: custom:auto-entities
+        card:
+          type: entities
+          title: Rooms
+          state_color: true
+        filter:
+          template: |-
+            {%- set hue = integration_entities('hue') -%}
+            {{ states.light | selectattr('entity_id', 'in', hue)
+               | selectattr('attributes.is_hue_group', 'eq', true)
+               | sort(attribute='name') | map(attribute='entity_id') | list }}
+
+  # ---------------------------------------------------------------------
+  # Remotes & buttons
+  # ---------------------------------------------------------------------
+  - type: grid
+    cards:
+      - type: heading
+        heading: Remotes & Buttons
+        icon: hue:dimmer-switch
+      - type: markdown
+        content: |-
+          {%- from 'hue.jinja' import hue_devices, hue_battery -%}
+          {%- set ns = namespace(rows=[]) -%}
+          {%- for d in hue_devices('remote') | from_json -%}
+            {%- set ev = device_entities(d) | select('match', 'event\.') | select('has_value')
+                 | map('states') | map('as_datetime') | reject('none') | list -%}
+            {%- set b = hue_battery(d) -%}
+            {%- set ns.rows = ns.rows + [{'d': d, 'n': device_attr(d, 'name_by_user') or device_attr(d, 'name'),
+                 'a': area_name(d) or '—', 'b': states(b) | float(-1),
+                 'p': ev | max if ev else none}] -%}
+          {%- endfor -%}
+          | | Remote | Room | 🔋 | Last pressed |
+          |:-:|:--|:--|--:|--:|
+          {% for r in ns.rows | sort(attribute='n') -%}
+          | {{ '⚫' if r.b < 0 else '🔴' if r.b < 10 else '🟠' if r.b < 30 else '🟢' }} | [{{ r.n }}](/config/devices/device/{{ r.d }}) | {{ r.a }} | {{ '—' if r.b < 0 else r.b | int ~ '%' }} | {{ time_since(r.p) ~ ' ago' if r.p else 'never' }} |
+          {% endfor %}
+          <sub>A remote that hasn't been pressed in months may be worth removing or re-homing.</sub>
+
+  # ---------------------------------------------------------------------
+  # Maintenance: bridge, firmware, housekeeping
+  # ---------------------------------------------------------------------
+  - type: grid
+    cards:
+      - type: heading
+        heading: Maintenance
+        icon: mdi:wrench-cog-outline
+      - type: markdown
+        content: |-
+          {%- from 'hue.jinja' import hue_devices, hue_kind -%}
+          {%- set ns = namespace(fw=[], noarea=[], bridges=[]) -%}
+          {%- for d in hue_devices() | from_json -%}
+            {%- set k = hue_kind(d) -%}
+            {%- set n = device_attr(d, 'name_by_user') or device_attr(d, 'name') -%}
+            {%- if k == 'bridge' -%}
+              {%- set c = device_entities(d) | select('search', 'connectivity') | first | default('') -%}
+              {%- set ns.bridges = ns.bridges + [{'d': d, 'n': n, 'm': device_attr(d, 'model_id'), 'v': device_attr(d, 'sw_version'), 'c': states(c) if c else 'unknown'}] -%}
+            {%- elif k != 'room' -%}
+              {%- set ns.fw = ns.fw + [(device_attr(d, 'model') or '?') | replace('Hue ', '') | capitalize ~ ' · ' ~ (device_attr(d, 'sw_version') or '?')] -%}
+              {%- if not area_id(d) -%}{%- set ns.noarea = ns.noarea + [{'d': d, 'n': n}] -%}{%- endif -%}
+            {%- endif -%}
+          {%- endfor -%}
+          **Bridge**
+
+          | | Bridge | Model | Firmware |
+          |:-:|:--|:--|:--|
+          {% for b in ns.bridges -%}
+          | {{ '🟢' if b.c == 'connected' else '⚠️' }} | [{{ b.n }}](/config/devices/device/{{ b.d }}) | {{ b.m }} | {{ b.v }} |
+          {% endfor %}
+
+          **Firmware in use**
+
+          | Model · version | Devices |
+          |:--|--:|
+          {% for v in ns.fw | unique | sort -%}
+          | {{ v }} | {{ ns.fw | select('eq', v) | list | count }} |
+          {% endfor %}
+
+          {% if ns.noarea -%}
+          **No area assigned**
+
+          {% for r in ns.noarea | sort(attribute='n') -%}
+          [{{ r.n }}](/config/devices/device/{{ r.d }}){{ ' · ' if not loop.last else '' }}
+          {%- endfor %}
+          {%- endif %}
+      - type: custom:auto-entities
+        show_empty: false
+        card:
+          type: entities
+          title: Sensing turned off
+        filter:
+          template: |-
+            {{ integration_entities('hue') | select('match', 'switch[.]')
+               | select('is_state', 'off') | list }}

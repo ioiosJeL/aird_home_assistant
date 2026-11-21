@@ -1,0 +1,80 @@
+path: screens
+title: Screens
+type: custom:masonry-layout
+layout:
+  width: 350
+  max_width: 5000
+  max_cols: 3
+cards:
+  - type: vertical-stack
+    cards:
+      - type: media-control
+        entity: media_player.dining_room_tv
+  - type: entities
+    entities:
+      - type: custom:multiple-entity-row
+        name: Bedroom Tablet
+        entity: binary_sensor.master_bedroom_screen
+        show_state: false
+        secondary_info: last-changed
+        entities:
+          - name: Screen
+            entity: switch.kitchen_kiosk_screen
+            tap_action:
+              action: call-service
+              service: switch.toggle
+              service_data:
+                entity_id: switch.kitchen_kiosk_screen
+          - name: Kiosk
+            entity: switch.kitchen_kiosk_kiosk_lock
+            tap_action:
+              action: call-service
+              service: switch.toggle
+              service_data:
+                entity_id: switch.kitchen_kiosk_kiosk_lock
+          - icon: mdi:restart
+            tap_action:
+              action: call-service
+              service: browser_mod.refresh
+              service_data:
+                browser_id: Master Bedroom Screen
+          - icon: mdi:power
+            tap_action:
+              action: call-service
+              service: button.press
+              service_data:
+                entity_id: button.kitchen_kiosk_restart_browser
+      - type: custom:multiple-entity-row
+        name: Theme
+        entity: input_select.master_bedroom_screen_themes
+        show_state: false
+        secondary_info:
+          attribute: last-changed
+        entities:
+          - entity: input_boolean.master_bedroom_screen_camera_switching
+            name: Switching
+            tap_action:
+              action: call-service
+              service: input_boolean.toggle
+              service_data:
+                entity_id: input_boolean.master_bedroom_screen_camera_switching
+          - icon: mdi:rewind
+            tap_action:
+              action: call-service
+              service: input_select.select_previous
+              service_data:
+                entity_id: input_select.master_bedroom_screen_themes
+                cycle: true
+          - name: Theme
+            entity: input_select.master_bedroom_screen_themes
+          - icon: mdi:fast-forward
+            tap_action:
+              action: call-service
+              service: input_select.select_next
+              service_data:
+                entity_id: input_select.master_bedroom_screen_themes
+                cycle: true
+  - type: picture-glance
+    camera_image: camera.debug_box_camera
+    camera_view: auto
+    entities: []

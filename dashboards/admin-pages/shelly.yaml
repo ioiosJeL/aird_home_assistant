@@ -1,0 +1,385 @@
+path: shellys
+title: Shelly Devices
+icon: mdi:alpha-s-box
+type: sections
+max_columns: 4
+# Roll-up sensors: packages/shelly.yaml. Display names in the tables come
+# from custom_templates/shelly.jinja (device name, not the doubled-up
+# entity friendly names).
+sections:
+  # ---------------------------------------------------------------------
+  # Fleet health
+  # ---------------------------------------------------------------------
+  - type: grid
+    cards:
+      - type: heading
+        heading: Fleet Health
+        icon: mdi:heart-pulse
+      - type: custom:button-card
+        template: health_tile
+        entity: sensor.shelly_devices_offline
+        name: Offline
+        icon: mdi:lan-disconnect
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: health_tile
+        entity: sensor.shelly_safety_alerts
+        name: Safety Alerts
+        icon: mdi:flash-alert
+        variables:
+          detail: alerts
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: health_tile
+        entity: sensor.shelly_updates_available
+        name: Firmware Updates
+        icon: mdi:package-up
+        variables:
+          ok_text: All up to date
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: health_tile
+        entity: sensor.shelly_recent_restarts
+        name: Restarted (24h)
+        icon: mdi:restart-alert
+        variables:
+          ok_text: None
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: health_tile
+        entity: sensor.shelly_hottest_device
+        name: Hottest
+        icon: mdi:thermometer-high
+        variables:
+          detail: device
+          warn: 60
+          crit: 80
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: health_tile
+        entity: sensor.shelly_weakest_signal
+        name: Weakest Signal
+        icon: mdi:wifi-strength-1-alert
+        variables:
+          detail: device
+          invert: true
+          warn: -75
+          crit: -82
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: markdown
+        visibility:
+          - condition: or
+            conditions:
+              - condition: numeric_state
+                entity: sensor.shelly_devices_offline
+                above: 0
+              - condition: numeric_state
+                entity: sensor.shelly_safety_alerts
+                above: 0
+        content: |-
+          {%- set alerts = state_attr('sensor.shelly_safety_alerts', 'alerts') -%}
+          {%- set off = state_attr('sensor.shelly_devices_offline', 'devices') -%}
+          {%- if alerts %}<ha-alert alert-type="error">**Protection tripped:** {{ alerts }}</ha-alert>{% endif %}
+          {%- if off %}<ha-alert alert-type="warning">**Offline:** {{ off }}</ha-alert>{% endif %}
+
+  # ---------------------------------------------------------------------
+  # Power right now
+  # ---------------------------------------------------------------------
+  - type: grid
+    cards:
+      - type: heading
+        heading: Power Now
+        icon: mdi:flash
+        badges:
+          - type: entity
+            entity: sensor.whole_house_voltage
+            show_state: true
+            show_icon: true
+      - type: custom:mini-graph-card
+        name: Main Clamps (24h)
+        icon: mdi:transmission-tower
+        hours_to_show: 24
+        update_interval: 60
+        points_per_hour: 4
+        line_width: 2
+        smoothing: true
+        show:
+          labels: true
+          legend: true
+        entities:
+          - entity: sensor.whole_house_power
+            name: Whole House
+          - entity: sensor.water_heater_power
+            name: Water Heater
+          - entity: sensor.shower_power
+            name: Shower
+      # Client-side ranking over an explicit list (was a server-side
+      # template scanning every Shelly entity). Aggregates excluded so the
+      # total isn't double-counted: whole house and garage ring main/spare.
+      - type: custom:button-card
+        template: power_board
+        name: Drawing power now
+        grid_options:
+          columns: full
+          rows: auto
+        variables:
+          limit: 12
+          items:
+            - [sensor.shower_power, "Shower"]
+            - [sensor.water_heater_power, "Water heater"]
+            - [sensor.bathroom_heater_power, "Bathroom Heater"]
+            - [sensor.kitchen_counter_lights_power, "Kitchen Counter Lights"]
+            - [sensor.living_room_heater_power, "Living Room Heater"]
+            - [sensor.tumble_dryer_power, "Tumble Dryer"]
+            - [sensor.washing_machine_power, "Washing Machine"]
+            - [sensor.it_ups_power, "IT UPS"]
+            - [sensor.freezer_power, "Freezer"]
+            - [sensor.dining_room_ceiling_lights_power, "Dining Room Hue Lights"]
+            - [sensor.kitchen_ceiling_lights_power, "Kitchen Ceiling Lights"]
+            - [sensor.dining_room_heater_power, "Dining Room Heater"]
+            - [sensor.living_room_dimmer_power, "Living Room Dimmer"]
+            - [sensor.bathroom_dimmer_power, "Bathroom Dimmer"]
+            - [sensor.utility_room_ceiling_lights_power, "Utility Room Ceiling Lights"]
+            - [sensor.dishwasher_power, "Dishwasher"]
+            - [sensor.kitchen_heater_power, "Kitchen Heater"]
+            - [sensor.fridge_power, "Fridge"]
+            - [sensor.master_bedroom_heater_power, "Master Bedroom Heater"]
+            - [sensor.shower_room_heater_power, "Shower Room Heater"]
+            - [sensor.shower_room_lights_power, "Shower Room Lights"]
+            - [sensor.double_bedroom_heater_power, "Double Bedroom Heater"]
+            - [sensor.soldering_iron_power, "Soldering Iron"]
+            - [sensor.workshop_computer_power, "Workshop Computer"]
+            - [sensor.garage_vacuum_power, "Garage Vacuum"]
+            - [sensor.garage_air_compressor_power, "Garage Air Compressor"]
+            - [sensor.workshop_heater_power, "Workshop Heater"]
+            - [sensor.machine_room_heater_power, "Machine Room Heater"]
+            - [sensor.workspace_lights_monitor_power, "Workspace Lights Monitor"]
+            - [sensor.garage_tv_power, "Garage TV"]
+            - [sensor.dining_room_triptych_power, "Dining Room Triptych"]
+            - [sensor.workshop_it_power, "Workshop IT"]
+            - [sensor.cnc_machine_power, "CNC Machine"]
+            - [sensor.patio_light_power, "Patio light"]
+            - [sensor.sunroom_heater_power, "Sunroom Heater"]
+            - [sensor.christmas_tree_lights_power, "Christmas Tree Lights"]
+            - [sensor.external_sockets_power, "Car Port Floodlight"]
+        triggers_update:
+          - sensor.shower_power
+          - sensor.water_heater_power
+          - sensor.bathroom_heater_power
+          - sensor.kitchen_counter_lights_power
+          - sensor.living_room_heater_power
+          - sensor.tumble_dryer_power
+          - sensor.washing_machine_power
+          - sensor.it_ups_power
+          - sensor.freezer_power
+          - sensor.dining_room_ceiling_lights_power
+          - sensor.kitchen_ceiling_lights_power
+          - sensor.dining_room_heater_power
+          - sensor.living_room_dimmer_power
+          - sensor.bathroom_dimmer_power
+          - sensor.utility_room_ceiling_lights_power
+          - sensor.dishwasher_power
+          - sensor.kitchen_heater_power
+          - sensor.fridge_power
+          - sensor.master_bedroom_heater_power
+          - sensor.shower_room_heater_power
+          - sensor.shower_room_lights_power
+          - sensor.double_bedroom_heater_power
+          - sensor.soldering_iron_power
+          - sensor.workshop_computer_power
+          - sensor.garage_vacuum_power
+          - sensor.garage_air_compressor_power
+          - sensor.workshop_heater_power
+          - sensor.machine_room_heater_power
+          - sensor.workspace_lights_monitor_power
+          - sensor.garage_tv_power
+          - sensor.dining_room_triptych_power
+          - sensor.workshop_it_power
+          - sensor.cnc_machine_power
+          - sensor.patio_light_power
+          - sensor.sunroom_heater_power
+          - sensor.christmas_tree_lights_power
+          - sensor.external_sockets_power
+
+  # ---------------------------------------------------------------------
+  # Energy history (long-term statistics)
+  # ---------------------------------------------------------------------
+  - type: grid
+    cards:
+      - type: heading
+        heading: Energy
+        icon: mdi:lightning-bolt
+      - type: statistic
+        entity: sensor.whole_house_energy
+        name: Main Clamp Today
+        icon: mdi:home-lightning-bolt-outline
+        period:
+          calendar:
+            period: day
+        stat_type: change
+        grid_options:
+          columns: 6
+      - type: statistic
+        entity: sensor.whole_house_energy
+        name: This Month
+        icon: mdi:calendar-month
+        period:
+          calendar:
+            period: month
+        stat_type: change
+        grid_options:
+          columns: 6
+      - type: statistics-graph
+        title: Appliances · kWh per day
+        chart_type: bar
+        period: day
+        days_to_show: 7
+        stat_types:
+          - change
+        entities:
+          - entity: sensor.water_heater_energy
+            name: Water Heater
+          - entity: sensor.shower_energy
+            name: Shower
+          - entity: sensor.dishwasher_energy
+            name: Dishwasher
+          - entity: sensor.washing_machine_energy
+            name: Washer
+          - entity: sensor.tumble_dryer_energy
+            name: Dryer
+          - entity: sensor.fridge_energy
+            name: Fridge
+          - entity: sensor.freezer_energy
+            name: Freezer
+          - entity: sensor.it_ups_energy
+            name: IT UPS
+      - type: statistics-graph
+        title: Heating · kWh per day
+        chart_type: bar
+        period: day
+        days_to_show: 7
+        stat_types:
+          - change
+        entities:
+          - entity: sensor.bathroom_heater_energy
+            name: Bathroom
+          - entity: sensor.dining_room_heater_energy
+            name: Dining
+          - entity: sensor.double_bedroom_heater_energy
+            name: Double Bed
+          - entity: sensor.kitchen_heater_energy
+            name: Kitchen
+          - entity: sensor.living_room_heater_energy
+            name: Living
+          - entity: sensor.master_bedroom_heater_energy
+            name: Master Bed
+          - entity: sensor.shower_room_heater_energy
+            name: Shower Rm
+          - entity: sensor.sunroom_heater_energy
+            name: Sunroom
+          - entity: sensor.machine_room_heater_energy
+            name: Machine Rm
+          - entity: sensor.workshop_heater_energy
+            name: Workshop
+
+  # ---------------------------------------------------------------------
+  # Device internal temperatures
+  # ---------------------------------------------------------------------
+  - type: grid
+    cards:
+      - type: heading
+        heading: Device Temperatures
+        icon: mdi:thermometer
+      - type: markdown
+        content: |-
+          {%- from 'shelly.jinja' import shelly_name -%}
+          {%- set ns = namespace(rows=[]) -%}
+          {%- for e in integration_entities('shelly') | select('search', 'temperature_watchdog$') | select('has_value') -%}
+            {%- set ns.rows = ns.rows + [{'e': e, 'n': shelly_name(e), 'v': states(e) | float}] -%}
+          {%- endfor -%}
+          | | Device | °C |
+          |:-:|:--|--:|
+          {% for r in ns.rows | sort(attribute='v', reverse=true) -%}
+          | {{ '🔴' if r.v >= 80 else '🟠' if r.v >= 60 else '🟢' }} | [{{ r.n }}](/config/devices/device/{{ device_id(r.e) }}) | {{ '%.1f' | format(r.v) }} |
+          {% endfor %}
+          <sub>🟠 60°C+ worth watching · 🔴 80°C+ approaching thermal cut-out</sub>
+
+  # ---------------------------------------------------------------------
+  # Wi-Fi signal
+  # ---------------------------------------------------------------------
+  - type: grid
+    cards:
+      - type: heading
+        heading: Wi-Fi Signal
+        icon: mdi:wifi
+      - type: markdown
+        content: |-
+          {%- from 'shelly.jinja' import shelly_name -%}
+          {%- set ns = namespace(rows=[]) -%}
+          {%- for e in integration_entities('shelly') | select('search', '_rssi$') | select('has_value') -%}
+            {%- set ns.rows = ns.rows + [{'e': e, 'n': shelly_name(e), 'v': states(e) | int}] -%}
+          {%- endfor -%}
+          | | Device | dBm | |
+          |:-:|:--|--:|:--|
+          {% for r in ns.rows | sort(attribute='v') -%}
+          {%- set bars = 4 if r.v >= -60 else 3 if r.v >= -67 else 2 if r.v >= -75 else 1 -%}
+          | {{ '⚠️' if r.v < -80 else '' }}`{{ ('▂▄▆█'[:bars] ~ '····')[:4] }}` | [{{ r.n }}](/config/devices/device/{{ device_id(r.e) }}) | {{ r.v }} | {{ ['Poor', 'Fair', 'Good', 'Excellent'][bars - 1] }} |
+          {% endfor %}
+          <sub>Wired (Pro) devices and some Gen1 devices have no RSSI sensor and aren't listed.</sub>
+
+  # ---------------------------------------------------------------------
+  # Maintenance: updates, restarts and firmware
+  # ---------------------------------------------------------------------
+  - type: grid
+    cards:
+      - type: heading
+        heading: Maintenance
+        icon: mdi:wrench-cog-outline
+      - type: custom:auto-entities
+        show_empty: false
+        card:
+          type: entities
+          title: Updates ready
+        filter:
+          template: |-
+            {{ integration_entities('shelly') | select('match', 'update[.]')
+               | select('is_state', 'on') | list }}
+      - type: markdown
+        content: |-
+          {%- from 'shelly.jinja' import shelly_name -%}
+          {%- set ns = namespace(rows=[], fw=[]) -%}
+          {%- for e in integration_entities('shelly') | select('search', '_uptime$') | select('has_value') -%}
+            {%- set ns.rows = ns.rows + [{'e': e, 'n': shelly_name(e), 't': as_datetime(states(e))}] -%}
+          {%- endfor -%}
+          {%- for e in integration_entities('shelly') | select('match', 'update\.') | select('has_value') -%}
+            {%- set raw = state_attr(e, 'installed_version') | string -%}
+            {%- set ver = raw | regex_replace('^.*/v?([0-9][0-9.]*).*$', '\\1') -%}
+            {%- set ns.fw = ns.fw + [('Gen1 · ' if '/' in raw else 'Gen2+ · ') ~ ver] -%}
+          {%- endfor -%}
+          **Most recent restarts**
+
+          | Device | Up for |
+          |:--|--:|
+          {% for r in (ns.rows | sort(attribute='t', reverse=true))[:8] -%}
+          | {{ '🔄 ' if r.t > now() - timedelta(days=1) else '' }}[{{ r.n }}](/config/devices/device/{{ device_id(r.e) }}) | {{ time_since(r.t) }} |
+          {% endfor %}
+
+          **Firmware in use**
+
+          | Version | Devices |
+          |:--|--:|
+          {% for v in ns.fw | unique | sort(reverse=true) -%}
+          | {{ v }} | {{ ns.fw | select('eq', v) | list | count }} |
+          {% endfor %}

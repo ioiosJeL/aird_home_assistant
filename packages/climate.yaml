@@ -1,0 +1,420 @@
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      common: &common
+        package: "Climate"
+
+      thermostat_defaults: &thermostat_defaults
+        platform: generic_thermostat
+        precision: 0.1
+
+      sensor_avg_defaults: &sensor_avg_defaults
+        platform: min_max
+        type: mean
+        round_digits: 1
+
+    sensor.*_average_temperature:
+      <<: *common
+      icon: mdi:thermometer
+
+climate:
+  - <<: *thermostat_defaults
+    name: Living Room
+    unique_id: living_room_thermostat
+    heater: switch.living_room_heater
+    target_sensor: sensor.living_room_average_temperature
+    min_temp: 4
+    max_temp: 18
+    min_cycle_duration:
+      seconds: 300
+    away_temp: 4
+    cold_tolerance: 0.4
+    hot_tolerance: 0.1
+
+  - <<: *thermostat_defaults
+    name: Dining Room
+    unique_id: dining_room_thermostat
+    heater: switch.dining_room_heater
+    target_sensor: sensor.dining_room_average_temperature
+    min_temp: 10
+    max_temp: 24
+    min_cycle_duration:
+      seconds: 600
+    away_temp: 10
+    cold_tolerance: 0.1
+    hot_tolerance: 0.1
+
+  - <<: *thermostat_defaults
+    name: Bathroom
+    unique_id: bathroom_thermostat
+    heater: switch.bathroom_heater
+    target_sensor: sensor.bathroom_average_temperature
+    min_temp: 4
+    max_temp: 22
+    min_cycle_duration:
+      seconds: 100
+    away_temp: 8
+    cold_tolerance: 0.4
+    hot_tolerance: 0.1
+
+  - <<: *thermostat_defaults
+    name: Kitchen
+    unique_id: kitchen_thermostat
+    heater: switch.kitchen_heater
+    target_sensor: sensor.kitchen_average_temperature
+    min_temp: 4
+    max_temp: 24
+    min_cycle_duration:
+      seconds: 200
+    away_temp: 10
+    cold_tolerance: 0.2
+    hot_tolerance: 0.1
+
+  - <<: *thermostat_defaults
+    name: Master Bedroom
+    unique_id: master_bedroom_thermostat
+    heater: switch.master_bedroom_heater
+    target_sensor: sensor.master_bedroom_average_temperature
+    min_temp: 6
+    max_temp: 24
+    min_cycle_duration:
+      seconds: 200
+    away_temp: 10
+    cold_tolerance: 0.2
+    hot_tolerance: 0.1
+
+  - <<: *thermostat_defaults
+    name: Double Bedroom
+    unique_id: double_bedroom_thermostat
+    heater: switch.double_bedroom_heater
+    target_sensor: sensor.double_bedroom_average_temperature
+    min_temp: 4
+    max_temp: 24
+    min_cycle_duration:
+      seconds: 60
+    away_temp: 6
+    cold_tolerance: 0.4
+    hot_tolerance: 0.1
+
+  - <<: *thermostat_defaults
+    name: Sunroom
+    unique_id: sunroom_thermostat
+    heater: switch.sunroom_heater
+    target_sensor: sensor.sunroom_average_temperature
+    min_temp: 0
+    max_temp: 20
+    min_cycle_duration:
+      seconds: 100
+    away_temp: 2
+    cold_tolerance: 0.4
+    hot_tolerance: 0.1
+
+  - <<: *thermostat_defaults
+    name: Shower Room
+    unique_id: shower_room_thermostat
+    heater: switch.shower_room_heater
+    target_sensor: sensor.shower_room_average_temperature
+    min_temp: 4
+    max_temp: 18
+    min_cycle_duration:
+      seconds: 300
+    away_temp: 6
+    cold_tolerance: 0.4
+    hot_tolerance: 0.1
+
+  - <<: *thermostat_defaults
+    name: Workshop
+    unique_id: workshop_thermostat
+    heater: switch.workshop_heater
+    target_sensor: sensor.workshop_average_temperature
+    min_temp: 5
+    max_temp: 21
+    min_cycle_duration:
+      seconds: 30
+    away_temp: 12
+    cold_tolerance: 0.2
+    hot_tolerance: 0.2
+
+  - <<: *thermostat_defaults
+    name: Machine Room
+    unique_id: machine_room_thermostat
+    heater: switch.machine_room_heater
+    target_sensor: sensor.machine_room_average_temperature
+    min_temp: 5
+    max_temp: 21
+    min_cycle_duration:
+      seconds: 30
+    away_temp: 12
+    cold_tolerance: 0.2
+    hot_tolerance: 0.2
+
+group:
+  all_climates:
+    name: All Climates
+    entities:
+      - climate.living_room
+      - climate.dining_room
+      - climate.kitchen
+      - climate.bathroom
+      - climate.sunroom
+      - climate.master_bedroom
+      - climate.double_bedroom
+      - climate.shower_room
+
+sensor:
+  - <<: *sensor_avg_defaults
+    unique_id: bathroom_average_temperature
+    name: Bathroom Average Temperature
+    entity_ids:
+      - sensor.hms_bathroom_temperature
+      - sensor.bluht_bathroom_temperature
+
+  - <<: *sensor_avg_defaults
+    unique_id: bathroom_average_humidity
+    name: Bathroom Average Humidity
+    entity_ids:
+      - sensor.bluht_bathroom_humidity
+
+  - <<: *sensor_avg_defaults
+    unique_id: master_bedroom_average_temperature
+    name: Master Bedroom Average Temperature
+    entity_ids:
+      - sensor.hms_master_bedroom_temperature
+      - sensor.bluht_master_bedroom_temperature
+
+  - <<: *sensor_avg_defaults
+    unique_id: master_bedroom_average_humidity
+    name: Master Bedroom Average Humidity
+    entity_ids:
+      - sensor.bluht_master_bedroom_humidity
+
+  - <<: *sensor_avg_defaults
+    unique_id: living_room_average_temperature
+    name: Living Room Average Temperature
+    entity_ids:
+      - sensor.hms_living_room_temperature
+      - sensor.bluht_living_room_temperature
+
+  - <<: *sensor_avg_defaults
+    unique_id: living_room_average_humidity
+    name: Living Room Average Humidity
+    entity_ids:
+      - sensor.bluht_living_room_humidity
+
+  - <<: *sensor_avg_defaults
+    unique_id: dining_room_average_temperature
+    name: Dining Room Average Temperature
+    entity_ids:
+      - sensor.hms_dining_room_temperature
+      - sensor.bluht_dining_room_temperature
+
+  - <<: *sensor_avg_defaults
+    unique_id: dining_room_average_humidity
+    name: Dining Room Average Humidity
+    entity_ids:
+      - sensor.bluht_dining_room_humidity
+
+  - <<: *sensor_avg_defaults
+    unique_id: kitchen_average_temperature
+    name: Kitchen Average Temperature
+    entity_ids:
+      - sensor.hms_kitchen_temperature
+
+  - <<: *sensor_avg_defaults
+    unique_id: sunroom_average_temperature
+    name: Sunroom Average Temperature
+    entity_ids:
+      - sensor.hms_sunroom_temperature
+      - sensor.bluht_sunroom_temperature
+
+  - <<: *sensor_avg_defaults
+    unique_id: sunroom_average_humidity
+    name: Sunroom Average Humidity
+    entity_ids:
+      - sensor.bluht_sunroom_humidity
+
+  - <<: *sensor_avg_defaults
+    unique_id: landing_average_temperature
+    name: Landing Average Temperature
+    entity_ids:
+      - sensor.hms_landing_temperature
+      - sensor.bluht_landing_temperature
+
+  - <<: *sensor_avg_defaults
+    unique_id: landing_average_humidity
+    name: Landing Average Humidity
+    entity_ids:
+      - sensor.bluht_landing_humidity
+
+  - <<: *sensor_avg_defaults
+    unique_id: hall_average_temperature
+    name: Hall Average Temperature
+    entity_ids:
+      - sensor.hms_hall_temperature
+      - sensor.bluht_hall_temperature
+
+  - <<: *sensor_avg_defaults
+    unique_id: hall_average_humidity
+    name: Hall Average Humidity
+    entity_ids:
+      - sensor.bluht_hall_humidity
+
+  - <<: *sensor_avg_defaults
+    unique_id: utility_room_average_temperature
+    name: Utility Room Average Temperature
+    entity_ids:
+      - sensor.hms_utility_room_temperature
+      - sensor.bluht_utility_room_temperature
+
+  - <<: *sensor_avg_defaults
+    unique_id: utility_room_average_humidity
+    name: Utility Room Average Humidity
+    entity_ids:
+      - sensor.bluht_utility_room_humidity
+
+  - <<: *sensor_avg_defaults
+    unique_id: shower_room_average_temperature
+    name: Shower Room Average Temperature
+    entity_ids:
+      - sensor.hms_shower_room_temperature
+      - sensor.bluht_shower_room_temperature
+
+  - <<: *sensor_avg_defaults
+    unique_id: shower_room_average_humidity
+    name: Shower Room Average Humidity
+    entity_ids:
+      - sensor.bluht_shower_room_humidity
+
+  - <<: *sensor_avg_defaults
+    unique_id: front_porch_average_temperature
+    name: Front Porch Average Temperature
+    entity_ids:
+      - sensor.hms_front_porch_temperature
+      - sensor.bluht_front_porch_temperature
+
+  - <<: *sensor_avg_defaults
+    unique_id: front_porch_average_humidity
+    name: Front Porch Average Humidity
+    entity_ids:
+      - sensor.bluht_front_porch_humidity
+
+  - <<: *sensor_avg_defaults
+    unique_id: double_bedroom_average_temperature
+    name: Double Bedroom Average Temperature
+    entity_ids:
+      - sensor.hms_double_bedroom_temperature
+      - sensor.bluht_double_bedroom_temperature
+
+  - <<: *sensor_avg_defaults
+    unique_id: double_bedroom_average_humidity
+    name: Double Bedroom Average Humidity
+    entity_ids:
+      - sensor.bluht_double_bedroom_humidity
+
+  - <<: *sensor_avg_defaults
+    unique_id: single_bedroom_average_temperature
+    name: Single Bedroom Average Temperature
+    entity_ids:
+      - sensor.hms_single_bedroom_temperature
+      - sensor.bluht_single_bedroom_temperature
+
+  - <<: *sensor_avg_defaults
+    unique_id: single_bedroom_average_humidity
+    name: Single Bedroom Average Humidity
+    entity_ids:
+      - sensor.bluht_single_bedroom_humidity
+
+  - <<: *sensor_avg_defaults
+    unique_id: workshop_average_temperature
+    name: Workshop Average Temperature
+    entity_ids:
+      - sensor.workshop_far_sensor_temperature
+      - sensor.workshop_door_sensor_temperature
+
+  - <<: *sensor_avg_defaults
+    unique_id: machine_room_average_temperature
+    name: Machine Room Average Temperature
+    entity_ids:
+      - sensor.machine_room_left_sensor_temperature
+      - sensor.machine_room_right_sensor_temperature
+
+  - <<: *sensor_avg_defaults
+    unique_id: garage_average_temperature
+    name: Garage Average Temperature
+    entity_ids:
+      - sensor.garage_east_sensor_temperature
+      - sensor.garage_west_sensor_temperature
+
+  - <<: *sensor_avg_defaults
+    unique_id: workshop_average_humidity
+    name: Workshop Average Humidity
+    entity_ids:
+      - sensor.workshop_far_sensor_humidity
+      - sensor.workshop_door_sensor_humidity
+
+  - <<: *sensor_avg_defaults
+    unique_id: machine_room_average_humidity
+    name: Machine Room Average Humidity
+    entity_ids:
+      - sensor.machine_room_left_sensor_humidity
+      - sensor.machine_room_right_sensor_humidity
+
+  - <<: *sensor_avg_defaults
+    unique_id: garage_average_humidity
+    name: Garage Average Humidity
+    entity_ids:
+      - sensor.garage_east_sensor_humidity
+      - sensor.garage_west_sensor_humidity
+
+script:
+  climate_increment:
+    alias: Increment Climate
+    description: "Up the given climate"
+    mode: queued
+    fields:
+      entity:
+        description: "The entity id of the climate with domain"
+        example: "climate.living_room"
+      step:
+        description: "The step value to change"
+        example: "1"
+        selector:
+          number:
+            min: 1
+            max: 5
+            step: 1
+            mode: slider
+    sequence:
+      - action: climate.set_temperature
+        target:
+          entity_id: "{{ entity }}"
+        data:
+          temperature: "{{ (state_attr(entity, 'temperature') + step) | float }}"
+      - delay: #DEBOUNCE
+          milliseconds: 200
+
+  climate_decrement:
+    alias: Decrement Climate
+    description: "Reduce given climate"
+    mode: queued
+    fields:
+      entity:
+        description: "The entity id of the climate with domain"
+        example: "climate.living_room"
+      step:
+        description: "The step value to change"
+        example: "1"
+        selector:
+          number:
+            min: 1
+            max: 5
+            step: 1
+            mode: slider
+    sequence:
+      - action: climate.set_temperature
+        target:
+          entity_id: "{{ entity }}"
+        data:
+          temperature: "{{ (state_attr(entity, 'temperature') - step) | float }}"
+      - delay: #DEBOUNCE
+          milliseconds: 200

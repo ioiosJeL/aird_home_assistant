@@ -1,0 +1,29 @@
+"script.*_scene_automatic":
+  icon: "mdi:brightness-auto"
+
+"script.*_scene_bright":
+  icon: "mdi:brightness-7"
+
+"script.*_scene_relax":
+  icon: "mdi:brightness-6"
+
+"script.*_scene_cosy":
+  icon: "mdi:brightness-4"
+
+"script.*_scene_movie":
+  icon: "mdi:filmstrip"
+
+"script.*_scene_addon_piano":
+  icon: "mdi:piano"
+
+"script.*_scene_dinner":
+  icon: "mdi:silverware-fork-knife"
+
+"script.*_scene_manual":
+  icon: "mdi:camera-control"
+
+"script.*_scene_candles":
+  icon: "mdi:candle"
+
+"script.*_scene_off":
+  icon: "mdi:power"

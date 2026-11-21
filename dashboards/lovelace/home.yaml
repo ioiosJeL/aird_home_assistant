@@ -1,0 +1,1152 @@
+path: default_view
+title: Home
+icon: mdi:home-assistant
+type: custom:masonry-layout
+layout:
+  width: 350
+  max_width: 5000
+  max_cols: 4
+cards:
+  - type: vertical-stack
+    cards:
+      - type: custom:stack-in-card
+        mode: vertical
+        keep:
+          border_radius: false
+          background: false
+        cards:
+          - type: picture-elements
+            image: /local/images/date_background.png
+            elements:
+              - type: state-icon
+                entity: sensor.period_of_day
+                style:
+                  top: 25%
+                  left: 5%
+                  transform: scale(2,2)
+
+              - type: state-label
+                tap_action: toggle
+                entity: sensor.date_time_24h
+                style:
+                  top: 50%
+                  left: 33%
+                  font-size: 280%
+
+              - type: service-button
+                service: script.turn_on
+                service_data:
+                  entity_id: script.living_room_scene_off
+                title: " "
+                style:
+                  top: 50%
+                  left: 50%
+
+              - type: state-label
+                tap_action: toggle
+                entity: sensor.date_time_weekday
+                style:
+                  top: 35%
+                  left: 67%
+                  font-size: 150%
+              - type: state-label
+                tap_action: toggle
+                entity: sensor.date_time_string
+                style:
+                  top: 65%
+                  left: 67%
+                  font-size: 120%
+
+              - type: state-icon
+                entity: sun.sun
+                style:
+                  top: 25%
+                  left: 85%
+                  transform: scale(2,2)
+
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:button-card
+            template: person_card
+            entity: person.john_lumley
+            name: John
+            variables:
+              battery: sensor.johns_iphone_battery_level
+          - type: custom:button-card
+            template: person_card
+            entity: person.elizabeth_munsie
+            name: Elizabeth
+            variables:
+              battery: sensor.elizabeth_s_phone_xoxo_battery_level
+
+      # This week (sensor.this_week, packages/calendar.yaml): the next 7 days
+      # from every calendar plus bin collections. Hidden when the week is empty.
+      - type: custom:button-card
+        template: status_list
+        visibility:
+          - condition: numeric_state
+            entity: sensor.this_week
+            above: 0
+        triggers_update:
+          - sensor.this_week
+          - sensor.date_time_date
+        variables:
+          title: This week
+          items: |
+            [[[
+              const evs = states['sensor.this_week']?.attributes.events || [];
+              const look = (c, s) =>
+                s.startsWith('🕐') ? { icon: 'mdi:clock-time-two-outline', color: 'amber' } :
+                c.startsWith('bins_') ? { icon: 'mdi:trash-can-outline',
+                    color: c === 'bins_green' ? 'green' : c === 'bins_blue' ? 'blue' : 'primary-text' }
+                : c.includes('birthday') ? { icon: 'mdi:cake-variant', color: 'pink' }
+                : c === 'bank_holidays' ? { icon: 'mdi:calendar-star', color: 'purple' }
+                : { icon: 'mdi:calendar', color: 'teal' };
+              const day0 = new Date(); day0.setHours(0, 0, 0, 0);
+              const label = e => {
+                const d = new Date(e.all_day ? e.start.slice(0, 10) + 'T00:00:00' : e.start);
+                const dd = new Date(d); dd.setHours(0, 0, 0, 0);
+                const n = Math.round((dd - day0) / 86400000);
+                const day = n === 0 ? 'Today' : n === 1 ? 'Tomorrow'
+                  : d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' });
+                return e.all_day || e.cal.startsWith('bins_') ? day
+                  : `${day}, ${d.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
+              };
+              return evs.map(e => ({ ...look(e.cal, e.summary), title: e.summary.replace(/^🕐\s*/, ''), detail: label(e) }));
+            ]]]
+
+      # Bin collections (packages/bins.yaml): each shows from 30 h before its
+      # Wednesday-morning collection until tapped ("it's out").
+      - type: custom:button-card
+        template: bin_due
+        entity: input_boolean.bin_ack_black
+        name: Black bin · general waste
+        icon: mdi:trash-can
+        variables:
+          next: sensor.black_bin_next_collection
+          color: var(--primary-text-color)
+        visibility:
+          - condition: state
+            entity: binary_sensor.black_bin_due
+            state: "on"
+          - condition: state
+            entity: input_boolean.bin_ack_black
+            state: "off"
+      - type: custom:button-card
+        template: bin_due
+        entity: input_boolean.bin_ack_green
+        name: Green bin · metal & plastics
+        icon: mdi:recycle
+        variables:
+          next: sensor.green_bin_next_collection
+          color: var(--green-color)
+        visibility:
+          - condition: state
+            entity: binary_sensor.green_bin_due
+            state: "on"
+          - condition: state
+            entity: input_boolean.bin_ack_green
+            state: "off"
+      - type: custom:button-card
+        template: bin_due
+        entity: input_boolean.bin_ack_blue
+        name: Blue bin · paper & card
+        icon: mdi:newspaper-variant-outline
+        variables:
+          next: sensor.blue_bin_next_collection
+          color: var(--blue-color)
+        visibility:
+          - condition: state
+            entity: binary_sensor.blue_bin_due
+            state: "on"
+          - condition: state
+            entity: input_boolean.bin_ack_blue
+            state: "off"
+
+      # Low-flying military aircraft (packages/military_aircraft.yaml): shown
+      # while one is within 10 miles below 3,000 ft and for 10 minutes after.
+      - type: markdown
+        visibility:
+          - condition: state
+            entity: binary_sensor.military_aircraft_recent
+            state: "on"
+        text_only: false
+        content: >-
+          {% set ov = is_state('binary_sensor.military_aircraft_overhead', 'on') %}
+          {% set planes = state_attr('sensor.military_aircraft_nearby', 'aircraft') if ov
+             else state_attr('sensor.military_aircraft_nearby', 'last_aircraft') %}
+          {% set seen = state_attr('sensor.military_aircraft_nearby', 'last_seen') %}
+          <ha-icon icon="mdi:airplane-alert"></ha-icon>
+          **{{ 'Military aircraft overhead' if ov else 'Military aircraft passed' }}**
+          {%- if not ov and seen %} · {{ as_datetime(seen) | as_local | as_timestamp | timestamp_custom('%H:%M') }}{% endif %}
+          {% for a in planes or [] %}
+
+          - **{{ a.description or a.type or 'Unknown type' }}**{% if a.callsign %} ({{ a.callsign }}){% endif %}
+          {{ '{:,}'.format(a.altitude_ft) }} ft · {{ a.distance_mi }} mi {{ a.direction }}
+          {%- if a.speed_kt %} · {{ a.speed_kt }} kt{% endif %}
+          {%- if a.operator %} · {{ a.operator }}{% endif %}
+          {%- endfor %}
+        card_mod:
+          style: |
+            ha-card {
+              border-left: 4px solid var(--red-color);
+            }
+            ha-icon { color: var(--red-color); --mdc-icon-size: 20px; vertical-align: -3px; }
+
+      # Homewatch + Guests toggles (left) + "That was weird" (right) on one row.
+      # "That was weird" (packages/lights_insight.yaml) snapshots every room
+      # and tells John, so odd behaviour comes with an exact time to look at.
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:stack-in-card
+            mode: vertical
+            cards:
+              - type: grid
+                columns: 2
+                square: false
+                card_mod:
+                  style: ":host { display: block; padding: 12px; }"
+                cards:
+                  - type: custom:button-card
+                    template: room_toggle
+                    entity: input_boolean.status_homewatch
+                    name: Homewatch
+                    icon: mdi:eye-outline
+                    variables:
+                      color: var(--blue-color)
+                  - type: custom:button-card
+                    template: room_toggle
+                    entity: input_boolean.status_guests
+                    name: Guests
+                    icon: mdi:account-group
+                    variables:
+                      color: var(--blue-color)
+          - type: custom:button-card
+            entity: script.report_something_odd
+            name: That was weird
+            label: Tap if the house just did something odd
+            show_label: true
+            show_state: false
+            icon: mdi:alert-circle-check-outline
+            tap_action:
+              action: perform-action
+              perform_action: script.report_something_odd
+              confirmation:
+                text: Let John know the house just did something odd? It saves what every room was doing right now.
+            hold_action:
+              action: none
+            styles:
+              card:
+                - height: 100%
+                - padding: 12px
+              grid:
+                - grid-template-areas: '"i" "n" "l"'
+                - grid-template-rows: auto auto 1fr
+                - row-gap: 4px
+              icon:
+                - width: 28px
+                - color: var(--warning-color)
+              name:
+                - font-weight: 600
+                - font-size: 0.95rem
+              label:
+                - white-space: normal
+                - font-size: 0.75rem
+                - line-height: 1.25
+                - color: var(--secondary-text-color)
+
+      # Living room warming up (fire lit): only shown in the cold months while
+      # the temperature is climbing - see packages/living_room_fire.yaml
+      - type: custom:stack-in-card
+        mode: vertical
+        visibility:
+          - condition: state
+            entity: binary_sensor.living_room_warming
+            state: "on"
+        cards:
+          - type: heading
+            heading: Living Room Warming
+            icon: mdi:fireplace
+            heading_style: subtitle
+            badges:
+              - type: entity
+                entity: sensor.living_room_average_temperature
+                show_state: true
+                show_icon: true
+                icon: mdi:thermometer
+              - type: entity
+                entity: sensor.living_room_temperature_rate
+                show_state: true
+                show_icon: true
+                icon: mdi:trending-up
+          - type: custom:mini-graph-card
+            entities:
+              - entity: sensor.living_room_average_temperature
+                name: Living Room
+                color: var(--orange-color)
+            hours_to_show: 4
+            points_per_hour: 12
+            update_interval: 60
+            line_width: 3
+            hour24: true
+            show:
+              name: false
+              icon: false
+              state: false
+              labels: true
+              fill: fade
+
+      # Rooms with lights on: tap a room to switch it off (via its Off scene),
+      # hold for its lights, or All off. Hidden when every room is off.
+      - type: custom:stack-in-card
+        mode: vertical
+        visibility:
+          - condition: numeric_state
+            entity: sensor.rooms_lit
+            above: 0
+        cards:
+          - type: heading
+            heading: Lights on
+            icon: mdi:lightbulb-group
+            badges:
+              - type: entity
+                entity: sensor.rooms_lit
+                show_state: true
+                show_icon: false
+          - type: grid
+            columns: 5
+            square: false
+            card_mod:
+              style: ":host { display: block; padding: 0 12px 12px; }"
+            cards:
+              - type: custom:button-card
+                template: room_pill
+                entity: light.dining_room_lights_master
+                name: Dining
+                icon: mdi:silverware-fork-knife
+                variables:
+                  color: var(--amber-color)
+                  active: true
+                tap_action:
+                  action: perform-action
+                  perform_action: script.turn_on
+                  target:
+                    entity_id: script.dining_room_scene_off
+                hold_action:
+                  action: more-info
+                visibility:
+                  - condition: state
+                    entity: light.dining_room_lights_master
+                    state: "on"
+              - type: custom:button-card
+                template: room_pill
+                entity: light.living_room_lights_master
+                name: Living
+                icon: mdi:sofa
+                variables:
+                  color: var(--amber-color)
+                  active: true
+                tap_action:
+                  action: perform-action
+                  perform_action: script.turn_on
+                  target:
+                    entity_id: script.living_room_scene_off
+                hold_action:
+                  action: more-info
+                visibility:
+                  - condition: state
+                    entity: light.living_room_lights_master
+                    state: "on"
+              - type: custom:button-card
+                template: room_pill
+                entity: light.kitchen_lights_master
+                name: Kitchen
+                icon: mdi:countertop
+                variables:
+                  color: var(--amber-color)
+                  active: true
+                tap_action:
+                  action: perform-action
+                  perform_action: script.turn_on
+                  target:
+                    entity_id: script.kitchen_scene_off
+                hold_action:
+                  action: more-info
+                visibility:
+                  - condition: state
+                    entity: light.kitchen_lights_master
+                    state: "on"
+              - type: custom:button-card
+                template: room_pill
+                entity: light.utility_room_lights_master
+                name: Utility
+                icon: mdi:washing-machine
+                variables:
+                  color: var(--amber-color)
+                  active: true
+                tap_action:
+                  action: perform-action
+                  perform_action: script.turn_on
+                  target:
+                    entity_id: script.utility_room_scene_off
+                hold_action:
+                  action: more-info
+                visibility:
+                  - condition: state
+                    entity: light.utility_room_lights_master
+                    state: "on"
+              - type: custom:button-card
+                template: room_pill
+                entity: light.hall_lights_master
+                name: Hall
+                icon: mdi:door
+                variables:
+                  color: var(--amber-color)
+                  active: true
+                tap_action:
+                  action: perform-action
+                  perform_action: script.turn_on
+                  target:
+                    entity_id: script.hall_scene_off
+                hold_action:
+                  action: more-info
+                visibility:
+                  - condition: state
+                    entity: light.hall_lights_master
+                    state: "on"
+              - type: custom:button-card
+                template: room_pill
+                entity: light.landing_lights_master
+                name: Landing
+                icon: mdi:stairs
+                variables:
+                  color: var(--amber-color)
+                  active: true
+                tap_action:
+                  action: perform-action
+                  perform_action: script.turn_on
+                  target:
+                    entity_id: script.landing_scene_off
+                hold_action:
+                  action: more-info
+                visibility:
+                  - condition: state
+                    entity: light.landing_lights_master
+                    state: "on"
+              - type: custom:button-card
+                template: room_pill
+                entity: light.front_porch_lights_master
+                name: Porch
+                icon: mdi:door-open
+                variables:
+                  color: var(--amber-color)
+                  active: true
+                tap_action:
+                  action: perform-action
+                  perform_action: script.turn_on
+                  target:
+                    entity_id: script.front_porch_scene_off
+                hold_action:
+                  action: more-info
+                visibility:
+                  - condition: state
+                    entity: light.front_porch_lights_master
+                    state: "on"
+              - type: custom:button-card
+                template: room_pill
+                entity: light.bathroom_lights_master
+                name: Bathroom
+                icon: mdi:bathtub
+                variables:
+                  color: var(--amber-color)
+                  active: true
+                tap_action:
+                  action: perform-action
+                  perform_action: script.turn_on
+                  target:
+                    entity_id: script.bathroom_scene_off
+                hold_action:
+                  action: more-info
+                visibility:
+                  - condition: state
+                    entity: light.bathroom_lights_master
+                    state: "on"
+              - type: custom:button-card
+                template: room_pill
+                entity: light.shower_room_lights_master
+                name: Shower
+                icon: mdi:shower
+                variables:
+                  color: var(--amber-color)
+                  active: true
+                tap_action:
+                  action: perform-action
+                  perform_action: script.turn_on
+                  target:
+                    entity_id: script.shower_room_scene_off
+                hold_action:
+                  action: more-info
+                visibility:
+                  - condition: state
+                    entity: light.shower_room_lights_master
+                    state: "on"
+              - type: custom:button-card
+                template: room_pill
+                entity: light.single_bedroom_lights_master
+                name: Single
+                icon: mdi:bed-single
+                variables:
+                  color: var(--amber-color)
+                  active: true
+                tap_action:
+                  action: perform-action
+                  perform_action: script.turn_on
+                  target:
+                    entity_id: script.single_bedroom_scene_off
+                hold_action:
+                  action: more-info
+                visibility:
+                  - condition: state
+                    entity: light.single_bedroom_lights_master
+                    state: "on"
+              - type: custom:button-card
+                template: room_pill
+                entity: light.double_bedroom_lights_master
+                name: Double
+                icon: mdi:bed
+                variables:
+                  color: var(--amber-color)
+                  active: true
+                tap_action:
+                  action: perform-action
+                  perform_action: script.turn_on
+                  target:
+                    entity_id: script.double_bedroom_scene_off
+                hold_action:
+                  action: more-info
+                visibility:
+                  - condition: state
+                    entity: light.double_bedroom_lights_master
+                    state: "on"
+              - type: custom:button-card
+                template: room_pill
+                entity: light.master_bedroom_lights_master
+                name: Master
+                icon: mdi:bed-king
+                variables:
+                  color: var(--amber-color)
+                  active: true
+                tap_action:
+                  action: perform-action
+                  perform_action: script.turn_on
+                  target:
+                    entity_id: script.master_bedroom_scene_off
+                hold_action:
+                  action: more-info
+                visibility:
+                  - condition: state
+                    entity: light.master_bedroom_lights_master
+                    state: "on"
+              - type: custom:button-card
+                template: room_pill
+                entity: light.sunroom_lights_master
+                name: Sunroom
+                icon: mdi:white-balance-sunny
+                variables:
+                  color: var(--amber-color)
+                  active: true
+                tap_action:
+                  action: perform-action
+                  perform_action: script.turn_on
+                  target:
+                    entity_id: script.sunroom_scene_off
+                hold_action:
+                  action: more-info
+                visibility:
+                  - condition: state
+                    entity: light.sunroom_lights_master
+                    state: "on"
+              - type: custom:button-card
+                template: room_pill
+                entity: script.house_lights_all_off
+                name: All off
+                icon: mdi:lightbulb-group-off
+                variables:
+                  color: var(--red-color)
+                  active: true
+                tap_action:
+                  action: perform-action
+                  perform_action: script.turn_on
+                  target:
+                    entity_id: script.house_lights_all_off
+                  confirmation:
+                    text: Turn off the lights in every room?
+
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_boolean.status_guests
+            state: "on"
+        card:
+          type: entities
+          entities:
+            - type: custom:multiple-entity-row
+              name: Double Bedroom
+              entity: binary_sensor.double_bedroom_motion
+              state_color: true
+              show_state: false
+              secondary_info: last-changed
+              entities:
+                - name: Temp
+                  entity: sensor.double_bedroom_average_temperature
+                - name: Heating
+                  entity: switch.schedule_cosy_double_bedroom
+                  toggle: true
+                - name: Bedtime
+                  entity: input_boolean.status_bedtime_double
+                  toggle: true
+                - name: Active
+                  entity: input_boolean.status_guest_double_bedroom
+                  toggle: true
+            - type: custom:multiple-entity-row
+              name: Single Bedroom
+              entity: binary_sensor.single_bedroom_motion
+              state_color: true
+              show_state: false
+              secondary_info: last-changed
+              entities:
+                - name: Temp
+                  entity: sensor.single_bedroom_average_temperature
+                - name: Bedtime
+                  entity: input_boolean.status_bedtime_single
+                  toggle: true
+                - name: Active
+                  entity: input_boolean.status_guest_single_bedroom
+                  toggle: true
+
+      # Quick Access: the controls used most from the app/touchscreens
+      # (ranked from 30 days of recorder history, Oct 2026). Workspace items
+      # (workshop/machine room/garage) are deliberately kept off this page.
+      - type: custom:stack-in-card
+        mode: vertical
+        cards:
+          - type: heading
+            heading: Dining Room
+            icon: mdi:silverware-fork-knife
+            tap_action:
+              action: navigate
+              navigation_path: /lovelace/extension
+            badges:
+              - type: entity
+                entity: sensor.dining_room_average_temperature
+                show_icon: true
+                show_state: true
+          - type: grid
+            columns: 6
+            square: false
+            card_mod:
+              style: ":host { display: block; padding: 0 12px 4px; }"
+            cards:
+                  - type: custom:button-card
+                    template: room_scene
+                    entity: input_select.dining_room_scenes
+                    icon: mdi:brightness-7
+                    variables:
+                      option: Bright
+                      color: var(--amber-color)
+                  - type: custom:button-card
+                    template: room_scene
+                    entity: input_select.dining_room_scenes
+                    icon: mdi:sofa
+                    variables:
+                      option: Relax
+                      color: var(--teal-color)
+                  - type: custom:button-card
+                    template: room_scene
+                    entity: input_select.dining_room_scenes
+                    icon: mdi:fire
+                    variables:
+                      option: Cosy
+                      color: var(--deep-orange-color)
+                  - type: custom:button-card
+                    template: room_scene
+                    entity: input_select.dining_room_scenes
+                    icon: mdi:music
+                    variables:
+                      option: Music
+                      color: var(--pink-color)
+                  - type: custom:button-card
+                    template: room_scene
+                    entity: input_select.dining_room_scenes
+                    icon: mdi:movie-open
+                    variables:
+                      option: Movie
+                      color: var(--indigo-color)
+                  - type: custom:button-card
+                    template: room_scene
+                    entity: input_select.dining_room_scenes
+                    icon: mdi:power
+                    variables:
+                      option: "Off"
+                      color: var(--red-color)
+          - type: grid
+            columns: 5
+            square: false
+            card_mod:
+              style: ":host { display: block; padding: 4px 12px 4px; }"
+            cards:
+                  - type: custom:button-card
+                    template: room_toggle
+                    entity: light.dining_room_lamp_left
+                    name: Lamp
+                    icon: mdi:floor-lamp
+                    variables:
+                      color: var(--amber-color)
+                  - type: custom:button-card
+                    template: room_toggle
+                    entity: light.dining_room_ceiling_window
+                    name: Window
+                    icon: mdi:ceiling-light
+                    variables:
+                      color: var(--amber-color)
+                  - type: custom:button-card
+                    template: room_toggle
+                    entity: light.dining_room_ceiling_piano
+                    name: Piano
+                    icon: mdi:piano
+                    variables:
+                      color: var(--amber-color)
+                  - type: custom:button-card
+                    template: room_toggle
+                    entity: light.dining_room_ceiling_door
+                    name: Door
+                    icon: mdi:ceiling-light
+                    variables:
+                      color: var(--amber-color)
+                  - type: custom:button-card
+                    template: room_toggle
+                    entity: input_boolean.dining_room_automatic_lights
+                    name: Auto
+                    icon: mdi:refresh-auto
+                    variables:
+                      color: var(--green-color)
+
+          - type: heading
+            heading: Heating
+            icon: mdi:radiator
+          - type: grid
+            columns: 2
+            square: false
+            card_mod:
+              style: ":host { display: block; padding: 0 12px 12px; }"
+            cards:
+                  - type: tile
+                    entity: climate.dining_room
+                    name: Dining Room
+                    vertical: false
+                    features_position: bottom
+                    features:
+                      - type: target-temperature
+                  - type: tile
+                    entity: climate.master_bedroom
+                    name: Master Bed
+                    vertical: false
+                    features_position: bottom
+                    features:
+                      - type: target-temperature
+
+  - type: vertical-stack
+    cards:
+      # Quick Access (continued): Kitchen, bedroom/hall scenes, media
+      - type: custom:stack-in-card
+        mode: vertical
+        cards:
+          - type: heading
+            heading: Kitchen
+            icon: mdi:countertop
+          - type: grid
+            columns: 2
+            square: false
+            card_mod:
+              style: ":host { display: block; padding: 0 12px 4px; }"
+            cards:
+                  - type: custom:button-card
+                    template: room_toggle
+                    entity: light.kitchen_counter_lights
+                    name: Counter
+                    icon: mdi:countertop
+                    variables:
+                      color: var(--amber-color)
+                  - type: custom:button-card
+                    template: room_toggle
+                    entity: light.kitchen_ceiling_lights
+                    name: Ceiling
+                    icon: mdi:ceiling-light
+                    variables:
+                      color: var(--amber-color)
+          - type: heading
+            heading: Master Bedroom
+            icon: mdi:bed-king
+            tap_action:
+              action: navigate
+              navigation_path: /lovelace/ground_floor
+          - type: grid
+            columns: 5
+            square: false
+            card_mod:
+              style: ":host { display: block; padding: 0 12px 4px; }"
+            cards:
+                  - type: custom:button-card
+                    template: room_scene
+                    entity: input_select.master_bedroom_scenes
+                    icon: mdi:brightness-7
+                    variables:
+                      option: Bright
+                      color: var(--amber-color)
+                  - type: custom:button-card
+                    template: room_scene
+                    entity: input_select.master_bedroom_scenes
+                    icon: mdi:sofa
+                    variables:
+                      option: Relax
+                      color: var(--teal-color)
+                  - type: custom:button-card
+                    template: room_scene
+                    entity: input_select.master_bedroom_scenes
+                    icon: mdi:fire
+                    variables:
+                      option: Cosy
+                      color: var(--deep-orange-color)
+                  - type: custom:button-card
+                    template: room_scene
+                    entity: input_select.master_bedroom_scenes
+                    icon: mdi:star-four-points
+                    variables:
+                      option: Special
+                      color: var(--purple-color)
+                  - type: custom:button-card
+                    template: room_scene
+                    entity: input_select.master_bedroom_scenes
+                    icon: mdi:power
+                    variables:
+                      option: "Off"
+                      color: var(--red-color)
+          - type: heading
+            heading: Media
+            icon: mdi:speaker-multiple
+          - type: custom:mini-media-player
+            entity: media_player.dining_room_tv
+            name: Dining Room TV
+            icon: mdi:television
+            info: short
+            hide:
+              volume: false
+              source: true
+            card_mod:
+              style: "ha-card { box-shadow: none; border: none; background: transparent; }"
+
+      - type: custom:mini-graph-card
+        entities:
+          - entity: sensor.whole_house_power
+            name: Total House Power
+            show_points: true
+          - entity: sensor.it_ups_power
+            name: IT Back Porch
+          - entity: sensor.workshop_it_power
+            name: IT Workshop
+        show:
+          labels: true
+          name: true
+          icon: true
+          state: true
+        hours_to_show: 12
+        points_per_hour: 12
+        update_interval: 60
+        line_width: 2
+        align_state: center
+        align_header: center
+      # Where the house's power is going right now, by circuit. Plug-level
+      # meters only cover a fraction of the load; these circuits add up to
+      # sensor.whole_house_power.
+      - type: custom:button-card
+        template: power_board
+        name: Using power now
+        variables:
+          limit: 8
+          items:
+            - [sensor.electrical_shower_power, "Shower"]
+            - [sensor.electrical_hot_water_power, "Hot water"]
+            - [sensor.electrical_house_heating_power, "Heating"]
+            - [sensor.electrical_kitchen_power, "Kitchen"]
+            - [sensor.electrical_utility_power, "Utility room"]
+            - [sensor.electrical_lighting_power, "Lighting"]
+            - [sensor.electrical_workspace_power, "Workspace"]
+            - [sensor.electrical_unmeasured_power, "Other circuits"]
+        triggers_update:
+          - sensor.electrical_shower_power
+          - sensor.electrical_hot_water_power
+          - sensor.electrical_house_heating_power
+          - sensor.electrical_kitchen_power
+          - sensor.electrical_utility_power
+          - sensor.electrical_lighting_power
+          - sensor.electrical_workspace_power
+          - sensor.electrical_unmeasured_power
+
+  - type: vertical-stack
+    cards:
+      - type: custom:state-switch
+        entity: input_boolean.power_tripped_water_heater
+        default: "off"
+        states:
+          "off":
+            type: vertical-stack
+            cards:
+              - type: entities
+                entities:
+                  - type: custom:paper-buttons-row
+                    styles:
+                      justify-content: space-between
+                    buttons:
+                      - entity: sensor.water_heater_temperature
+                        state:
+                          postfix: "°C"
+                        name: "Hot Water"
+                        layout: icon|state|name
+                        icon: mdi:thermometer-water
+                        styles:
+                          state:
+                            margin-left: 12px
+                            margin-right: 12px
+                            color: >-
+                              {% if is_state('input_boolean.power_status_water_heater', 'on') %} 
+                                var(--paper-item-icon-active-color)
+                              {% else %}
+                                var(--primary-text-color)
+                              {% endif %}
+                          button:
+                            font-size: 24px
+
+                  - entity: climate.water_heater_backup
+                    name: Water Heater
+                    secondary_info:
+                      entity: sensor.daily_water_heater_energy_usage
+                      name: Energy
+                      unit: kWh
+                    type: custom:multiple-entity-row
+                    show_state: false
+                    entities:
+                      - entity: input_boolean.power_status_water_heater
+                        icon: mdi:water-boiler
+                        state_color: true
+                        name: false
+                      - entity: input_number.water_heater_low_alarm
+                        name: "Alarm"
+                      - entity: input_number.water_heater_low_alarm_linger
+                        name: "Linger"
+                      - entity: input_number.water_heater_setpoint
+                        name: "Backup Target"
+
+          "on":
+            type: vertical-stack
+            cards:
+              - type: entities
+                entities:
+                  - type: custom:paper-buttons-row
+                    styles:
+                      justify-content: space-between
+                    buttons:
+                      - entity: sensor.water_heater_temperature
+                        state:
+                          postfix: "°C"
+                        name: "Backup Hot Water"
+                        layout: icon|state|name
+                        icon: mdi:thermometer-water
+                        styles:
+                          state:
+                            margin-left: 12px
+                            margin-right: 12px
+                            color: red
+                          button:
+                            font-size: 24px
+
+                  - entity: climate.water_heater_backup
+                    name: Water Heater Tripped
+                    secondary_info:
+                      entity: input_boolean.power_tripped_water_heater
+                      name: "Since:"
+                      attribute: last-changed
+                    type: custom:multiple-entity-row
+                    show_state: false
+                    entities:
+                      - entity: climate.water_heater_backup
+                        attribute: temperature
+                        name: "Target"
+                      - entity: climate.water_heater_backup
+                        attribute: current_temperature
+                        name: "Current"
+
+                      - icon: "mdi:restart"
+                        tap_action:
+                          action: call-service
+                          service: script.water_heater_reset_backup
+                          service_data: []
+
+      - type: custom:mini-graph-card
+        entities:
+          - entity: sensor.water_heater_power
+            name: Water Heater Power
+            show_points: true
+          - entity: sensor.water_heater_temperature
+            name: Water Heater Temperature
+            show_points: true
+            y_axis: secondary
+        show:
+          labels: true
+          labels_secondary: true
+          name: false
+          icon: false
+          state: false
+        smoothing: false
+        hours_to_show: 1
+        points_per_hour: 20
+        line_width: 2
+        update_interval: 60
+
+      # Show the 3D printer (debug box) camera while OctoPrint is printing,
+      # otherwise the last-object-detected CCTV camera. Snapshots (auto)
+      # rather than live video: decoding streams is too heavy for the tablet.
+      - type: custom:state-switch
+        entity: binary_sensor.octoprint_printing
+        default: "off"
+        states:
+          "on":
+            type: picture-glance
+            title: 3D Printer
+            camera_image: camera.debug_box_camera
+            camera_view: auto
+            entities:
+              - entity: sensor.octoprint_job_percentage
+              - entity: sensor.octoprint_current_state
+
+          "off":
+            type: custom:state-switch
+            entity: input_text.last_object_camera
+            default: "driveway"
+            states:
+              "driveway":
+                type: picture-glance
+                camera_image: camera.driveway_medium
+                camera_view: auto
+                entities: []
+
+              "car_port":
+                type: picture-glance
+                camera_image: camera.car_port_medium
+                camera_view: auto
+                entities: []
+
+              "patio":
+                type: picture-glance
+                camera_image: camera.patio_medium
+                camera_view: auto
+                entities: []
+
+  - type: vertical-stack
+    cards:
+      - type: custom:stack-in-card
+        mode: vertical
+        cards:
+          - type: custom:horizon-card
+            moon: true
+            refresh_period: 60
+            fields:
+              sunrise: true
+              sunset: true
+              dawn: false
+              noon: false
+              dusk: false
+          - type: custom:button-card
+            entity: sensor.tide_height
+            show_icon: false
+            show_name: false
+            show_state: false
+            tap_action:
+              action: more-info
+            triggers_update:
+              - sensor.tide_height
+            custom_fields:
+              tide: |
+                [[[
+                  const a = entity?.attributes || {};
+                  const hm = d => new Date(d).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                  const up = (a.upcoming || []).slice(0, 2);
+                  const cell = (icon, col, v, l) => `<div class="k"><ha-icon class="${col === 'var(--blue-color)' ? 'blue' : ''}" icon="mdi:${icon}" style="color:${col}"></ha-icon><div class="v">${v}</div><div class="l">${l}</div></div>`;
+                  const h = parseFloat(entity?.state);
+                  const now = cell(a.trend === 'rising' ? 'arrow-up-bold' : 'arrow-down-bold', 'var(--primary-text-color)',
+                    isNaN(h) ? '—' : `${h.toFixed(1)} m`, a.trend === 'rising' ? 'Rising' : 'Falling');
+                  return up.map(e => cell(e.type === 'high' ? 'wave-arrow-up' : 'wave-arrow-down', 'var(--blue-color)',
+                    hm(e.time), `${e.type === 'high' ? 'High' : 'Low'} · ${e.height.toFixed(1)} m`)).join('') + now;
+                ]]]
+            styles:
+              card:
+                - padding: 4px 8px 12px
+              grid:
+                - grid-template-areas: '"tide"'
+              custom_fields:
+                tide:
+                  - justify-self: stretch
+            extra_styles: |
+              #tide { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+              #tide .k { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; }
+              #tide ha-icon { --mdc-icon-size: 24px; width: 24px; height: 24px; margin: 0; }
+              #tide ha-icon.blue { color: var(--blue-color, #2196f3) !important; --icon-primary-color: var(--blue-color, #2196f3) !important; }
+              #tide .v { font-size: 1rem; font-weight: 700; }
+              #tide .l { font-size: 11px; color: var(--secondary-text-color); }
+
+      # Dog sound desensitisation (packages/dog_audio.yaml): status, stats,
+      # 24 h pause, and the last five sessions (tap one to listen).
+      - type: custom:stack-in-card
+        mode: vertical
+        cards:
+          - type: custom:button-card
+            template: dog_audio_status
+          - type: custom:button-card
+            template: dog_audio_pause
+          - type: entities
+            card_mod:
+              style: "ha-card { box-shadow: none; } .card-content { padding: 0 12px 4px; }"
+            entities:
+              - entity: input_number.dog_audio_volume
+                name: Dog sounds volume
+          - type: heading
+            heading: Recently played
+            heading_style: subtitle
+            visibility:
+              - condition: state
+                entity: sensor.dog_audio_log
+                state_not: unknown
+          - type: custom:button-card
+            template: dog_audio_row
+            variables:
+              index: 0
+          - type: custom:button-card
+            template: dog_audio_row
+            variables:
+              index: 1
+          - type: custom:button-card
+            template: dog_audio_row
+            variables:
+              index: 2
+          - type: custom:button-card
+            template: dog_audio_row
+            variables:
+              index: 3
+          - type: custom:button-card
+            template: dog_audio_row
+            variables:
+              index: 4
+

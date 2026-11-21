@@ -1,0 +1,140 @@
+# Low-flying military aircraft near home (added Nov 2026).
+#
+# Polls the adsb.fi open-data military feed (worldwide list of aircraft
+# flagged military, ~250 aircraft / ~130 KB) every 30 s and keeps only those
+# within 10 miles of zone.home and below 3,000 ft. The filter runs here, so
+# the home location is never sent to adsb.fi.
+#
+# Limits: only sees aircraft transmitting ADS-B (or Mode S picked up by
+# enough community receivers for MLAT). Jets on low-level training often
+# fly with ADS-B off, so expect to miss some.
+#
+# - sensor.military_aircraft_nearby: count; `aircraft` attribute lists each
+#   one (callsign, type, altitude, speed, distance, direction from home).
+# - binary_sensor.military_aircraft_overhead: on while the count is > 0.
+# - binary_sensor.military_aircraft_recent: stays on 10 min after the last
+#   sighting; drives the alert card on the Home view (dashboards/lovelace/
+#   home.yaml), which lists sensor.military_aircraft_nearby's last_aircraft.
+
+rest_command:
+  adsbfi_military:
+    url: https://opendata.adsb.fi/api/v2/mil
+    method: GET
+    timeout: 15
+
+template:
+  - triggers:
+      - trigger: time_pattern
+        seconds: "/30"
+    actions:
+      - action: rest_command.adsbfi_military
+        response_variable: resp
+        continue_on_error: true
+      - variables:
+          ok: "{{ resp is defined and resp.status == 200 and resp.content.ac is defined }}"
+          max_km: 16.09  # 10 miles
+          max_ft: 3000
+          nearby: >-
+            {% set ns = namespace(out=[]) %}
+            {% if ok %}
+              {% set hlat = state_attr('zone.home', 'latitude') | float %}
+              {% set hlon = state_attr('zone.home', 'longitude') | float %}
+              {% set dirs = ['N','NE','E','SE','S','SW','W','NW'] %}
+              {% for a in resp.content.ac
+                   if a.lat is defined and a.alt_baro is number
+                   and a.alt_baro < max_ft and (a.seen_pos | default(0)) < 60 %}
+                {% set km = distance(hlat, hlon, a.lat, a.lon) %}
+                {% if km is number and km <= max_km %}
+                  {% set p1 = hlat * pi / 180 %}
+                  {% set p2 = a.lat * pi / 180 %}
+                  {% set dl = (a.lon - hlon) * pi / 180 %}
+                  {% set brg = (atan2(sin(dl) * cos(p2), cos(p1) * sin(p2) - sin(p1) * cos(p2) * cos(dl)) * 180 / pi + 360) % 360 %}
+                  {% set ns.out = ns.out + [{
+                    'callsign': (a.flight | default('') | trim) or none,
+                    'registration': a.r | default(none),
+                    'type': a.t | default(none),
+                    'description': a.desc | default(none),
+                    'operator': a.ownOp | default(none),
+                    'altitude_ft': a.alt_baro,
+                    'speed_kt': (a.gs | round(0) | int) if a.gs is defined else none,
+                    'heading': (a.track | round(0) | int) if a.track is defined else none,
+                    'distance_mi': (km * 0.621371) | round(1),
+                    'direction': dirs[((brg + 22.5) // 45) | int % 8],
+                    'squawk': a.squawk | default(none),
+                    'mlat': (a.mlat | default([]) | count) > 0,
+                    'hex': a.hex
+                  }] %}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+            {{ ns.out | sort(attribute='distance_mi') }}
+    sensor:
+      - name: Military aircraft nearby
+        unique_id: military_aircraft_nearby
+        icon: mdi:airplane-alert
+        unit_of_measurement: aircraft
+        state_class: measurement
+        availability: "{{ ok | default(true) }}"
+        state: "{{ nearby | count }}"
+        attributes:
+          aircraft: "{{ nearby }}"
+          summary: >-
+            {{ nearby | map(attribute='description') | map('default', 'Unknown', true) | join(', ') }}
+          # Last non-empty list and when it was seen, kept after the
+          # aircraft leave so the Home view card can keep showing them.
+          last_aircraft: >-
+            {{ nearby if nearby | count > 0 else (this.attributes.last_aircraft | default([])) }}
+          last_seen: >-
+            {{ now().isoformat() if nearby | count > 0 else (this.attributes.last_seen | default(none)) }}
+          feed_total: "{{ resp.content.ac | count if ok else none }}"
+          updated: "{{ now().isoformat() }}"
+    binary_sensor:
+      - name: Military aircraft overhead
+        unique_id: military_aircraft_overhead
+        icon: mdi:airplane-alert
+        availability: "{{ ok | default(true) }}"
+        state: "{{ nearby | count > 0 }}"
+        attributes:
+          closest: "{{ nearby[0] if nearby | count > 0 else none }}"
+
+  - binary_sensor:
+      - name: Military aircraft recent
+        unique_id: military_aircraft_recent
+        icon: mdi:airplane-clock
+        state: "{{ is_state('binary_sensor.military_aircraft_overhead', 'on') }}"
+        delay_off:
+          minutes: 10
+
+# Notification via script.notify_dispatch; who hears it is set by the
+# input_boolean.notify_military_aircraft_* toggles (Notifications admin page,
+# defined in packages/notification_preferences.yaml). Fires when the first
+# aircraft arrives, with a 10-minute cooldown so a jet circling at the edge
+# of the 10-mile radius doesn't send a burst of alerts.
+automation:
+  - id: "alert_military_aircraft_overhead"
+    alias: "Alert: Military Aircraft Low Overhead"
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.military_aircraft_overhead
+        from: "off"
+        to: "on"
+    conditions:
+      - condition: template
+        value_template: >-
+          {% set last = state_attr('automation.alert_military_aircraft_low_overhead', 'last_triggered') %}
+          {{ last is none or (now() - last).total_seconds() > 600 }}
+    actions:
+      - variables:
+          planes: "{{ state_attr('sensor.military_aircraft_nearby', 'aircraft') or [] }}"
+      - action: script.notify_dispatch
+        data:
+          event: military_aircraft
+          title: "Military aircraft overhead"
+          message: >-
+            {% for a in planes %}{{ a.description or a.type or 'Unknown type' }}
+            {%- if a.callsign %} ({{ a.callsign }}){% endif %}
+            at {{ '{:,}'.format(a.altitude_ft) }} ft, {{ a.distance_mi }} mi {{ a.direction }}
+            {%- if a.speed_kt %}, {{ a.speed_kt }} kt{% endif %}
+            {%- if a.operator %}, {{ a.operator }}{% endif %}
+            {%- if not loop.last %}; {% endif %}{% endfor %}

@@ -1,0 +1,324 @@
+path: other_floors
+title: Other Floors
+type: custom:masonry-layout
+layout:
+  width: 350
+  max_width: 5000
+  max_cols: 4
+cards:
+  - type: custom:button-card
+    template: room_card
+    name: Double Bedroom
+    icon: mdi:bed-double
+    entity: light.double_bedroom_lights_master
+    triggers_update:
+      - sensor.double_bedroom_average_temperature
+      - climate.double_bedroom
+      - sensor.double_bedroom_average_humidity
+      - binary_sensor.double_bedroom_motion
+      - input_select.double_bedroom_scenes
+    variables:
+      temp: sensor.double_bedroom_average_temperature
+      climate: climate.double_bedroom
+      second: sensor.double_bedroom_average_humidity
+      second_icon: mdi:water-percent
+      motion: binary_sensor.double_bedroom_motion
+      scene: input_select.double_bedroom_scenes
+    custom_fields:
+      lights:
+        card:
+          type: vertical-stack
+          cards:
+            - type: tile
+              entity: light.double_bedroom_lights_master
+              name: Lights
+              features_position: inline
+              features:
+                - type: light-brightness
+            - type: tile
+              entity: light.double_bedroom_lamps
+              name: Lamps
+              features_position: inline
+              features:
+                - type: light-brightness
+      scenes:
+        card:
+          type: grid
+          square: false
+          columns: 4
+          cards:
+            - type: custom:button-card
+              template: room_scene
+              entity: input_select.double_bedroom_scenes
+              icon: mdi:brightness-7
+              variables:
+                option: Bright
+                color: "var(--amber-color)"
+            - type: custom:button-card
+              template: room_scene
+              entity: input_select.double_bedroom_scenes
+              icon: mdi:sofa
+              variables:
+                option: Relax
+                color: "var(--teal-color)"
+            - type: custom:button-card
+              template: room_scene
+              entity: input_select.double_bedroom_scenes
+              icon: mdi:fire
+              variables:
+                option: Cosy
+                color: "var(--deep-orange-color)"
+            - type: custom:button-card
+              template: room_scene
+              entity: input_select.double_bedroom_scenes
+              icon: mdi:power
+              variables:
+                option: "Off"
+                color: "var(--red-color)"
+      toggles:
+        card:
+          type: grid
+          square: false
+          columns: 3
+          cards:
+            - type: custom:button-card
+              template: room_toggle
+              entity: input_boolean.double_bedroom_automatic_lights
+              name: Auto
+              icon: mdi:refresh-auto
+              variables:
+                color: "var(--blue-color)"
+            - type: custom:button-card
+              template: room_boost
+              entity: input_boolean.boost_double_bedroom
+              variables:
+                slug: double_bedroom
+      extra:
+        card:
+          type: conditional
+          conditions:
+            - condition: state
+              entity: input_boolean.status_guests
+              state: "on"
+          card:
+            type: entities
+            entities:
+              - name: Bedtime
+                entity: input_boolean.status_bedtime_double
+                toggle: true
+              - name: Guest Active
+                entity: input_boolean.status_guest_double_bedroom
+                toggle: true
+
+  - type: custom:button-card
+    template: room_card
+    name: Single Bedroom
+    icon: mdi:bed-single
+    entity: light.single_bedroom_lights_master
+    triggers_update:
+      - sensor.single_bedroom_average_temperature
+      - sensor.single_bedroom_average_humidity
+      - binary_sensor.single_bedroom_motion
+      - input_select.single_bedroom_scenes
+    variables:
+      temp: sensor.single_bedroom_average_temperature
+      second: sensor.single_bedroom_average_humidity
+      second_icon: mdi:water-percent
+      motion: binary_sensor.single_bedroom_motion
+      scene: input_select.single_bedroom_scenes
+    custom_fields:
+      lights:
+        card:
+          type: vertical-stack
+          cards:
+            - type: tile
+              entity: light.single_bedroom_lights_master
+              name: Lights
+              features_position: inline
+              features:
+                - type: light-brightness
+      scenes:
+        card:
+          type: grid
+          square: false
+          columns: 4
+          cards:
+            - type: custom:button-card
+              template: room_scene
+              entity: input_select.single_bedroom_scenes
+              icon: mdi:brightness-7
+              variables:
+                option: Bright
+                color: "var(--amber-color)"
+            - type: custom:button-card
+              template: room_scene
+              entity: input_select.single_bedroom_scenes
+              icon: mdi:sofa
+              variables:
+                option: Relax
+                color: "var(--teal-color)"
+            - type: custom:button-card
+              template: room_scene
+              entity: input_select.single_bedroom_scenes
+              icon: mdi:fire
+              variables:
+                option: Cosy
+                color: "var(--deep-orange-color)"
+            - type: custom:button-card
+              template: room_scene
+              entity: input_select.single_bedroom_scenes
+              icon: mdi:power
+              variables:
+                option: "Off"
+                color: "var(--red-color)"
+      toggles:
+        card:
+          type: grid
+          square: false
+          columns: 3
+          cards:
+            - type: custom:button-card
+              template: room_toggle
+              entity: input_boolean.single_bedroom_automatic_lights
+              name: Auto
+              icon: mdi:refresh-auto
+              variables:
+                color: "var(--blue-color)"
+      extra:
+        card:
+          type: conditional
+          conditions:
+            - condition: state
+              entity: input_boolean.status_guests
+              state: "on"
+          card:
+            type: entities
+            entities:
+              - name: Bedtime
+                entity: input_boolean.status_bedtime_single
+                toggle: true
+              - name: Guest Active
+                entity: input_boolean.status_guest_single_bedroom
+                toggle: true
+
+  - type: custom:button-card
+    template: room_card
+    name: Landing
+    icon: mdi:stairs
+    entity: light.landing_lights_master
+    triggers_update:
+      - sensor.landing_average_temperature
+      - sensor.landing_average_humidity
+      - binary_sensor.landing_motion
+      - input_select.landing_scenes
+    variables:
+      temp: sensor.landing_average_temperature
+      second: sensor.landing_average_humidity
+      second_icon: mdi:water-percent
+      motion: binary_sensor.landing_motion
+      scene: input_select.landing_scenes
+    custom_fields:
+      lights:
+        card:
+          type: vertical-stack
+          cards:
+            - type: tile
+              entity: light.landing_lights_master
+              name: Lights
+              features_position: inline
+              features:
+                - type: light-brightness
+      scenes:
+        card:
+          type: grid
+          square: false
+          columns: 4
+          cards:
+            - type: custom:button-card
+              template: room_scene
+              entity: input_select.landing_scenes
+              icon: mdi:brightness-7
+              variables:
+                option: Bright
+                color: "var(--amber-color)"
+            - type: custom:button-card
+              template: room_scene
+              entity: input_select.landing_scenes
+              icon: mdi:sofa
+              variables:
+                option: Relax
+                color: "var(--teal-color)"
+            - type: custom:button-card
+              template: room_scene
+              entity: input_select.landing_scenes
+              icon: mdi:fire
+              variables:
+                option: Cosy
+                color: "var(--deep-orange-color)"
+            - type: custom:button-card
+              template: room_scene
+              entity: input_select.landing_scenes
+              icon: mdi:power
+              variables:
+                option: "Off"
+                color: "var(--red-color)"
+      toggles:
+        card:
+          type: grid
+          square: false
+          columns: 3
+          cards:
+            - type: custom:button-card
+              template: room_toggle
+              entity: input_boolean.landing_automatic_lights
+              name: Auto
+              icon: mdi:refresh-auto
+              variables:
+                color: "var(--blue-color)"
+
+  - type: custom:button-card
+    template: room_card
+    name: Patio
+    icon: mdi:table-chair
+    entity: light.patio_light
+    triggers_update:
+      - sensor.homs_patio_temperature
+      - sensor.homs_patio_illuminance
+      - binary_sensor.patio_motion
+    variables:
+      temp: sensor.homs_patio_temperature
+      second: sensor.homs_patio_illuminance
+      second_icon: mdi:brightness-6
+      motion: binary_sensor.patio_motion
+    custom_fields:
+      lights:
+        card:
+          type: vertical-stack
+          cards:
+            - type: tile
+              entity: light.patio_light
+              name: Patio Light
+              features_position: inline
+              features:
+                - type: light-brightness
+            - type: tile
+              entity: input_number.patio_lights_on_threshold
+              name: Threshold
+              icon: mdi:brightness-4
+              features_position: inline
+              features:
+                - type: numeric-input
+                  style: slider
+      toggles:
+        card:
+          type: grid
+          square: false
+          columns: 3
+          cards:
+            - type: custom:button-card
+              template: room_toggle
+              entity: input_boolean.patio_automatic_lights
+              name: Auto
+              icon: mdi:refresh-auto
+              variables:
+                color: "var(--blue-color)"

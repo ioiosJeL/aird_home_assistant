@@ -1,0 +1,1870 @@
+# Shared custom:button-card templates.
+# Included by dashboards/lovelace/nav.yaml and dashboards/admin-pages/nav.yaml.
+
+scene_button:
+  show_name: true
+  color: var(--paper-item-icon-color)
+  size: 35%
+  styles:
+    card:
+      - border-radius: var(--ha-card-border-radius)
+      - margin-top: 16px
+      - --mdc-ripple-color: white
+      - --mdc-ripple-press-opacity: 0.5
+
+# ---------------------------------------------------------------------------
+# Room card: one card per room. `entity` is the room's master light (drives
+# the icon glow); variables supply the sensors shown in the header.
+# Nested cards go in custom_fields: lights, scenes, toggles, extra.
+# ---------------------------------------------------------------------------
+room_card:
+  show_icon: true
+  show_name: true
+  show_state: false
+  tap_action:
+    action: none
+  hold_action:
+    action: none
+  variables:
+    temp: null
+    climate: null
+    second: null
+    second_icon: mdi:water-percent
+    motion: null
+    scene: null
+  custom_fields:
+    sub: |
+      [[[
+        const scene = variables.scene && states[variables.scene] ? states[variables.scene].state : null;
+        const members = entity && entity.attributes.entity_id ? entity.attributes.entity_id : [];
+        let lights;
+        if (!entity || entity.state !== 'on') lights = 'Lights off';
+        else if (members.length > 1) {
+          const on = members.filter(e => states[e] && states[e].state === 'on').length;
+          lights = `${on} of ${members.length} lights on`;
+        } else lights = 'Lights on';
+        return [scene && scene !== 'Off' && entity && entity.state === 'on' ? scene : null, lights].filter(Boolean).join(' · ');
+      ]]]
+    stats: |
+      [[[
+        const fmt = (id, digits) => {
+          const s = states[id];
+          if (!s || isNaN(parseFloat(s.state))) return '—';
+          return parseFloat(s.state).toFixed(digits);
+        };
+        // pointerup, not click: button-card's action handler calls
+        // preventDefault() on touchend, which swallows click on phones.
+        // The movement check stops a scroll from opening the dialog.
+        const more = id => `data-tap onpointerdown="this._p=[event.clientX,event.clientY]" onpointerup="const p=this._p;this._p=null;if(!p||Math.abs(event.clientX-p[0])>10||Math.abs(event.clientY-p[1])>10)return;event.stopPropagation();this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${id}'},bubbles:true,composed:true}))"`;
+        let out = '';
+        if (variables.temp) {
+          const c = variables.climate && states[variables.climate];
+          const heating = c && c.attributes.hvac_action === 'heating';
+          const col = heating ? 'var(--deep-orange-color)' : 'var(--primary-text-color)';
+          out += `<div class="t" ${more(variables.temp)} style="color:${col}">` +
+            (heating ? '<ha-icon icon="mdi:fire" style="width:18px;height:18px;--mdc-icon-size:18px"></ha-icon>' : '') +
+            `${fmt(variables.temp, 1)}°</div>`;
+        }
+        let row = '';
+        if (variables.second) {
+          const s = states[variables.second];
+          const unit = s && s.attributes.unit_of_measurement ? s.attributes.unit_of_measurement : '';
+          row += `<span ${more(variables.second)}><ha-icon icon="${variables.second_icon}" style="width:16px;height:16px;--mdc-icon-size:16px"></ha-icon>${fmt(variables.second, 0)}${unit === '%' ? '%' : ' ' + unit}</span>`;
+        }
+        if (variables.motion) {
+          const m = states[variables.motion];
+          const on = m && m.state === 'on';
+          row += `<span ${more(variables.motion)} style="color:${on ? 'var(--green-color)' : 'var(--disabled-text-color)'}"><ha-icon icon="${on ? 'mdi:motion-sensor' : 'mdi:motion-sensor-off'}" style="width:16px;height:16px;--mdc-icon-size:16px"></ha-icon></span>`;
+        }
+        return out + `<div class="r">${row}</div>`;
+      ]]]
+    # Plain-English "why" from sensor.<room>_lights_why (lights_insight.yaml).
+    # Tap for the room's history of explanations.
+    why: |
+      [[[
+        if (!entity) return '';
+        const id = entity.entity_id.replace('light.', 'sensor.').replace('_lights_master', '_lights_why');
+        const s = states[id];
+        if (!s || !s.state || ['unknown', 'unavailable'].includes(s.state)) return '';
+        const t = s.state;
+        const icon = t.startsWith('Paused') ? 'mdi:pause-circle-outline'
+          : t.startsWith('Motion control is switched off') ? 'mdi:motion-sensor-off'
+          : t.startsWith('Bedtime') ? 'mdi:power-sleep'
+          : t.startsWith('Dimming') ? 'mdi:timer-sand'
+          : t.includes("bright enough") ? 'mdi:white-balance-sunny'
+          : 'mdi:information-outline';
+        const col = t.startsWith('Paused') || t.startsWith('Dimming') ? 'var(--warning-color)' : 'var(--secondary-text-color)';
+        return `<div data-tap onpointerdown="this._p=[event.clientX,event.clientY]" onpointerup="const p=this._p;this._p=null;if(!p||Math.abs(event.clientX-p[0])>10||Math.abs(event.clientY-p[1])>10)return;event.stopPropagation();this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${id}'},bubbles:true,composed:true}))" style="color:${col}"><ha-icon icon="${icon}"></ha-icon><span>${t}</span></div>`;
+      ]]]
+  styles:
+    card:
+      - padding: 18px 16px 14px
+      - background: |
+          [[[
+            if (!entity || entity.state !== 'on') return 'var(--ha-card-background, var(--card-background-color))';
+            const c = entity.attributes.rgb_color ? `rgb(${entity.attributes.rgb_color.join(',')})` : 'var(--amber-color)';
+            return `linear-gradient(160deg, color-mix(in srgb, ${c} 16%, var(--ha-card-background, var(--card-background-color))) 0%, var(--ha-card-background, var(--card-background-color)) 55%)`;
+          ]]]
+      - cursor: default
+    grid:
+      - grid-template-areas: >-
+          "i n stats" "i sub stats" "why why why" "lights lights lights"
+          "scenes scenes scenes" "toggles toggles toggles" "extra extra extra"
+      - grid-template-columns: 52px 1fr auto
+      - grid-template-rows: auto auto
+      - column-gap: 14px
+      - align-items: center
+    img_cell:
+      - width: 52px
+      - height: 52px
+      - border-radius: 16px
+      - background: |
+          [[[
+            if (!entity || entity.state !== 'on') return 'color-mix(in srgb, var(--primary-text-color) 7%, transparent)';
+            const c = entity.attributes.rgb_color ? `rgb(${entity.attributes.rgb_color.join(',')})` : 'var(--amber-color)';
+            return `color-mix(in srgb, ${c} 28%, transparent)`;
+          ]]]
+    icon:
+      - width: 28px
+      - color: |
+          [[[
+            if (!entity || entity.state !== 'on') return 'var(--secondary-text-color)';
+            return entity.attributes.rgb_color ? `rgb(${entity.attributes.rgb_color.join(',')})` : 'var(--amber-color)';
+          ]]]
+    name:
+      - justify-self: start
+      - align-self: end
+      - font-size: 1.55rem
+      - font-weight: 700
+      - letter-spacing: -0.01em
+      - line-height: 1.15
+      - white-space: normal
+      - text-align: left
+    custom_fields:
+      sub:
+        - justify-self: start
+        - align-self: start
+        - font-size: 0.85rem
+        - color: var(--secondary-text-color)
+        - margin-top: 2px
+      stats:
+        - justify-self: end
+        - text-align: right
+        - line-height: 1.2
+        - "--mdc-icon-size": 16px
+      why:
+        - justify-self: stretch
+        - text-align: left
+        - margin-top: 10px
+        - font-size: 0.85rem
+        - line-height: 1.3
+      lights:
+        - justify-self: stretch
+        - text-align: left
+        - margin-top: 14px
+        - "--ha-card-box-shadow": none
+        - "--ha-card-border-width": "0"
+        - "--ha-card-border-radius": 14px
+        - "--ha-card-background": color-mix(in srgb, var(--primary-text-color) 5%, transparent)
+      scenes:
+        - justify-self: stretch
+        - margin-top: 10px
+        - "--grid-card-gap": 6px
+      toggles:
+        - justify-self: stretch
+        - margin-top: 6px
+        - "--grid-card-gap": 6px
+      extra:
+        - justify-self: stretch
+        - text-align: left
+        - margin-top: 10px
+        - "--ha-card-box-shadow": none
+        - "--ha-card-border-width": "0"
+        - "--ha-card-background": color-mix(in srgb, var(--primary-text-color) 5%, transparent)
+  extra_styles: |
+    #stats .t { font-size: 1.35rem; font-weight: 700; display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
+    #stats .t ha-icon { --mdc-icon-size: 18px; }
+    #stats .r { display: flex; gap: 8px; justify-content: flex-end; font-size: 0.85rem; color: var(--secondary-text-color); margin-top: 2px; }
+    #stats .r span { display: inline-flex; align-items: center; gap: 2px; }
+    #stats [data-tap] { cursor: pointer; padding: 4px; margin: -4px; border-radius: 8px; -webkit-tap-highlight-color: transparent; }
+    #stats [data-tap]:active { background: color-mix(in srgb, var(--primary-text-color) 10%, transparent); }
+    #why div { display: flex; align-items: flex-start; gap: 6px; cursor: pointer; padding: 6px 8px; margin: 0 -8px; border-radius: 10px; -webkit-tap-highlight-color: transparent; }
+    #why div:active { background: color-mix(in srgb, var(--primary-text-color) 10%, transparent); }
+    #why ha-icon { --mdc-icon-size: 16px; width: 16px; height: 16px; flex: none; margin-top: 1px; }
+
+# Pill-style button used for scenes and toggles inside a room card.
+room_pill:
+  show_icon: true
+  show_name: true
+  show_state: false
+  variables:
+    color: var(--amber-color)
+    active: false
+  styles:
+    card:
+      - padding: 8px 2px 6px
+      - border-radius: 12px
+      - box-shadow: none
+      - border: none
+      - background: |
+          [[[ return variables.active
+                ? `color-mix(in srgb, ${variables.color} 24%, transparent)`
+                : 'color-mix(in srgb, var(--primary-text-color) 5%, transparent)'; ]]]
+    grid:
+      - grid-template-areas: '"i" "n"'
+      - grid-template-rows: auto auto
+    icon:
+      - width: 22px
+      - color: |
+          [[[ return variables.active ? variables.color : 'var(--secondary-text-color)'; ]]]
+    name:
+      - font-size: 11px
+      - font-weight: 600
+      - margin-top: 2px
+      - color: |
+          [[[ return variables.active ? 'var(--primary-text-color)' : 'var(--secondary-text-color)'; ]]]
+
+room_scene:
+  template: room_pill
+  variables:
+    option: ""
+    active: "[[[ return entity && entity.state === variables.option; ]]]"
+  name: "[[[ return variables.option; ]]]"
+  tap_action:
+    action: perform-action
+    perform_action: input_select.select_option
+    data:
+      entity_id: "[[[ return entity.entity_id; ]]]"
+      option: "[[[ return variables.option; ]]]"
+
+room_toggle:
+  template: room_pill
+  variables:
+    active: "[[[ return entity && entity.state === 'on'; ]]]"
+  tap_action:
+    action: toggle
+  hold_action:
+    action: more-info
+
+# Heating boost pill: tap opens a popup (browser_mod) explaining the boost,
+# with sliders for how much and how long and a Start button; while a boost
+# is running it shows the time left and a Cancel button instead (the
+# sliders are hidden then, because the timer-expired automation takes the
+# current "raise by" value back off). Entities follow the slug:
+# input_boolean/timer.boost_<slug>, input_number.boost_<slug>_value /
+# _minutes, climate.<slug>, script.boost_start_/boost_cancel_<slug>
+# (packages/boost_timers.yaml). Only standard cards inside the popup:
+# button-card would evaluate nested [[[ ]]] templates in this context.
+room_boost:
+  template: room_pill
+  name: Boost
+  icon: "[[[ return entity && entity.state === 'on' ? 'mdi:radiator' : 'mdi:radiator-off'; ]]]"
+  variables:
+    slug: ""
+    color: var(--red-color)
+    active: "[[[ return entity && entity.state === 'on'; ]]]"
+  tap_action:
+    action: fire-dom-event
+    browser_mod:
+      service: browser_mod.popup
+      data:
+        title: >-
+          [[[ const n = variables.slug.split('_').map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
+              return `${n} heating boost`; ]]]
+        size: normal
+        content:
+          type: vertical-stack
+          cards:
+            # The room's temperature now, big and full width, to judge how
+            # much boost is needed
+            - type: sensor
+              entity: "[[[ return `sensor.${variables.slug}_average_temperature`; ]]]"
+              name: Room temperature now
+              icon: mdi:home-thermometer-outline
+              graph: none
+            - type: markdown
+              content: >-
+                [[[ const s = variables.slug;
+                    return `{% set c = 'climate.${s}' %}{% set sp = state_attr(c, 'temperature') %}` +
+                      `{% set v = states('input_number.boost_${s}_value') | int(0) %}` +
+                      `{% set m = states('input_number.boost_${s}_minutes') | int(0) %}` +
+                      `{% if is_state('input_boolean.boost_${s}', 'on') %}` +
+                      `**Boost running.** The heating is set to **{{ sp }}°**, {{ v }}° above normal. ` +
+                      `When the timer runs out it drops back to **{{ sp - v }}°** on its own. ` +
+                      `Cancel to put it back now.` +
+                      `{% else %}` +
+                      `A boost turns the heating up for a while, then puts it back on its own. ` +
+                      `Choose how much warmer and for how long, then tap **Start boost**.\n\n` +
+                      `Heating is set to **{{ sp }}°**; the boost raises it to **{{ sp + v }}°** for **{{ (m // 60 ~ ' h ') if m >= 60 else '' }}{{ (m % 60 ~ ' min') if m % 60 else '' }}**.` +
+                      `{% endif %}`; ]]]
+            # Not running: sliders + Start
+            - type: conditional
+              conditions:
+                - condition: state
+                  entity: "[[[ return `input_boolean.boost_${variables.slug}`; ]]]"
+                  state: "off"
+              card:
+                type: vertical-stack
+                cards:
+                  - type: entities
+                    state_color: false
+                    entities:
+                      - entity: "[[[ return `input_number.boost_${variables.slug}_value`; ]]]"
+                        name: How much warmer
+                        icon: mdi:thermometer-plus
+                      - entity: "[[[ return `input_number.boost_${variables.slug}_minutes`; ]]]"
+                        name: For how long
+                        icon: mdi:timer-outline
+                  - type: button
+                    name: Start boost
+                    icon: mdi:radiator
+                    show_state: false
+                    tap_action:
+                      action: perform-action
+                      perform_action: "[[[ return `script.boost_start_${variables.slug}`; ]]]"
+            # Running: time left + Cancel
+            - type: conditional
+              conditions:
+                - condition: state
+                  entity: "[[[ return `input_boolean.boost_${variables.slug}`; ]]]"
+                  state: "on"
+              card:
+                type: vertical-stack
+                cards:
+                  - type: entities
+                    entities:
+                      - entity: "[[[ return `timer.boost_${variables.slug}`; ]]]"
+                        name: Time left
+                        icon: mdi:timer-sand
+                  - type: button
+                    name: Cancel boost
+                    icon: mdi:radiator-off
+                    show_state: false
+                    tap_action:
+                      action: perform-action
+                      perform_action: "[[[ return `script.boost_cancel_${variables.slug}`; ]]]"
+
+room_status:
+  template: room_pill
+  variables:
+    color: var(--green-color)
+    active: "[[[ return entity && entity.state === 'on'; ]]]"
+  tap_action:
+    action: more-info
+
+# ---------------------------------------------------------------------------
+# Person card: photo, where they are and for how long, phone battery.
+# Tap for the person's more-info (map/history), hold for the battery.
+# ---------------------------------------------------------------------------
+person_card:
+  show_entity_picture: true
+  show_name: true
+  show_state: false
+  variables:
+    battery: null
+  tap_action:
+    action: more-info
+  hold_action:
+    action: more-info
+    entity: "[[[ return variables.battery; ]]]"
+  custom_fields:
+    where: |
+      [[[
+        if (!entity) return '';
+        const st = entity.state;
+        const zone = st === 'home' ? 'Home' : st === 'not_home' ? 'Away'
+          : (states[`zone.${st}`]?.attributes.friendly_name || st);
+        const mins = Math.max(0, Math.round((Date.now() - new Date(entity.last_changed)) / 60000));
+        const ago = mins < 1 ? 'just now' : mins < 60 ? `${mins}m` : mins < 1440
+          ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${Math.floor(mins / 1440)}d`;
+        return `${zone} · ${ago}`;
+      ]]]
+    batt: |
+      [[[
+        const b = variables.battery && states[variables.battery];
+        if (!b || isNaN(parseFloat(b.state))) return '';
+        const v = Math.round(parseFloat(b.state));
+        const icon = v >= 95 ? 'mdi:battery' : v < 10 ? 'mdi:battery-outline' : `mdi:battery-${Math.floor(v / 10) * 10}`;
+        const col = v <= 20 ? 'var(--red-color)' : 'var(--secondary-text-color)';
+        return `<span style="color:${col};display:inline-flex;align-items:center;gap:2px"><ha-icon icon="${icon}" style="--mdc-icon-size:14px;width:14px"></ha-icon>${v}%</span>`;
+      ]]]
+  styles:
+    card:
+      - padding: 12px
+      - -webkit-tap-highlight-color: transparent
+    grid:
+      - grid-template-areas: '"i n" "i where" "i batt"'
+      - grid-template-columns: 48px 1fr
+      - column-gap: 12px
+    img_cell:
+      - width: 48px
+      - height: 48px
+    entity_picture:
+      - width: 44px
+      - height: 44px
+      - border-radius: 50%
+      - object-fit: cover
+      - box-shadow: |
+          [[[ return `0 0 0 2px ${entity && entity.state === 'home'
+                ? 'var(--green-color)' : 'var(--disabled-text-color)'}`; ]]]
+      - filter: "[[[ return entity && entity.state === 'home' ? 'none' : 'grayscale(0.7)'; ]]]"
+    name:
+      - justify-self: start
+      - font-size: 1.05rem
+      - font-weight: 700
+    custom_fields:
+      where:
+        - justify-self: start
+        - font-size: 0.8rem
+        - color: "[[[ return entity && entity.state === 'home' ? 'var(--green-color)' : 'var(--secondary-text-color)'; ]]]"
+      batt:
+        - justify-self: start
+        - font-size: 0.75rem
+
+# ---------------------------------------------------------------------------
+# Bin due: Home view reminder for one bin (packages/bins.yaml). Entity is
+# the bin's input_boolean.bin_ack_<colour>; tap marks it out (hides the
+# card). variables.next is its sensor.<colour>_bin_next_collection.
+# Show it only while binary_sensor.<colour>_bin_due is on and the ack off.
+# ---------------------------------------------------------------------------
+bin_due:
+  show_name: true
+  show_state: false
+  show_label: true
+  variables:
+    next: null
+    color: var(--primary-text-color)
+  tap_action:
+    action: toggle
+    haptic: success
+  hold_action:
+    action: more-info
+  label: |
+    [[[
+      const n = variables.next && states[variables.next] && new Date(states[variables.next].state);
+      if (!n || isNaN(n)) return 'Tap when it\'s out';
+      const today = new Date();
+      const tomorrow = new Date(today.getTime() + 86400000);
+      const day = n.toDateString() === today.toDateString() ? 'this morning'
+        : n.toDateString() === tomorrow.toDateString() ? 'tomorrow morning'
+        : n.toLocaleDateString(undefined, { weekday: 'long' }) + ' morning';
+      return `Collection ${day} · tap when it's out`;
+    ]]]
+  styles:
+    card:
+      - padding: 12px
+      - border-left: "[[[ return `4px solid ${variables.color}`; ]]]"
+      - -webkit-tap-highlight-color: transparent
+    grid:
+      - grid-template-areas: '"i n" "i l"'
+      - grid-template-columns: 40px 1fr
+      - column-gap: 12px
+    img_cell:
+      - width: 40px
+      - height: 40px
+    icon:
+      - width: 32px
+      - color: "[[[ return variables.color; ]]]"
+    name:
+      - justify-self: start
+      - font-size: 1.05rem
+      - font-weight: 700
+    label:
+      - justify-self: start
+      - font-size: 0.8rem
+      - color: var(--secondary-text-color)
+
+# ---------------------------------------------------------------------------
+# Dog audio (packages/dog_audio.yaml): Home view status card, 24 h pause
+# button and recent-play rows. Session data comes from sensor.dog_audio_log
+# (newest first; reason "playing" while a session runs).
+# ---------------------------------------------------------------------------
+dog_audio_status:
+  entity: script.dog_audio_play
+  show_name: true
+  show_state: false
+  show_icon: true
+  icon: mdi:dog
+  name: Dog sounds
+  triggers_update:
+    - sensor.date_time_24h
+    - sensor.dog_audio_log
+    - timer.dog_audio_pause
+    - input_boolean.dog_audio_enabled
+    - input_datetime.dog_audio_next
+    - person.john_lumley
+    - person.elizabeth_munsie
+  tap_action:
+    action: more-info
+    entity: input_boolean.dog_audio_enabled
+  variables:
+    mode: |
+      [[[
+        const log = states['sensor.dog_audio_log']?.attributes.log || [];
+        if (states['script.dog_audio_play']?.state === 'on' && log[0]?.reason === 'playing') return 'playing';
+        if (states['input_boolean.dog_audio_enabled']?.state !== 'on') return 'off';
+        if (states['timer.dog_audio_pause']?.state === 'active') return 'paused';
+        return 'armed';
+      ]]]
+  custom_fields:
+    status: |
+      [[[
+        const log = states['sensor.dog_audio_log']?.attributes.log || [];
+        const title = (f) => (f || '').slice(3, -4).replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+        const hm = (d) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const when = (d) => {
+          const t = new Date(); const tm = new Date(t.getTime() + 86400000);
+          return d.toDateString() === t.toDateString() ? hm(d)
+            : d.toDateString() === tm.toDateString() ? `tomorrow ${hm(d)}`
+            : `${d.toLocaleDateString([], { weekday: 'short' })} ${hm(d)}`;
+        };
+        if (variables.mode === 'playing') {
+          const left = Math.max(0, Math.round(log[0].planned - (Date.now() - new Date(log[0].start)) / 60000));
+          return `Playing <b>${title(log[0].file)}</b> · ${left} min left`;
+        }
+        if (variables.mode === 'off') return 'Switched off';
+        if (variables.mode === 'paused')
+          return `Paused until ${when(new Date(states['timer.dog_audio_pause'].attributes.finishes_at))}`;
+        if (['person.john_lumley', 'person.elizabeth_munsie'].some((e) => states[e]?.state === 'home'))
+          return 'Waiting · plays when you\'re both out';
+        if (states['input_boolean.status_guests']?.state === 'on') return 'Guest mode · not playing';
+        const ts = states['input_datetime.dog_audio_next']?.attributes.timestamp;
+        if (!ts) return 'Ready';
+        const n = new Date(ts * 1000), h = n.getHours() + n.getMinutes() / 60;
+        return h < 9 || h >= 22.83 ? 'Next session after 09:00' : `Next session ${when(n)}`;
+      ]]]
+    stats: |
+      [[[
+        const log = states['sensor.dog_audio_log']?.attributes.log || [];
+        const mins = (e) => e.played ?? Math.round((Date.now() - new Date(e.start)) / 60000);
+        const sum = (since) => {
+          const l = log.filter((e) => new Date(e.start) >= since);
+          return [l.length, l.reduce((a, e) => a + mins(e), 0)];
+        };
+        const dur = (m) => m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`;
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const [tn, tm] = sum(today);
+        const [wn, wm] = sum(new Date(Date.now() - 7 * 86400000));
+        return `Today <b>${tn}</b> · ${dur(tm)} &nbsp;|&nbsp; 7 days <b>${wn}</b> · ${dur(wm)}`;
+      ]]]
+  styles:
+    card:
+      - padding: 12px
+      - -webkit-tap-highlight-color: transparent
+    grid:
+      - grid-template-areas: '"i n" "i status" "i stats"'
+      - grid-template-columns: 40px 1fr
+      - column-gap: 12px
+    img_cell:
+      - width: 40px
+      - height: 40px
+    icon:
+      - width: 30px
+      - color: |
+          [[[ return { playing: 'var(--green-color)', paused: 'var(--amber-color)',
+                       off: 'var(--disabled-text-color)' }[variables.mode] || 'var(--primary-text-color)'; ]]]
+    name:
+      - justify-self: start
+      - font-size: 1.05rem
+      - font-weight: 700
+    custom_fields:
+      status:
+        - justify-self: start
+        - text-align: left
+        - font-size: 0.85rem
+        - color: "[[[ return variables.mode === 'playing' ? 'var(--green-color)' : 'var(--primary-text-color)'; ]]]"
+      stats:
+        - justify-self: start
+        - font-size: 0.8rem
+        - color: var(--secondary-text-color)
+
+# 24 h pause toggle: tap starts timer.dog_audio_pause (stopping a session
+# in progress) or cancels it.
+dog_audio_pause:
+  entity: timer.dog_audio_pause
+  show_state: false
+  name: "[[[ return entity?.state === 'active' ? 'Resume now' : 'Pause for 24 hours'; ]]]"
+  icon: "[[[ return entity?.state === 'active' ? 'mdi:play-circle-outline' : 'mdi:pause-circle-outline'; ]]]"
+  tap_action:
+    action: javascript
+    javascript: |
+      [[[
+        hass.callService('timer', entity.state === 'active' ? 'cancel' : 'start',
+          { entity_id: 'timer.dog_audio_pause' });
+      ]]]
+  styles:
+    card:
+      - padding: 8px 12px
+      - -webkit-tap-highlight-color: transparent
+      - background: "[[[ return entity?.state === 'active' ? 'rgba(var(--rgb-amber-color, 255,193,7), 0.15)' : 'none'; ]]]"
+    grid:
+      - grid-template-areas: '"i n"'
+      - grid-template-columns: 28px 1fr
+      - column-gap: 8px
+    icon:
+      - width: 22px
+      - color: "[[[ return entity?.state === 'active' ? 'var(--amber-color)' : 'var(--secondary-text-color)'; ]]]"
+    name:
+      - justify-self: start
+      - font-size: 0.9rem
+      - font-weight: 600
+
+# One recent session (variables.index into the log, 0 = newest). Tap to
+# listen: resolves a signed URL for the file via media_source and opens it.
+dog_audio_row:
+  entity: sensor.dog_audio_log
+  show_state: false
+  show_label: true
+  variables:
+    index: 0
+    item: "[[[ return (entity?.attributes.log || [])[variables.index]; ]]]"
+  icon: "[[[ return variables.item?.reason === 'playing' ? 'mdi:volume-high' : 'mdi:play-circle-outline'; ]]]"
+  name: |
+    [[[ const f = variables.item?.file || '';
+        return f.slice(3, -4).replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()); ]]]
+  label: |
+    [[[
+      const e = variables.item; if (!e) return '';
+      const d = new Date(e.start), t = new Date();
+      const y = new Date(t.getTime() - 86400000);
+      const hm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const day = d.toDateString() === t.toDateString() ? 'Today'
+        : d.toDateString() === y.toDateString() ? 'Yesterday'
+        : d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+      const how = e.reason === 'playing' ? 'playing now'
+        : e.reason === 'completed' ? `${e.played} min`
+        : `${e.played} of ${e.planned} min · ${e.reason}`;
+      return `${day} ${hm} · ${how}`;
+    ]]]
+  tap_action:
+    action: javascript
+    javascript: |
+      [[[
+        const e = variables.item; if (!e) return;
+        const w = window.open('', '_blank');
+        hass.callWS({ type: 'media_source/resolve_media',
+                      media_content_id: `media-source://media_source/local/dog_desensitisation/${e.file}` })
+          .then((r) => { const u = hass.hassUrl(r.url); if (w) w.location = u; else window.location = u; })
+          .catch(() => w && w.close());
+      ]]]
+  styles:
+    card:
+      - padding: 6px 12px
+      - display: "[[[ return variables.item ? 'block' : 'none'; ]]]"
+      - -webkit-tap-highlight-color: transparent
+    grid:
+      - grid-template-areas: '"i n" "i l"'
+      - grid-template-columns: 28px 1fr
+      - column-gap: 10px
+    icon:
+      - width: 22px
+      - color: "[[[ return variables.item?.reason === 'playing' ? 'var(--green-color)' : 'var(--primary-color)'; ]]]"
+    name:
+      - justify-self: start
+      - font-size: 0.9rem
+    label:
+      - justify-self: start
+      - font-size: 0.75rem
+      - color: var(--secondary-text-color)
+
+# ---------------------------------------------------------------------------
+# Stat tile: a percentage sensor with value, label and a usage bar that
+# turns amber/red past the warn/crit thresholds. Tap opens history.
+# ---------------------------------------------------------------------------
+stat_tile:
+  show_icon: true
+  show_name: true
+  show_state: false
+  variables:
+    warn: 70
+    crit: 85
+  tap_action:
+    action: more-info
+  custom_fields:
+    value: |
+      [[[
+        const v = parseFloat(entity?.state);
+        return isNaN(v) ? '—' : `${Math.round(v)}<span style="font-size:0.7em;font-weight:500">%</span>`;
+      ]]]
+    bar: |
+      [[[
+        const v = Math.min(100, Math.max(0, parseFloat(entity?.state) || 0));
+        const col = v >= variables.crit ? 'var(--red-color)' : v >= variables.warn ? 'var(--amber-color)' : 'var(--green-color)';
+        return `<div style="height:4px;border-radius:2px;background:color-mix(in srgb, var(--primary-text-color) 10%, transparent)">` +
+          `<div style="height:100%;width:${v}%;border-radius:2px;background:${col}"></div></div>`;
+      ]]]
+  styles:
+    card:
+      - padding: 10px 10px 8px
+      - border-radius: 12px
+      - box-shadow: none
+      - border: none
+      - background: color-mix(in srgb, var(--primary-text-color) 5%, transparent)
+      - -webkit-tap-highlight-color: transparent
+    grid:
+      - grid-template-areas: '"i value" "n n" "bar bar"'
+      - grid-template-columns: auto 1fr
+      - row-gap: 4px
+    icon:
+      - width: 18px
+      - color: |
+          [[[ const v = parseFloat(entity?.state) || 0;
+              return v >= variables.crit ? 'var(--red-color)' : v >= variables.warn ? 'var(--amber-color)' : 'var(--secondary-text-color)'; ]]]
+    name:
+      - justify-self: start
+      - font-size: 11px
+      - font-weight: 600
+      - color: var(--secondary-text-color)
+    custom_fields:
+      value:
+        - justify-self: end
+        - font-size: 1.2rem
+        - font-weight: 700
+      bar:
+        - justify-self: stretch
+
+# ---------------------------------------------------------------------------
+# Health tile: a roll-up sensor (count or reading) with a one-line detail
+# from an attribute. Green/amber/red by warn/crit thresholds; set invert
+# when lower is worse (e.g. signal strength). Tap opens more-info.
+# ---------------------------------------------------------------------------
+health_tile:
+  show_icon: true
+  show_name: true
+  show_state: false
+  variables:
+    warn: 1
+    crit: 1
+    invert: false
+    detail: devices
+    ok_text: All good
+    # Computed last (variables resolve alphabetically)
+    z_color: |
+      [[[
+        const v = parseFloat(entity?.state);
+        if (isNaN(v)) return 'var(--disabled-text-color)';
+        const hit = (t) => variables.invert ? v <= t : v >= t;
+        return hit(variables.crit) ? 'var(--red-color)'
+          : hit(variables.warn) ? 'var(--amber-color)' : 'var(--green-color)';
+      ]]]
+  tap_action:
+    action: more-info
+  custom_fields:
+    value: |
+      [[[
+        const v = parseFloat(entity?.state);
+        if (isNaN(v)) return '—';
+        const u = entity.attributes.unit_of_measurement || '';
+        const unit = ['°C', 'dBm'].includes(u) ? u : '';
+        return `${Math.round(v)}<span style="font-size:0.6em;font-weight:500;margin-left:2px">${unit}</span>`;
+      ]]]
+    detail: |
+      [[[
+        const d = entity?.attributes[variables.detail];
+        return d ? d : variables.ok_text;
+      ]]]
+  styles:
+    card:
+      - padding: 10px 12px
+      - border-radius: 12px
+      - box-shadow: none
+      - border: none
+      - background: |
+          [[[ return `color-mix(in srgb, ${variables.z_color} 10%, transparent)`; ]]]
+      - -webkit-tap-highlight-color: transparent
+    grid:
+      - grid-template-areas: '"i value" "n n" "detail detail"'
+      - grid-template-columns: auto 1fr
+      - row-gap: 2px
+    icon:
+      - width: 20px
+      - color: "[[[ return variables.z_color; ]]]"
+    name:
+      - justify-self: start
+      - font-size: 11px
+      - font-weight: 600
+      - color: var(--secondary-text-color)
+    custom_fields:
+      value:
+        - justify-self: end
+        - font-size: 1.4rem
+        - font-weight: 700
+        - color: "[[[ return variables.z_color; ]]]"
+      detail:
+        - justify-self: start
+        - text-align: left
+        - font-size: 11px
+        - color: var(--primary-text-color)
+        - white-space: nowrap
+        - overflow: hidden
+        - text-overflow: ellipsis
+        - max-width: 100%
+
+# ---------------------------------------------------------------------------
+# Value tile: one reading with a friendly format. variables.format is
+# duration_h (hours, e.g. history_stats), duration_min, kwh, gbp or raw.
+# ---------------------------------------------------------------------------
+value_tile:
+  show_icon: true
+  show_name: true
+  show_state: false
+  variables:
+    format: raw
+  tap_action:
+    action: more-info
+  custom_fields:
+    value: |
+      [[[
+        const v = parseFloat(entity?.state);
+        if (isNaN(v)) return '—';
+        const u = (t) => `<span style="font-size:0.65em;font-weight:500;margin-left:1px">${t}</span>`;
+        const dur = (m) => {
+          m = Math.round(m);
+          return m < 60 ? `${m}${u('m')}` : `${Math.floor(m / 60)}${u('h')} ${m % 60}${u('m')}`;
+        };
+        switch (variables.format) {
+          case 'duration_h': return dur(v * 60);
+          case 'duration_min': return dur(v);
+          case 'kwh': return `${v.toFixed(v < 10 ? 2 : 1)}${u('kWh')}`;
+          case 'gbp': return `£${v.toFixed(2)}`;
+          default: return `${v}${u(entity.attributes.unit_of_measurement || '')}`;
+        }
+      ]]]
+  styles:
+    card:
+      - padding: 10px 12px
+      - border-radius: 12px
+      - box-shadow: none
+      - border: none
+      - background: color-mix(in srgb, var(--primary-text-color) 5%, transparent)
+      - -webkit-tap-highlight-color: transparent
+    grid:
+      - grid-template-areas: '"i value" "n n"'
+      - grid-template-columns: auto 1fr
+      - row-gap: 4px
+    icon:
+      - width: 18px
+      - color: var(--secondary-text-color)
+    name:
+      - justify-self: start
+      - font-size: 11px
+      - font-weight: 600
+      - color: var(--secondary-text-color)
+    custom_fields:
+      value:
+        - justify-self: end
+        - font-size: 1.2rem
+        - font-weight: 700
+        - white-space: nowrap
+
+# ---------------------------------------------------------------------------
+# Climate tile: a thermostat's current temperature in value_tile style. The
+# icon turns orange while it is heating. Tap opens the thermostat.
+# ---------------------------------------------------------------------------
+climate_tile:
+  template: value_tile
+  custom_fields:
+    value: |
+      [[[
+        const t = parseFloat(entity?.attributes.current_temperature);
+        if (isNaN(t)) return '—';
+        return `${t.toFixed(1)}<span style="font-size:0.65em;font-weight:500;margin-left:1px">°C</span>`;
+      ]]]
+  styles:
+    icon:
+      - color: |
+          [[[ return entity?.attributes.hvac_action === 'heating'
+                ? 'var(--deep-orange-color)' : 'var(--secondary-text-color)'; ]]]
+
+# ---------------------------------------------------------------------------
+# Heater title: section title for a room's heater. `entity` is the climate;
+# shows the draw while heating, otherwise how far above setpoint the room is,
+# with today's heater energy underneath. List the variables' sensors in the
+# card's triggers_update so it refreshes.
+# ---------------------------------------------------------------------------
+heater_title:
+  show_icon: false
+  show_name: true
+  show_state: false
+  variables:
+    power: null
+    temp: null
+    energy: null
+  tap_action:
+    action: none
+  name: |
+    [[[
+      if (entity?.attributes.hvac_action !== 'idle')
+        return `Heating ${states[variables.power]?.state ?? '—'}W`;
+      const d = parseFloat(states[variables.temp]?.state) - parseFloat(entity?.attributes.temperature);
+      return isNaN(d) ? '—' : `${d.toFixed(2)}°C above setpoint`;
+    ]]]
+  custom_fields:
+    sub: |
+      [[[
+        const k = parseFloat(states[variables.energy]?.state);
+        return `Today: ${(isNaN(k) ? 0 : k).toFixed(2)} kWh`;
+      ]]]
+  styles:
+    card:
+      - padding: 12px 16px 4px
+      - background: none
+      - box-shadow: none
+      - border: none
+      - cursor: default
+    grid:
+      - grid-template-areas: '"n" "sub"'
+    name:
+      - justify-self: start
+      - font-size: 1.3rem
+      - font-weight: 700
+    custom_fields:
+      sub:
+        - justify-self: start
+        - font-size: 0.9rem
+        - color: var(--secondary-text-color)
+
+# ---------------------------------------------------------------------------
+# Section title: a heading with a line of explanation under it. Set the
+# heading as `name` and the explanation in variables.subtitle.
+# ---------------------------------------------------------------------------
+section_title:
+  show_icon: false
+  show_name: true
+  show_state: false
+  variables:
+    subtitle: ""
+  tap_action:
+    action: none
+  custom_fields:
+    sub: "[[[ return variables.subtitle; ]]]"
+  styles:
+    card:
+      - padding: 12px 16px 4px
+      - background: none
+      - box-shadow: none
+      - border: none
+      - cursor: default
+    grid:
+      - grid-template-areas: '"n" "sub"'
+    name:
+      - justify-self: start
+      - font-size: 1.3rem
+      - font-weight: 700
+    custom_fields:
+      sub:
+        - justify-self: start
+        - text-align: left
+        - white-space: normal
+        - font-size: 0.9rem
+        - color: var(--secondary-text-color)
+
+# ---------------------------------------------------------------------------
+# Chip row: a label, an optional link to the device page, a chip per entity
+# (tap for more-info) and an optional link to the device's own web UI.
+# variables.chips is a list of {entity, icon, color}. List the chip entities
+# in the card's triggers_update so it refreshes.
+# ---------------------------------------------------------------------------
+chip_row:
+  show_icon: false
+  show_name: false
+  show_state: false
+  variables:
+    label: ""
+    device_url: null
+    ui_url: null
+    chips: []
+  tap_action:
+    action: none
+  custom_fields:
+    row: |
+      [[[
+        // Same tap handling as room_card's stats: pointerup, ignoring scrolls
+        const more = id => `data-tap onpointerdown="this._p=[event.clientX,event.clientY]" onpointerup="const p=this._p;this._p=null;if(!p||Math.abs(event.clientX-p[0])>10||Math.abs(event.clientY-p[1])>10)return;event.stopPropagation();this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${id}'},bubbles:true,composed:true}))"`;
+        const ic = (icon, col) => `<ha-icon icon="${icon}" style="color:var(--${col}-color)"></ha-icon>`;
+        const ago = t => {
+          const m = Math.max(0, Math.round((Date.now() - new Date(t)) / 60000));
+          return m < 60 ? `${m}m` : m < 1440 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${Math.floor(m / 1440)}d ${Math.floor(m % 1440 / 60)}h`;
+        };
+        let out = variables.label ? `<span class="l">${variables.label}</span>` : '';
+        if (variables.device_url)
+          out += `<a class="c" href="${variables.device_url}" title="Device page">${ic('mdi:arrow-left', 'cyan')}</a>`;
+        for (const c of variables.chips) {
+          const s = states[c.entity];
+          if (!s) continue;
+          const u = s.attributes.unit_of_measurement;
+          const v = s.attributes.device_class === 'timestamp' ? ago(s.state) : `${s.state}${u ? ' ' + u : ''}`;
+          out += `<span class="c" ${more(c.entity)}>${ic(c.icon || s.attributes.icon || 'mdi:information-outline', c.color || 'primary-text')}${v}</span>`;
+        }
+        if (variables.ui_url)
+          out += `<a class="c" href="${variables.ui_url}" target="_blank" rel="noopener" title="Web UI">${ic('mdi:arrow-right', 'cyan')}</a>`;
+        return out;
+      ]]]
+  styles:
+    card:
+      - padding: 4px 8px
+      - background: none
+      - box-shadow: none
+      - border: none
+      - cursor: default
+    grid:
+      - grid-template-areas: '"row"'
+    custom_fields:
+      row:
+        - justify-self: end
+  extra_styles: |
+    #row { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; align-items: center; }
+    #row .l { font-weight: 600; margin-right: 4px; }
+    #row .c { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 16px; font-size: 12px; color: var(--primary-text-color); text-decoration: none; cursor: pointer; background: color-mix(in srgb, var(--primary-text-color) 6%, transparent); -webkit-tap-highlight-color: transparent; }
+    #row .c ha-icon { --mdc-icon-size: 16px; width: 16px; }
+
+# ---------------------------------------------------------------------------
+# Status list: a titled list of whatever is currently true, e.g. "Needs
+# attention" or "Happening now". variables.items is a JS template returning
+# [{icon, color, title, detail, entity | nav}]; colour is a theme colour name
+# (red, amber, green...). Rows tap to more-info (entity) or navigate (nav).
+# With no items it shows the empty_* text instead. List every entity the
+# items read in the card's triggers_update so it refreshes.
+# ---------------------------------------------------------------------------
+status_list:
+  show_icon: false
+  show_name: true
+  show_state: false
+  variables:
+    title: Status
+    empty_icon: mdi:check-circle-outline
+    empty_title: All clear
+    empty_detail: ""
+    items: []
+  tap_action:
+    action: none
+  name: |
+    [[[
+      const n = (variables.items || []).length;
+      return n ? `${variables.title}<span class="n">${n}</span>` : variables.title;
+    ]]]
+  custom_fields:
+    list: |
+      [[[
+        const items = variables.items || [];
+        if (!items.length)
+          return `<div class="row empty"><ha-icon icon="${variables.empty_icon}" style="color:var(--green-color)"></ha-icon>` +
+            `<div><div class="t">${variables.empty_title}</div><div class="d">${variables.empty_detail}</div></div></div>`;
+        const tap = (it) => {
+          const go = it.nav
+            ? `history.pushState(null,'','${it.nav}');window.dispatchEvent(new CustomEvent('location-changed'))`
+            : `this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${it.entity}'},bubbles:true,composed:true}))`;
+          return `data-tap onpointerdown="this._p=[event.clientX,event.clientY]" onpointerup="const p=this._p;this._p=null;if(!p||Math.abs(event.clientX-p[0])>10||Math.abs(event.clientY-p[1])>10)return;event.stopPropagation();${go}"`;
+        };
+        return items.map(it => {
+          const c = `var(--${it.color || 'primary'}-color)`;
+          return `<div class="row" ${it.entity || it.nav ? tap(it) : ''}>` +
+            `<span class="i" style="color:${c};background:color-mix(in srgb, ${c} 14%, transparent)"><ha-icon icon="${it.icon}"></ha-icon></span>` +
+            `<div class="x"><div class="t">${it.title}</div>${it.detail ? `<div class="d">${it.detail}</div>` : ''}</div></div>`;
+        }).join('');
+      ]]]
+  styles:
+    card:
+      - padding: 14px 12px 8px
+      - cursor: default
+    grid:
+      - grid-template-areas: '"n" "list"'
+    name:
+      - justify-self: start
+      - padding: 0 4px
+      - font-size: 1.1rem
+      - font-weight: 700
+    custom_fields:
+      list:
+        - justify-self: stretch
+        - text-align: left
+        - margin-top: 8px
+  extra_styles: |
+    #name .n { display: inline-block; margin-left: 8px; padding: 0 8px; border-radius: 10px; font-size: 0.8rem; line-height: 1.5; vertical-align: 2px; background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); }
+    #list .row { display: flex; align-items: center; gap: 12px; padding: 7px 4px; border-radius: 10px; -webkit-tap-highlight-color: transparent; }
+    #list .row + .row { border-top: 1px solid color-mix(in srgb, var(--primary-text-color) 6%, transparent); }
+    #list [data-tap] { cursor: pointer; }
+    #list [data-tap]:active { background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); }
+    #list .i { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 10px; --mdc-icon-size: 20px; }
+    #list .i ha-icon { --mdc-icon-size: 20px; width: 20px; height: 20px; margin: 0; }
+    #list .empty ha-icon { --mdc-icon-size: 28px; width: 28px; height: 28px; margin: 0 3px; flex: none; }
+    #list .x { flex: 1; min-width: 0; }
+    #list .t { font-size: 0.92rem; font-weight: 600; }
+    #list .d { font-size: 0.78rem; color: var(--secondary-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+# ---------------------------------------------------------------------------
+# Feed list: renders a rolling log kept in a sensor attribute (default `log`)
+# as a timeline - sensor.activity_feed / sensor.notification_log from
+# packages/alerts.yaml. Entries are {t, m, i, c, k} (activity) or
+# {t, e, m, c[], h, x} (notifications). variables.kinds filters activity by
+# k; add sensor.date_time_24h to triggers_update to keep "ago" times fresh.
+# ---------------------------------------------------------------------------
+feed_list:
+  show_icon: false
+  show_name: true
+  show_state: false
+  variables:
+    title: Activity
+    limit: 12
+    kinds: null
+    empty: Nothing yet
+  tap_action:
+    action: none
+  name: "[[[ return variables.title; ]]]"
+  custom_fields:
+    list: |
+      [[[
+        let log = (entity?.attributes.log || []);
+        if (variables.kinds) log = log.filter(x => variables.kinds.includes(x.k));
+        log = log.slice(0, variables.limit);
+        if (!log.length) return `<div class="e">${variables.empty}</div>`;
+        const icons = { camera_detected: 'mdi:cctv', camera_person: 'mdi:walk', camera_vehicle: 'mdi:car', camera_animal: 'mdi:paw', safety_alarm: 'mdi:smoke-detector-alert', camera_offline: 'mdi:cctv-off',
+          nvr_storage_low: 'mdi:harddisk', print_error: 'mdi:printer-3d-nozzle-alert', print_finished: 'mdi:printer-3d-nozzle',
+          ink_low: 'mdi:printer-alert', bin_reminder: 'mdi:trash-can-outline', power_cut: 'mdi:flash-off', fridge_off: 'mdi:fridge-alert',
+          dishwasher_off: 'mdi:dishwasher-alert', fridge_too_active: 'mdi:fridge-alert', freezer_too_active: 'mdi:fridge-alert',
+          fridge_too_inactive: 'mdi:fridge-alert', freezer_too_inactive: 'mdi:fridge-alert', water_heater_backup: 'mdi:water-boiler-alert',
+          aurora_visible: 'mdi:aurora', device_overheating: 'mdi:thermometer-alert', appliance_finished: 'mdi:washing-machine',
+          house_mode: 'mdi:home-switch-outline', network_offline: 'mdi:lan-disconnect', electrical_fault: 'mdi:flash-alert',
+          backups_stale: 'mdi:backup-restore', frost_warning: 'mdi:snowflake-alert', left_on_away: 'mdi:lightbulb-alert-outline',
+          battery_low: 'mdi:battery-alert-variant-outline', weekly_digest: 'mdi:email-newsletter', away_summary: 'mdi:hand-wave',
+          military_aircraft: 'mdi:airplane-alert' };
+        const now = new Date();
+        const when = (t) => {
+          const d = new Date(t), m = Math.round((now - d) / 60000);
+          if (m < 1) return 'now';
+          if (m < 60) return `${m}m`;
+          const hm = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+          if (d.toDateString() === now.toDateString()) return hm;
+          if (now - d < 6 * 86400000) return `${d.toLocaleDateString('en-GB', { weekday: 'short' })} ${hm}`;
+          return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        };
+        return log.map(x => {
+          const notif = x.e !== undefined;
+          const icon = notif ? (icons[x.e] || 'mdi:bell-outline') : (x.i || 'mdi:circle-small');
+          const col = notif ? (x.x ? 'red' : x.h ? 'grey' : (x.c || []).length ? 'blue' : 'grey') : (x.c || 'primary');
+          const sub = notif ? (x.h ? `Held · ${x.h}` : (x.c || []).length ? x.c.join(' · ') : 'No channels on') : '';
+          const c = `var(--${col}-color)`;
+          return `<div class="r"><span class="i" style="color:${c};background:color-mix(in srgb, ${c} 14%, transparent)"><ha-icon icon="${icon}"></ha-icon></span>` +
+            `<div class="x"><div class="t">${x.m}${x.n > 1 ? ` <span class="n">×${x.n}</span>` : ''}</div>${sub ? `<div class="d">${sub}</div>` : ''}</div><span class="w">${when(x.t)}</span></div>`;
+        }).join('');
+      ]]]
+  styles:
+    card:
+      - padding: 14px 12px 8px
+      - cursor: default
+    grid:
+      - grid-template-areas: '"n" "list"'
+    name:
+      - justify-self: start
+      - padding: 0 4px
+      - font-size: 1.1rem
+      - font-weight: 700
+    custom_fields:
+      list:
+        - justify-self: stretch
+        - text-align: left
+        - margin-top: 6px
+  extra_styles: |
+    #list .r { display: flex; align-items: center; gap: 10px; padding: 6px 4px; }
+    #list .r + .r { border-top: 1px solid color-mix(in srgb, var(--primary-text-color) 6%, transparent); }
+    #list .i { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; }
+    #list .i ha-icon { --mdc-icon-size: 16px; width: 16px; height: 16px; margin: 0; }
+    #list .x { flex: 1; min-width: 0; }
+    #list .t { font-size: 0.85rem; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    #list .d { font-size: 0.72rem; color: var(--secondary-text-color); }
+    #list .w { flex: none; font-size: 0.72rem; color: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
+    #list .e { padding: 8px 4px; font-size: 0.85rem; color: var(--secondary-text-color); }
+    #list .t .n { font-size: 0.72rem; font-weight: 700; color: var(--secondary-text-color); }
+
+# ---------------------------------------------------------------------------
+# Notification preference row: one per dispatcher event key. Three channel
+# dots (John / Elizabeth / Kitchen) toggle
+# input_boolean.notify_<event>_<channel>; set variables.ack to an
+# input_boolean.alert_ack_* to add a Silence dot. The sub line shows when
+# the event last fired (sensor.notification_log), or that it's muted
+# (sensor.notify_mutes). The bell-sleep dot mutes it for 1 hour / unmutes.
+# ---------------------------------------------------------------------------
+notify_dot:
+  show_name: false
+  show_state: false
+  show_icon: true
+  variables:
+    color: var(--blue-color)
+  tap_action:
+    action: toggle
+  hold_action:
+    action: more-info
+  styles:
+    card:
+      - padding: 0
+      - width: 34px
+      - height: 30px
+      - border-radius: 9px
+      - box-shadow: none
+      - border: none
+      - background: |
+          [[[ return entity?.state === 'on'
+                ? `color-mix(in srgb, ${variables.color} 22%, transparent)`
+                : 'color-mix(in srgb, var(--primary-text-color) 5%, transparent)'; ]]]
+    icon:
+      - width: 17px
+      - color: |
+          [[[ return entity?.state === 'on' ? variables.color : 'var(--disabled-text-color)'; ]]]
+
+# Camera alert type row (camera_alert page): on/off for good
+# (input_boolean.camera_alerts_<kind>) and mute pills (script.notify_mute on
+# event camera_<kind>). Nested pills are evaluated in this card's context.
+camera_alert_type:
+  entity: "[[[ return `input_boolean.camera_alerts_${variables.kind}`; ]]]"
+  show_icon: true
+  show_name: true
+  show_state: false
+  variables:
+    kind: person
+    until: "[[[ return states['sensor.notify_mutes']?.attributes.until?.[`camera_${variables.kind}`] || null; ]]]"
+    muted: "[[[ return !!variables.until && new Date(variables.until) > new Date(); ]]]"
+  tap_action:
+    action: none
+  triggers_update:
+    - sensor.notify_mutes
+    - sensor.date_time_24h
+  custom_fields:
+    sub: |
+      [[[
+        if (entity?.state !== 'on') return '<span style="color:var(--secondary-text-color)">Off</span>';
+        if (variables.muted) return `<span style="color:var(--red-color);font-weight:600">Muted until ${new Date(variables.until).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true })}</span>`;
+        return '<span style="color:var(--green-color)">Alerting</span>';
+      ]]]
+    on:
+      card:
+        type: custom:button-card
+        template: room_pill
+        entity: "[[[ return `input_boolean.camera_alerts_${variables.kind}`; ]]]"
+        name: "[[[ return entity?.state === 'on' ? 'On' : 'Off'; ]]]"
+        icon: "[[[ return entity?.state === 'on' ? 'mdi:bell-ring-outline' : 'mdi:bell-off-outline'; ]]]"
+        variables:
+          color: var(--green-color)
+          active: "[[[ return entity?.state === 'on'; ]]]"
+        tap_action:
+          action: toggle
+    h1:
+      card:
+        type: custom:button-card
+        template: room_pill
+        name: 1 hour
+        icon: mdi:timer-sand
+        variables:
+          color: var(--red-color)
+        tap_action:
+          action: perform-action
+          perform_action: script.notify_mute
+          data:
+            event: "[[[ return `camera_${variables.kind}`; ]]]"
+            minutes: 60
+    h4:
+      card:
+        type: custom:button-card
+        template: room_pill
+        name: 4 hours
+        icon: mdi:timer-sand
+        variables:
+          color: var(--red-color)
+        tap_action:
+          action: perform-action
+          perform_action: script.notify_mute
+          data:
+            event: "[[[ return `camera_${variables.kind}`; ]]]"
+            minutes: 240
+    am:
+      card:
+        type: custom:button-card
+        template: room_pill
+        name: "[[[ return variables.muted ? 'Unmute' : 'Till 7:30'; ]]]"
+        icon: "[[[ return variables.muted ? 'mdi:bell-ring-outline' : 'mdi:weather-sunset-up'; ]]]"
+        variables:
+          color: var(--red-color)
+          active: "[[[ return variables.muted; ]]]"
+        tap_action:
+          action: perform-action
+          perform_action: script.notify_mute
+          data:
+            event: "[[[ return `camera_${variables.kind}`; ]]]"
+            minutes: |
+              [[[
+                if (variables.muted) return 0;
+                const n = new Date(), t = new Date(n);
+                t.setHours(7, 30, 0, 0);
+                if (t <= n) t.setDate(t.getDate() + 1);
+                return Math.round((t - n) / 60000);
+              ]]]
+  styles:
+    card:
+      - padding: 8px 10px
+      - cursor: default
+    grid:
+      - grid-template-areas: '"i n on h1 h4 am" "i sub on h1 h4 am"'
+      - grid-template-columns: 26px 1fr 50px 50px 50px 50px
+      - column-gap: 6px
+    icon:
+      - width: 22px
+      - color: "[[[ return entity?.state === 'on' ? (variables.muted ? 'var(--red-color)' : 'var(--green-color)') : 'var(--disabled-text-color)'; ]]]"
+    name:
+      - justify-self: start
+      - font-weight: 600
+      - font-size: 0.9rem
+    custom_fields:
+      sub:
+        - justify-self: start
+        - font-size: 0.75rem
+
+# Mute dot: mutes one alert for an hour (sensor.notify_mutes via
+# script.notify_mute); red while muted, tap again to unmute.
+notify_mute_dot:
+  template: notify_dot
+  entity: sensor.notify_mutes
+  icon: mdi:bell-sleep
+  variables:
+    event: ""
+    color: var(--red-color)
+    muted: |
+      [[[ const u = entity?.attributes.until?.[variables.event];
+          return !!u && new Date(u) > new Date(); ]]]
+  tap_action:
+    action: perform-action
+    perform_action: script.notify_mute
+    data:
+      event: "[[[ return variables.event; ]]]"
+      minutes: "[[[ return variables.muted ? 0 : 60; ]]]"
+  hold_action:
+    action: none
+  styles:
+    card:
+      - background: |
+          [[[ return variables.muted
+                ? `color-mix(in srgb, ${variables.color} 22%, transparent)`
+                : 'color-mix(in srgb, var(--primary-text-color) 5%, transparent)'; ]]]
+    icon:
+      - color: |
+          [[[ return variables.muted ? variables.color : 'var(--disabled-text-color)'; ]]]
+
+notify_row:
+  show_icon: true
+  show_name: true
+  show_state: false
+  variables:
+    event: ""
+    ack: null
+  entity: "[[[ return `input_boolean.notify_${variables.event}_johns_devices`; ]]]"
+  tap_action:
+    action: none
+  triggers_update:
+    - sensor.notification_log
+    - sensor.notify_mutes
+  custom_fields:
+    sub: |
+      [[[
+        const mu = states['sensor.notify_mutes']?.attributes.until?.[variables.event];
+        if (mu && new Date(mu) > new Date())
+          return `<span style="color:var(--red-color);font-weight:600">Muted until ${new Date(mu).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true })}</span>`;
+        const last = (states['sensor.notification_log']?.attributes.log || []).find(x => x.e === variables.event);
+        if (!last) return 'Not sent recently';
+        const m = Math.round((Date.now() - new Date(last.t)) / 60000);
+        const ago = m < 60 ? `${m}m ago` : m < 1440 ? `${Math.floor(m / 60)}h ago` : `${Math.floor(m / 1440)}d ago`;
+        return `Last sent ${ago}`;
+      ]]]
+    j:
+      card:
+        type: custom:button-card
+        template: notify_dot
+        entity: "[[[ return `input_boolean.notify_${variables.event}_johns_devices`; ]]]"
+        icon: mdi:cellphone
+        variables:
+          color: var(--green-color)
+    e:
+      card:
+        type: custom:button-card
+        template: notify_dot
+        entity: "[[[ return `input_boolean.notify_${variables.event}_elizabeth`; ]]]"
+        icon: mdi:cellphone-text
+        variables:
+          color: var(--pink-color)
+    k:
+      card:
+        type: custom:button-card
+        template: notify_dot
+        entity: "[[[ return `input_boolean.notify_${variables.event}_kitchen_tts`; ]]]"
+        icon: mdi:speaker-message
+        variables:
+          color: var(--amber-color)
+    m:
+      card:
+        type: custom:button-card
+        template: notify_mute_dot
+        variables:
+          event: "[[[ return variables.event; ]]]"
+  styles:
+    card:
+      - padding: 8px 10px
+      - box-shadow: none
+      - border: none
+      - border-radius: 0
+      - background: none
+      - cursor: default
+    grid:
+      - grid-template-areas: '"i n j e k m" "i sub j e k m"'
+      - grid-template-columns: 26px 1fr 38px 38px 38px 38px
+      - column-gap: 6px
+    icon:
+      - width: 20px
+      - color: var(--secondary-text-color)
+    name:
+      - justify-self: start
+      - font-size: 0.88rem
+      - font-weight: 600
+      - white-space: normal
+      - text-align: left
+    custom_fields:
+      sub:
+        - justify-self: start
+        - font-size: 0.72rem
+        - color: var(--secondary-text-color)
+
+# Same row with a fifth "Silence" dot for the repeating alerts
+notify_row_ack:
+  template: notify_row
+  custom_fields:
+    s:
+      card:
+        type: custom:button-card
+        template: notify_dot
+        entity: "[[[ return variables.ack; ]]]"
+        icon: mdi:bell-off
+        variables:
+          color: var(--red-color)
+  styles:
+    grid:
+      - grid-template-areas: '"i n j e k m s" "i sub j e k m s"'
+      - grid-template-columns: 26px 1fr 38px 38px 38px 38px 38px
+
+# ---------------------------------------------------------------------------
+# UniFi device tile: `entity` is the device's *_state sensor. Shows online
+# state, clients (variables.clients), uptime (variables.uptime) and an
+# optional extra reading. Tap: more-info. Hold: restart (variables.restart,
+# a button entity) after confirmation.
+# ---------------------------------------------------------------------------
+unifi_device:
+  show_icon: true
+  show_name: true
+  show_state: false
+  variables:
+    clients: null
+    uptime: null
+    extra: null
+    extra_icon: mdi:information-outline
+    restart: null
+    z_ok: "[[[ return entity?.state === 'connected'; ]]]"
+  tap_action:
+    action: more-info
+  hold_action:
+    action: "[[[ return variables.restart ? 'perform-action' : 'none'; ]]]"
+    perform_action: button.press
+    target:
+      entity_id: "[[[ return variables.restart; ]]]"
+    confirmation:
+      text: "[[[ return `Restart ${entity?.attributes.friendly_name?.replace(' State', '') || 'device'}?`; ]]]"
+  custom_fields:
+    st: |
+      [[[
+        const s = entity?.state || 'unknown';
+        return variables.z_ok ? 'Online' : s.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
+      ]]]
+    meta: |
+      [[[
+        const out = [];
+        const c = variables.clients && states[variables.clients];
+        if (c && !isNaN(parseFloat(c.state))) out.push(`<span><ha-icon icon="mdi:devices"></ha-icon>${c.state}</span>`);
+        const u = variables.uptime && states[variables.uptime];
+        if (u && u.state && !['unknown', 'unavailable'].includes(u.state)) {
+          const h = Math.floor((Date.now() - new Date(u.state)) / 3600000);
+          out.push(`<span><ha-icon icon="mdi:timer-outline"></ha-icon>${h < 48 ? h + 'h' : Math.floor(h / 24) + 'd'}</span>`);
+        }
+        const x = variables.extra && states[variables.extra];
+        if (x && !isNaN(parseFloat(x.state)))
+          out.push(`<span><ha-icon icon="${variables.extra_icon}"></ha-icon>${Math.round(parseFloat(x.state) * 10) / 10}${x.attributes.unit_of_measurement ? ' ' + x.attributes.unit_of_measurement : ''}</span>`);
+        return out.join('');
+      ]]]
+  styles:
+    card:
+      - padding: 10px 12px
+      - border-radius: 12px
+      - box-shadow: none
+      - border: none
+      - -webkit-tap-highlight-color: transparent
+      - background: |
+          [[[ return variables.z_ok ? 'color-mix(in srgb, var(--primary-text-color) 5%, transparent)'
+                : 'color-mix(in srgb, var(--red-color) 14%, transparent)'; ]]]
+    grid:
+      - grid-template-areas: '"i n" "i st" "meta meta"'
+      - grid-template-columns: 30px 1fr
+      - column-gap: 8px
+    icon:
+      - width: 22px
+      - color: "[[[ return variables.z_ok ? 'var(--green-color)' : 'var(--red-color)'; ]]]"
+    name:
+      - justify-self: start
+      - font-size: 0.85rem
+      - font-weight: 700
+      - white-space: nowrap
+      - overflow: hidden
+      - text-overflow: ellipsis
+      - max-width: 100%
+    custom_fields:
+      st:
+        - justify-self: start
+        - font-size: 0.72rem
+        - color: "[[[ return variables.z_ok ? 'var(--secondary-text-color)' : 'var(--red-color)'; ]]]"
+      meta:
+        - justify-self: start
+        - margin-top: 6px
+  extra_styles: |
+    #meta { display: flex; flex-wrap: wrap; gap: 10px; font-size: 0.75rem; color: var(--secondary-text-color); }
+    #meta span { display: inline-flex; align-items: center; gap: 3px; }
+    #meta ha-icon { --mdc-icon-size: 14px; width: 14px; height: 14px; margin: 0; }
+
+# ---------------------------------------------------------------------------
+# Power board: live ranking of power sensors. variables.items is a list of
+# [entity_id, label]; shows the top `limit` drawing more than `min` W with a
+# bar scaled to the largest, then a footer counting idle/offline ones. All
+# client-side over an explicit list - no server templates. List the same
+# entities in triggers_update.
+# ---------------------------------------------------------------------------
+power_board:
+  show_icon: false
+  show_name: true
+  show_state: false
+  # No `items` default here: button-card merges template and card arrays
+  # with concat(), which flattens the [entity, label] pairs into loose
+  # strings. The card must supply items itself.
+  variables:
+    limit: 8
+    min: 1
+    color: var(--amber-color)
+    unit: W
+    decimals: 1
+    total: true
+  tap_action:
+    action: none
+  custom_fields:
+    list: |
+      [[[
+        const more = id => `data-tap onpointerdown="this._p=[event.clientX,event.clientY]" onpointerup="const p=this._p;this._p=null;if(!p||Math.abs(event.clientX-p[0])>10||Math.abs(event.clientY-p[1])>10)return;event.stopPropagation();this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${id}'},bubbles:true,composed:true}))"`;
+        const rows = (variables.items || []).map(([e, n]) => {
+          const s = states[e];
+          const v = parseFloat(s?.state);
+          return { e, n, v: isNaN(v) ? null : v };
+        });
+        const live = rows.filter(r => r.v !== null && r.v >= variables.min).sort((a, b) => b.v - a.v);
+        const idle = rows.filter(r => r.v !== null && r.v < variables.min).length;
+        const off = rows.filter(r => r.v === null).length;
+        const max = Math.max(1, ...live.map(r => r.v));
+        const fmt = w => variables.unit !== 'W' ? `${w.toFixed(variables.decimals)}${variables.unit}`
+          : w >= 1000 ? `${(w / 1000).toFixed(2)} kW` : `${w < 10 ? w.toFixed(1) : Math.round(w)} W`;
+        const total = live.reduce((t, r) => t + r.v, 0);
+        let out = live.slice(0, variables.limit).map(r =>
+          `<div class="b" ${more(r.e)}><span class="n">${r.n}</span><span class="tr"><span style="width:${(r.v / max * 100).toFixed(1)}%;background:${variables.color}"></span></span><span class="v">${fmt(r.v)}</span></div>`).join('');
+        if (!live.length) out = `<div class="f">Nothing drawing power</div>`;
+        const extra = live.length > variables.limit ? `${live.length - variables.limit} more · ` : '';
+        if (!variables.total) return out + (extra || off ? `<div class="f">${extra}${off ? `${off} offline` : ''}</div>` : '');
+        return out + `<div class="f">${extra}${fmt(total)} total · ${idle} idle${off ? ` · ${off} offline` : ''}</div>`;
+      ]]]
+  styles:
+    card:
+      - padding: 14px 16px 10px
+      - cursor: default
+    grid:
+      - grid-template-areas: '"n" "list"'
+    name:
+      - justify-self: start
+      - font-size: 0.95rem
+      - font-weight: 700
+    custom_fields:
+      list:
+        - justify-self: stretch
+        - margin-top: 8px
+  extra_styles: |
+    #list .b { display: grid; grid-template-columns: minmax(0, 120px) 1fr 62px; align-items: center; gap: 8px; padding: 4px 2px; font-size: 0.82rem; border-radius: 6px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    #list .b:active { background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); }
+    #list .n { text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #list .tr { height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); overflow: hidden; }
+    #list .tr span { display: block; height: 100%; border-radius: 3px; }
+    #list .v { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+    #list .f { text-align: left; font-size: 0.75rem; color: var(--secondary-text-color); padding: 6px 2px 0; }
+
+# ---------------------------------------------------------------------------
+# Light map: every bulb as a dot in its current colour and brightness,
+# grouped by room. variables.rooms is a list of {name, lights: [ids]}.
+# Off = hollow ring, unavailable = dashed red ring. Tap a dot: more-info.
+# ---------------------------------------------------------------------------
+light_map:
+  show_icon: false
+  show_name: true
+  show_state: false
+  variables:
+    rooms: []
+  tap_action:
+    action: none
+  custom_fields:
+    map: |
+      [[[
+        const more = id => `data-tap onpointerdown="this._p=[event.clientX,event.clientY]" onpointerup="const p=this._p;this._p=null;if(!p||Math.abs(event.clientX-p[0])>10||Math.abs(event.clientY-p[1])>10)return;event.stopPropagation();this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${id}'},bubbles:true,composed:true}))"`;
+        // Colour temperature (K) to RGB, after Tanner Helland's approximation
+        const k2rgb = k => {
+          const t = k / 100; let r, g, b;
+          r = t <= 66 ? 255 : 329.7 * Math.pow(t - 60, -0.1332);
+          g = t <= 66 ? 99.47 * Math.log(t) - 161.12 : 288.12 * Math.pow(t - 60, -0.0755);
+          b = t >= 66 ? 255 : t <= 19 ? 0 : 138.52 * Math.log(t - 10) - 305.04;
+          return [r, g, b].map(x => Math.round(Math.min(255, Math.max(0, x))));
+        };
+        let on = 0, total = 0, dead = 0;
+        const rooms = variables.rooms.map(room => {
+          const dots = room.lights.map(id => {
+            const s = states[id]; total++;
+            const name = (s?.attributes.friendly_name || id).replace(room.name + ' ', '');
+            if (!s || s.state === 'unavailable') { dead++; return `<span class="d u" title="${name} · unreachable" ${more(id)}></span>`; }
+            if (s.state !== 'on') return `<span class="d o" title="${name} · off" ${more(id)}></span>`;
+            on++;
+            const a = s.attributes;
+            const rgb = a.rgb_color || (a.color_temp_kelvin ? k2rgb(a.color_temp_kelvin) : [255, 196, 120]);
+            const br = Math.max(0.25, (a.brightness || 255) / 255);
+            const c = `rgb(${rgb.join(',')})`;
+            return `<span class="d" title="${name} · ${Math.round(br * 100)}%" ${more(id)} style="background:${c};opacity:${br};box-shadow:0 0 ${Math.round(br * 14)}px ${c}"></span>`;
+          }).join('');
+          return `<div class="rm"><span class="rn">${room.name}</span><span class="ds">${dots}</span></div>`;
+        }).join('');
+        return `<div class="sum">${on} of ${total} on${dead ? ` · <span style="color:var(--red-color)">${dead} unreachable</span>` : ''}</div>` + rooms;
+      ]]]
+  styles:
+    card:
+      - padding: 14px 16px 12px
+      - cursor: default
+    grid:
+      - grid-template-areas: '"n" "map"'
+    name:
+      - justify-self: start
+      - font-size: 0.95rem
+      - font-weight: 700
+    custom_fields:
+      map:
+        - justify-self: stretch
+  extra_styles: |
+    #map .sum { text-align: left; font-size: 0.78rem; color: var(--secondary-text-color); margin: 2px 0 8px; }
+    #map .rm { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+    #map .rm + .rm { border-top: 1px solid color-mix(in srgb, var(--primary-text-color) 6%, transparent); }
+    #map .rn { flex: none; width: 116px; text-align: left; font-size: 0.82rem; }
+    #map .ds { display: flex; flex-wrap: wrap; gap: 8px; }
+    #map .d { width: 18px; height: 18px; border-radius: 50%; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    #map .d.o { border: 2px solid color-mix(in srgb, var(--primary-text-color) 22%, transparent); width: 14px; height: 14px; }
+    #map .d.u { border: 2px dashed var(--red-color); width: 14px; height: 14px; }
+
+# ---------------------------------------------------------------------------
+# Attention list: status_list of things wrong right now (Overview + Home).
+# Red = safety/data, amber = upkeep, blue = info, green = good news.
+# ---------------------------------------------------------------------------
+attention_list:
+  template: status_list
+  triggers_update:
+    - sensor.shelly_devices_offline
+    - sensor.hue_devices_offline
+    - binary_sensor.house_power_cut
+    - binary_sensor.device_overheating
+    - sensor.shelly_safety_alerts
+    - binary_sensor.any_cctv_camera_offline
+    - binary_sensor.aird_nvr_ssd_1
+    - binary_sensor.backups_stale
+    - binary_sensor.network_device_offline
+    - timer.notify_snooze
+    - binary_sensor.octoprint_printing_error
+    - binary_sensor.water_heater_backup_active
+    - input_boolean.power_tripped_water_heater
+    - binary_sensor.fridge_off
+    - binary_sensor.fridge_too_active
+    - binary_sensor.fridge_too_inactive
+    - binary_sensor.freezer_too_active
+    - binary_sensor.freezer_too_inactive
+    - binary_sensor.dishwasher_off
+    - sensor.hue_low_batteries
+    - sensor.hp_envy_6000_series_black_cartridge
+    - sensor.hp_envy_6000_series_tri_color_cartridge
+    - calendar.bins
+    - sensor.updates_pending
+    - sensor.persistent_notifications
+    - binary_sensor.aurora_visible
+  variables:
+    include_offline: false  # must sort before `items` (variables resolve alphabetically)
+    title: Needs attention
+    empty_title: All clear
+    empty_detail: Nothing needs you right now
+    items: |
+      [[[
+        const s = id => states[id];
+        const on = id => s(id)?.state === 'on';
+        const num = id => parseFloat(s(id)?.state);
+        const a = [];
+        const add = (cond, it) => { if (cond) a.push(it); };
+        // Red: safety and data
+        add(on('binary_sensor.house_power_cut'), { icon: 'mdi:flash-off', color: 'red', title: 'Power cut', detail: 'Mains supply lost', entity: 'binary_sensor.house_power_cut' });
+        add(on('binary_sensor.device_overheating'), { icon: 'mdi:fire-alert', color: 'red', title: 'A device is overheating', entity: 'binary_sensor.device_overheating' });
+        add(num('sensor.shelly_safety_alerts') > 0, { icon: 'mdi:flash-alert', color: 'red', title: 'Electrical safety alert', detail: s('sensor.shelly_safety_alerts')?.attributes.alerts, nav: '/admin-pages/shelly' });
+        add(on('binary_sensor.any_cctv_camera_offline'), { icon: 'mdi:cctv-off', color: 'red', title: 'Camera offline', nav: 'cctv' });
+        add(on('binary_sensor.network_device_offline'), { icon: 'mdi:lan-disconnect', color: 'red', title: 'Network device offline', detail: s('binary_sensor.network_device_offline')?.attributes.devices, nav: '/admin-pages/network' });
+        add(on('binary_sensor.aird_nvr_ssd_1'), { icon: 'mdi:harddisk-remove', color: 'red', title: 'NVR drive problem', entity: 'binary_sensor.aird_nvr_ssd_1' });
+        add(on('binary_sensor.octoprint_printing_error'), { icon: 'mdi:printer-3d-nozzle-alert', color: 'red', title: '3D print error', entity: 'sensor.octoprint_current_state' });
+        if (on('binary_sensor.backups_stale')) {
+          const last = s('sensor.backup_last_successful_automatic_backup')?.state;
+          const days = last ? Math.floor((Date.now() - new Date(last)) / 86400000) : null;
+          a.push({ icon: 'mdi:backup-restore', color: 'red', title: 'Backups are stale', detail: days !== null ? `Last good backup ${days} days ago` : '', nav: '/config/backup' });
+        }
+        // Amber: appliances and upkeep
+        add(on('binary_sensor.water_heater_backup_active'), { icon: 'mdi:water-boiler-alert', color: 'amber', title: 'Hot water on backup heater', entity: 'binary_sensor.water_heater_backup_active' });
+        add(on('input_boolean.power_tripped_water_heater'), { icon: 'mdi:water-boiler-alert', color: 'amber', title: 'Water heater tripped', entity: 'input_boolean.power_tripped_water_heater' });
+        [['binary_sensor.fridge_off', 'Fridge has no power'], ['binary_sensor.fridge_too_active', 'Fridge running constantly'],
+         ['binary_sensor.fridge_too_inactive', 'Fridge not cycling'], ['binary_sensor.freezer_too_active', 'Freezer running constantly'],
+         ['binary_sensor.freezer_too_inactive', 'Freezer not cycling'], ['binary_sensor.dishwasher_off', 'Dishwasher has no power']]
+          .forEach(([id, t]) => add(on(id), { icon: 'mdi:fridge-alert', color: 'amber', title: t, entity: id }));
+        if (variables.include_offline) {
+          add(num('sensor.shelly_devices_offline') > 0, { icon: 'mdi:lan-disconnect', color: 'amber', title: `${num('sensor.shelly_devices_offline')} Shelly devices offline`, detail: s('sensor.shelly_devices_offline')?.attributes.devices, nav: '/admin-pages/shelly' });
+          add(num('sensor.hue_devices_offline') > 0, { icon: 'mdi:lan-disconnect', color: 'amber', title: `${num('sensor.hue_devices_offline')} Hue devices offline`, detail: s('sensor.hue_devices_offline')?.attributes.devices, nav: '/admin-pages/hue' });
+        }
+        add(num('sensor.hue_low_batteries') > 0, { icon: 'mdi:battery-alert-variant-outline', color: 'amber', title: `${num('sensor.hue_low_batteries')} low batteries`, detail: s('sensor.hue_low_batteries')?.attributes.devices, nav: '/admin-pages/hue' });
+        const ink = [['Black', 'sensor.hp_envy_6000_series_black_cartridge'], ['Colour', 'sensor.hp_envy_6000_series_tri_color_cartridge']].filter(([, id]) => num(id) <= 15);
+        add(ink.length > 0, { icon: 'mdi:printer-alert', color: 'amber', title: 'Printer ink low', detail: ink.map(([n, id]) => `${n} ${num(id)}%`).join(' · '), entity: ink[0]?.[1] });
+        add(on('calendar.bins'), { icon: 'mdi:trash-can-outline', color: 'amber', title: 'Bins day', detail: s('calendar.bins')?.attributes.message, entity: 'calendar.bins' });
+        // Blue: informational
+        add(num('sensor.updates_pending') > 0, { icon: 'mdi:package-up', color: 'blue', title: `${num('sensor.updates_pending')} updates available`, detail: s('sensor.updates_pending')?.attributes.devices, nav: '/config/updates' });
+        add(num('sensor.persistent_notifications') > 0, { icon: 'mdi:bell-ring-outline', color: 'blue', title: `${num('sensor.persistent_notifications')} notification${num('sensor.persistent_notifications') > 1 ? 's' : ''}`, detail: 'See the bell in the sidebar', entity: 'sensor.persistent_notifications' });
+        if (s('timer.notify_snooze')?.state === 'active') {
+          const fin = s('timer.notify_snooze').attributes.finishes_at;
+          const m = fin ? Math.max(0, Math.round((new Date(fin) - Date.now()) / 60000)) : null;
+          a.push({ icon: 'mdi:bell-sleep', color: 'blue', title: 'Notifications snoozed', detail: m !== null ? `${m >= 60 ? Math.floor(m / 60) + 'h ' : ''}${m % 60}m left · critical alerts still sent` : '', nav: '/admin-pages/notification-preferences' });
+        }
+        // Green: good news
+        add(on('binary_sensor.aurora_visible'), { icon: 'mdi:aurora', color: 'green', title: 'Aurora may be visible', detail: `Visibility ${s('sensor.home_aurora_visibility')?.state}% · look north`, entity: 'sensor.home_aurora_visibility' });
+        return a;
+      ]]]
+
+# ---------------------------------------------------------------------------
+# Happening list: status_list of what's running or occupied right now
+# (Overview + Home): motion, media, machines, heating, timers, lights.
+# ---------------------------------------------------------------------------
+happening_list:
+  template: status_list
+  triggers_update:
+    - sensor.date_time_24h
+    - media_player.garage_garage_roku
+    - media_player.dining_room_tv
+    - media_player.kitchen_sonos
+    - media_player.the_boys_speaker
+    - binary_sensor.octoprint_printing
+    - sensor.octoprint_job_percentage
+    - binary_sensor.cnc_machine_cutting
+    - binary_sensor.washing_machine_active
+    - binary_sensor.tumble_dryer_active
+    - binary_sensor.dishwasher_active
+    - timer.boost_master_bedroom
+    - timer.boost_bathroom
+    - timer.boost_sunroom
+    - timer.boost_dining_room
+    - timer.boost_shower_room
+    - timer.boost_double_bedroom
+    - timer.sleep_master_bedroom_tv
+    - input_boolean.power_status_water_heater
+    - sensor.water_heater_temperature
+    - sensor.shower_power
+    - sensor.heaters_running
+    - sensor.lights_on
+    - binary_sensor.living_room_motion
+    - binary_sensor.dining_room_motion
+    - binary_sensor.master_bedroom_motion
+    - binary_sensor.double_bedroom_motion
+    - binary_sensor.single_bedroom_motion
+    - binary_sensor.kitchen_motion
+    - binary_sensor.bathroom_motion
+    - binary_sensor.landing_motion
+    - binary_sensor.hall_motion
+    - binary_sensor.front_porch_motion
+    - binary_sensor.sunroom_motion
+    - binary_sensor.utility_room_motion
+    - binary_sensor.shower_room_motion
+    - binary_sensor.garage_motion
+    - binary_sensor.workshop_motion
+    - binary_sensor.machine_room_motion
+    - binary_sensor.patio_motion
+  variables:
+    title: Happening now
+    empty_icon: mdi:sleep
+    empty_title: All quiet
+    empty_detail: Nothing running, no movement
+    items: |
+      [[[
+        const s = id => states[id];
+        const on = id => s(id)?.state === 'on';
+        const hm = d => new Date(d).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        const left = d => { const m = Math.max(0, Math.round((new Date(d) - Date.now()) / 60000)); return m < 60 ? `${m}m left` : `${Math.floor(m / 60)}h ${m % 60}m left`; };
+        const pretty = r => r.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        const a = [];
+        // Motion: rooms with someone in them
+        const rooms = ['living_room', 'dining_room', 'kitchen', 'sunroom', 'hall', 'landing', 'master_bedroom', 'double_bedroom',
+          'single_bedroom', 'bathroom', 'shower_room', 'utility_room', 'front_porch', 'patio', 'garage', 'workshop', 'machine_room'];
+        const moving = rooms.filter(r => on(`binary_sensor.${r}_motion`));
+        if (moving.length)
+          a.push({ icon: 'mdi:motion-sensor', color: 'green', title: `Motion in ${moving.length === 1 ? pretty(moving[0]) : moving.length + ' rooms'}`, detail: moving.length > 1 ? moving.map(pretty).join(', ') : '', entity: `binary_sensor.${moving[0]}_motion` });
+        // Media
+        ['media_player.garage_garage_roku', 'media_player.dining_room_tv', 'media_player.kitchen_sonos', 'media_player.the_boys_speaker'].forEach(id => {
+          const m = s(id);
+          if (m?.state !== 'playing') return;
+          const what = [m.attributes.media_title, m.attributes.media_artist || m.attributes.app_name].filter(Boolean).join(' · ');
+          a.push({ icon: 'mdi:play-circle-outline', color: 'purple', title: m.attributes.friendly_name, detail: what, entity: id });
+        });
+        // Machines
+        if (on('binary_sensor.octoprint_printing')) {
+          const pct = parseFloat(s('sensor.octoprint_job_percentage')?.state) || 0;
+          const eta = s('sensor.octoprint_estimated_finish_time')?.state;
+          const file = (s('sensor.octoprint_current_file')?.state || '').replace(/\.gcode$/, '');
+          a.push({ icon: 'mdi:printer-3d-nozzle', color: 'teal', title: `3D printing · ${Math.round(pct)}%`, detail: [eta && eta !== 'unknown' ? `Done about ${hm(eta)}` : '', file].filter(Boolean).join(' · '), entity: 'sensor.octoprint_job_percentage' });
+        }
+        if (on('binary_sensor.cnc_machine_cutting'))
+          a.push({ icon: 'mdi:saw-blade', color: 'teal', title: 'CNC cutting', entity: 'binary_sensor.cnc_machine_cutting' });
+        [['binary_sensor.washing_machine_active', 'Washing machine', 'mdi:washing-machine'],
+         ['binary_sensor.tumble_dryer_active', 'Tumble dryer', 'mdi:tumble-dryer'],
+         ['binary_sensor.dishwasher_active', 'Dishwasher', 'mdi:dishwasher']]
+          .forEach(([id, t, i]) => { if (on(id)) a.push({ icon: i, color: 'blue', title: `${t} running`, detail: `Since ${hm(s(id).last_changed)}`, entity: id }); });
+        // Hot water and shower
+        if (on('input_boolean.power_status_water_heater'))
+          a.push({ icon: 'mdi:water-boiler', color: 'deep-orange', title: 'Hot water heating', detail: `${s('sensor.water_heater_temperature')?.state ?? '—'}°C now · ${Math.round(parseFloat(s('sensor.water_heater_power')?.state) || 0)} W`, entity: 'sensor.water_heater_temperature' });
+        if ((parseFloat(s('sensor.shower_power')?.state) || 0) > 500)
+          a.push({ icon: 'mdi:shower-head', color: 'cyan', title: 'Shower running', detail: `${(parseFloat(s('sensor.shower_power').state) / 1000).toFixed(1)} kW`, entity: 'sensor.shower_power' });
+        // Heating
+        const heat = parseInt(s('sensor.heaters_running')?.state) || 0;
+        if (heat) a.push({ icon: 'mdi:radiator', color: 'deep-orange', title: `${heat} heater${heat > 1 ? 's' : ''} on`, detail: s('sensor.heaters_running').attributes.devices, entity: 'sensor.heaters_running' });
+        // Timers: heating boosts, TV sleep
+        ['timer.boost_master_bedroom', 'timer.boost_bathroom', 'timer.boost_sunroom', 'timer.boost_dining_room',
+         'timer.boost_shower_room', 'timer.boost_double_bedroom', 'timer.sleep_master_bedroom_tv'].forEach(id => {
+          const t = s(id);
+          if (t?.state !== 'active') return;
+          const name = id === 'timer.sleep_master_bedroom_tv' ? 'Bedroom TV sleep timer' : `${pretty(id.replace('timer.boost_', ''))} boost`;
+          a.push({ icon: id.includes('sleep') ? 'mdi:timer-sand' : 'mdi:fire', color: 'red', title: name, detail: t.attributes.finishes_at ? left(t.attributes.finishes_at) : '', entity: id });
+        });
+        // Lights
+        const lights = parseInt(s('sensor.lights_on')?.state) || 0;
+        if (lights) a.push({ icon: 'mdi:lightbulb-on-outline', color: 'amber', title: `${lights} light${lights > 1 ? 's' : ''} on`, detail: s('sensor.lights_on').attributes.rooms, entity: 'sensor.lights_on' });
+        return a;
+      ]]]
+
+# WLED sync send/receive toggle (LEDs page): green when on, red when off.
+# Layered on room_toggle: template: [room_toggle, led_sync]
+led_sync:
+  variables:
+    color: var(--green-color)
+  styles:
+    icon:
+      - color: "[[[ return entity?.state === 'on' ? 'var(--green-color)' : 'var(--red-color)'; ]]]"

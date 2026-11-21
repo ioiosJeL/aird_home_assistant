@@ -1,0 +1,340 @@
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      double: &double
+        package: "Lights"
+
+    input_number.dining_room_lights_*:
+      <<: *double
+
+light:
+  - platform: group
+    name: House Lights
+    entities:
+      - light.dining_room_lights_master
+      - light.living_room_lights_master
+      - light.kitchen_lights_master
+      - light.utility_room_lights_master
+      - light.hall_lights_master
+      - light.bathroom_lights_master
+      - light.shower_room_lights_master
+      - light.single_bedroom_lights_master
+      - light.double_bedroom_lights_master
+      - light.master_bedroom_lights_master
+      - light.sunroom_lights_master
+
+input_number:
+  # Lux level below which brings on the auto lights
+  patio_lights_on_threshold:
+    name: Patio Threshold On
+    min: 1
+    max: 70
+
+input_boolean:
+  # Master auto mode toggle
+  master_automatic_lights:
+    name: Master Automatic Lights Switch
+    icon: mdi:refresh-auto
+
+  # Master lights off command
+  master_lights_off:
+    name: Master Lights Off Switch
+    icon: mdi:power-standby
+
+  # Auto mode active
+  patio_automatic_lights:
+    name: Patio Automatic Lights Mode
+    icon: mdi:refresh-auto
+
+script:
+  utility_room_welcome:
+    alias: Utility Room Welcome Sequence
+    mode: single
+    sequence:
+      - action: light.turn_on
+        target:
+          entity_id: light.utility_room_ceiling_lights
+      - delay:
+          milliseconds: 500
+      - action: light.turn_off
+        target:
+          entity_id: light.utility_room_ceiling_lights
+      - delay:
+          milliseconds: 500
+      - action: light.turn_on
+        target:
+          entity_id: light.utility_room_ceiling_lights
+      - delay:
+          milliseconds: 500
+      - action: light.turn_off
+        target:
+          entity_id: light.utility_room_ceiling_lights
+      - delay:
+          milliseconds: 500
+      - action: light.turn_on
+        target:
+          entity_id: light.utility_room_ceiling_lights
+      - delay:
+          milliseconds: 500
+      - action: light.turn_off
+        target:
+          entity_id: light.utility_room_ceiling_lights
+      - delay:
+          milliseconds: 500
+      - action: light.turn_on
+        target:
+          entity_id: light.utility_room_ceiling_lights
+      - delay:
+          milliseconds: 500
+      - action: light.turn_off
+        target:
+          entity_id: light.utility_room_ceiling_lights
+      - delay:
+          milliseconds: 500
+      - action: light.turn_on
+        target:
+          entity_id: light.utility_room_ceiling_lights
+
+automation:
+  - alias: Master Lights Off Check
+    mode: single
+    description: ""
+    triggers:
+      - trigger: time_pattern
+        minutes: "/15"
+    actions:
+      - repeat:
+          for_each:
+            - light: light.dining_room_lights_master
+              motion: binary_sensor.hms_dining_room_motion
+              timeout_seconds: 7200
+              off_script: script.dining_room_scene_off
+              hold: media_player.dining_room_tv
+            - light: light.living_room_lights_master
+              motion: binary_sensor.hms_living_room_motion
+              timeout_seconds: 7200
+              off_script: script.living_room_scene_off
+            - light: light.kitchen_lights_master
+              motion: binary_sensor.hms_kitchen_motion
+              timeout_seconds: 3600
+              off_script: script.kitchen_scene_off
+            - light: light.sunroom_lights_master
+              motion: binary_sensor.hms_sunroom_motion
+              timeout_seconds: 7200
+              off_script: script.sunroom_scene_off
+            - light: light.utility_room_lights_master
+              motion: binary_sensor.hms_utility_room_motion
+              timeout_seconds: 1200
+              off_script: script.utility_room_scene_off
+            - light: light.double_bedroom_lights_master
+              motion: binary_sensor.hms_double_bedroom_motion
+              timeout_seconds: 7200
+              off_script: script.double_bedroom_scene_off
+            - light: light.single_bedroom_lights_master
+              motion: binary_sensor.hms_single_bedroom_motion
+              timeout_seconds: 7200
+              off_script: script.single_bedroom_scene_off
+            - light: light.master_bedroom_lights_master
+              motion: binary_sensor.hms_master_bedroom_motion
+              timeout_seconds: 7200
+              off_script: script.master_bedroom_scene_off
+            - light: light.hall_lights_master
+              motion: binary_sensor.hms_hall_motion
+              timeout_seconds: 3600
+              off_script: script.hall_scene_off
+            - light: light.bathroom_lights_master
+              motion: binary_sensor.hms_bathroom_motion
+              timeout_seconds: 1200
+              off_script: script.bathroom_scene_off
+              hold: binary_sensor.bathroom_bathing
+            - light: light.shower_room_lights_master
+              motion: binary_sensor.hms_shower_room_motion
+              timeout_seconds: 1200
+              off_script: script.shower_room_scene_off
+              hold: binary_sensor.shower_room_bathing
+            - light: light.landing_lights_master
+              motion: binary_sensor.hms_landing_motion
+              timeout_seconds: 1200
+              off_script: script.landing_scene_off
+            - light: light.front_porch_lights_master
+              motion: binary_sensor.hms_front_porch_motion
+              timeout_seconds: 1200
+              off_script: script.front_porch_scene_off
+          sequence:
+            - if:
+                - condition: template
+                  value_template: >-
+                    {# hold: skip while the TV is on / a shower or bath is running #}
+                    {% set hold = repeat.item.hold | default('') %}
+                    {{ is_state(repeat.item.light, 'on')
+                       and (as_timestamp(now()) - as_timestamp(states[repeat.item.motion].last_changed))
+                           > repeat.item.timeout_seconds
+                       and (hold == '' or states(hold) in ['off', 'unavailable', 'unknown']) }}
+              then:
+                - action: script.turn_on
+                  target:
+                    entity_id: "{{ repeat.item.off_script }}"
+
+  - alias: Master Lights Off Switch
+    mode: single
+    description: ""
+    variables:
+      script_list: >
+        {{ states.script 
+        | select('search', '_scene_off') 
+        | map(attribute='entity_id') | list }}
+
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.master_lights_off
+        to: "on" #BEDSIDE LEFT
+    actions:
+      - action: script.turn_on
+        target:
+          entity_id: "{{ script_list }}"
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.master_lights_off
+
+  - alias: Master Auto Lights Toggle
+    mode: single
+    description: ""
+    variables:
+      auto_bools: >
+        {{ states.input_boolean 
+        | select('search', '_automatic_lights') 
+        | map(attribute='entity_id') | list }}
+
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.master_automatic_lights
+    actions:
+      - choose:
+          - conditions: "{{ is_state('input_boolean.master_automatic_lights', 'on') }}"
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: "{{ auto_bools }}"
+      - choose:
+          - conditions: "{{ is_state('input_boolean.master_automatic_lights', 'off') }}"
+            sequence:
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: "{{ auto_bools }}"
+
+  # Night Mode ending is "morning": restore auto lights that get switched
+  # off overnight - the master bedroom by "Master Bedroom Auto Lights Off
+  # After Bedtime", the dining room by hand for the evening.
+  - alias: Automatic Lights Morning Reset
+    description: ""
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.status_nighttime
+        from: "on"
+        to: "off"
+    # Not gated on input_boolean.master_automatic_lights: that's a one-shot
+    # "flip every room" button whose state goes stale (it sat at off from
+    # 2023, so this reset never ran).
+    actions:
+      - action: input_boolean.turn_on
+        target:
+          entity_id:
+            - input_boolean.master_bedroom_automatic_lights
+            - input_boolean.double_bedroom_automatic_lights
+            - input_boolean.single_bedroom_automatic_lights
+            - input_boolean.dining_room_automatic_lights
+      # Clear any Manual Override left from the night before (set when the
+      # lights were changed outside HA, e.g. the Hue app)
+      - action: input_boolean.turn_off
+        target:
+          entity_id: >-
+            {{ states.input_boolean | map(attribute='entity_id')
+               | select('search', '_manual_override$') | list }}
+
+  - alias: Patio Lights Auto On
+    mode: single
+    description: ""
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.patio_motion
+        to: "on"
+    conditions: "{{ (states('input_boolean.patio_automatic_lights') == 'on')
+      and (states('sensor.homs_patio_illuminance') | int <= states('input_number.patio_lights_on_threshold') | int) }}"
+    actions:
+      - action: light.turn_on
+        data:
+          entity_id: light.patio_light
+
+  - alias: Patio Lights Auto Off
+    mode: single
+    description: ""
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.patio_motion
+        to: "off"
+        for:
+          minutes: "{{ states('input_number.patio_motion_timeout') | int }}"
+    conditions: "{{ (states('input_boolean.patio_automatic_lights') == 'on') }}"
+    actions:
+      - action: light.turn_off
+        data:
+          entity_id: light.patio_light
+
+  - alias: Shed Counter Light Toggle
+    description: ""
+    mode: single
+    triggers:
+      - trigger: event
+        event_type: bthome_ble_event
+        event_data:
+          event_type: press
+          device_id: 0a0a9aedee58a1063d2a7ad849d1db56
+    actions:
+      - action: light.toggle
+        data:
+          entity_id: light.shed_counter_light
+
+  - alias: Greenhouse Light Toggle
+    description: ""
+    mode: single
+    triggers:
+      - trigger: event
+        event_type: bthome_ble_event
+        event_data:
+          event_type: press
+          device_id: 34f7bd95ee81e3e3532dfcaaac9927c6
+    actions:
+      - action: light.toggle
+        data:
+          entity_id: light.greenhouse
+
+  - alias: Christmas Tree Lights Toggle
+    description: ""
+    mode: single
+    triggers:
+      - trigger: event
+        event_type: hue_event
+        event_data:
+          id: hsb_living_room_button
+          type: short_release
+          subtype: 1
+
+    actions:
+      - action: light.toggle
+        data:
+          entity_id: light.christmas_tree_lights
+
+  - alias: Outside Lights Toggle
+    description: ""
+    mode: single
+    triggers:
+      - trigger: device
+        device_id: 20e03543611a94baae7b104dcfe9a3bb
+        domain: bthome
+        type: button
+        subtype: press
+    actions:
+      - action: switch.toggle
+        data:
+          entity_id: switch.external_sockets

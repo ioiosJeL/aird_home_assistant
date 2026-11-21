@@ -1,0 +1,115 @@
+script:
+  # On-screen toast on the dining room TV. Goes through the media_player
+  # entity rather than the webOS notify service, whose name follows the
+  # integration title and has changed under us (notify.dining_room_tv ->
+  # notify.lg_webos_tv_43up75006lf). Silently skipped while the TV is off.
+  dining_room_tv_notify:
+    alias: Dining Room TV Notify
+    mode: queued
+    max: 10
+    fields:
+      message:
+        description: "Text to show on the TV"
+        example: "Washing Machine Finished"
+        required: true
+        selector:
+          text:
+    sequence:
+      - condition: state
+        entity_id: media_player.dining_room_tv
+        state: "on"
+      - action: webostv.command
+        continue_on_error: true
+        data:
+          entity_id: media_player.dining_room_tv
+          command: system.notifications/createToast
+          payload:
+            message: "{{ message }}"
+
+  dining_room_tv_wol:
+    sequence:
+      - action: wake_on_lan.send_magic_packet
+        data:
+          mac: c4:e5:32:ea:1e:d2
+          # Subnet broadcast: unicast to the TV's IP doesn't reach it once
+          # it's asleep and its ARP entry has expired
+          broadcast_address: 192.168.1.255
+
+  # Wake the TV if it's asleep. After a cold wake webOS reports "on" a few
+  # seconds before its app launcher accepts commands, so settle briefly.
+  dining_room_tv_wake_up:
+    mode: single
+    sequence:
+      - if: "{{ not is_state('media_player.dining_room_tv', 'on') }}"
+        then:
+          - action: script.dining_room_tv_wol
+          - wait_template: "{{ is_state('media_player.dining_room_tv', 'on') }}"
+            timeout: "00:00:20"
+            continue_on_timeout: false
+          - delay:
+              seconds: 4
+
+  # Dashboard power button: off if on, wake if off
+  dining_room_tv_power:
+    alias: Dining Room TV Power
+    mode: single
+    sequence:
+      - if: "{{ is_state('media_player.dining_room_tv', 'on') }}"
+        then:
+          - action: media_player.turn_off
+            target:
+              entity_id: media_player.dining_room_tv
+        else:
+          - action: script.dining_room_tv_wake_up
+
+  dining_room_tv_launch_home:
+    sequence:
+      - action: script.dining_room_tv_wake_up
+      - action: webostv.button
+        target:
+          entity_id: media_player.dining_room_tv
+        data:
+          button: "HOME"
+
+  # This TV ignores the "YOUTUBE" remote key, so open the app as a source
+  dining_room_tv_launch_youtube:
+    sequence:
+      - action: script.dining_room_tv_wake_up
+      - action: media_player.select_source
+        target:
+          entity_id: media_player.dining_room_tv
+        data:
+          source: YouTube
+
+  dining_room_tv_launch_youtube_video:
+    sequence:
+      - action: script.dining_room_tv_wake_up
+      - action: webostv.command
+        data:
+          entity_id: media_player.dining_room_tv
+          command: system.launcher/launch
+          payload:
+            id: youtube.leanback.v4
+            contentId: v=6VB4bgiB0yA
+      - delay:
+          hours: 0
+          minutes: 0
+          seconds: 5
+          milliseconds: 0
+      - action: webostv.button
+        data:
+          entity_id: media_player.dining_room_tv
+          button: ENTER
+
+automation:
+  # webOS can't be powered on over its API once asleep. This trigger is what
+  # makes media_player.turn_on work (HomeKit, dashboards, voice): without an
+  # automation using it, the entity doesn't advertise TURN_ON at all.
+  - id: dining_room_tv_turn_on_via_wol
+    alias: Dining Room TV Turn On via WOL
+    mode: single
+    triggers:
+      - trigger: webostv.turn_on
+        entity_id: media_player.dining_room_tv
+    actions:
+      - action: script.dining_room_tv_wol

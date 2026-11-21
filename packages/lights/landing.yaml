@@ -1,0 +1,277 @@
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      zoned: &zoned
+        package: "Lights"
+        zone: "Landing"
+
+  customize:
+    input_select.landing_scenes:
+      <<: *zoned
+    input_text.landing_last_action:
+      <<: *zoned
+    input_text.landing_previous_scene:
+      <<: *zoned
+    automation.landing_lights_auto_on:
+      <<: *zoned
+    automation.landing_lights_auto_off:
+      <<: *zoned
+
+input_select:
+  # All Scenes
+  landing_scenes:
+    name: Landing Scenes
+    options:
+      - "Bright"
+      - "Relax"
+      - "Cosy"
+      - "Off"
+    icon: mdi:palette-outline
+
+light:
+  - platform: group
+    name: Landing Lights Master
+    entities:
+      - light.landing_ceiling
+
+input_number:
+  # Lux level below which brings on the auto lights
+  landing_lights_on_threshold:
+    name: Landing Threshold On
+    min: 1
+    max: 70
+
+input_text:
+  landing_last_action:
+    name: "Last Action: Landing"
+    icon: mdi:gesture-tap-button
+    initial: "Fuck Knows"
+
+  landing_previous_scene:
+    name: Previous Landing Scene
+    icon: mdi:palette
+    initial: "Reboot"
+
+input_boolean:
+  # On when the lights were changed outside HA (e.g. Hue app); motion
+  # leaves the room alone until it clears (see Manual Override Detection)
+  landing_manual_override:
+    name: Landing Manual Override
+    icon: mdi:hand-back-right
+
+  # Boolean which is on during scene change
+  landing_scene_changing:
+    name: Landing Scene Change In Progress
+    icon: mdi:repeat-once
+    initial: false
+
+  # Boolean which is on when lights are in auto mode
+  landing_auto_mode_active:
+    name: Landing Auto Mode
+    icon: mdi:refresh-auto
+
+  # Auto mode active
+  landing_automatic_lights:
+    name: Landing Automatic Lights Mode
+    icon: mdi:refresh-auto
+
+timer:
+  # Running after the lights went (or nearly went) off on someone who was
+  # still here; the motion timeout is doubled while it runs
+  landing_motion_extended:
+    name: Landing Motion Timeout Extended
+    icon: mdi:timer-plus-outline
+    duration: "00:30:00"
+
+  # Lets motion bring the light back straight after an auto-off even if
+  # the lux reading is still high from the light itself
+  landing_auto_off_override:
+    name: Timer To Prevent Waiting For Lux Sensor
+    icon: mdi:timer-sand-empty
+
+  # Timer set during each scene on script for transitions
+  landing_scene_changing:
+    name: Time For Scene Change
+    icon: mdi:timer-sand-empty
+
+automation:
+  - alias: Landing Lights Manual Override Detection
+    use_blueprint:
+      path: lights/manual_override_detection.yaml
+      input:
+        lights:
+          - light.landing_ceiling
+        lights_master: light.landing_lights_master
+        manual_boolean: input_boolean.landing_manual_override
+        scene_changing_boolean: input_boolean.landing_scene_changing
+        scenes_select: input_select.landing_scenes
+        auto_mode_boolean: input_boolean.landing_auto_mode_active
+        last_action_text: input_text.landing_last_action
+
+  - alias: Landing Lights Auto On
+    use_blueprint:
+      path: lights/motion_auto_on.yaml
+      input:
+        previous_scene_text: input_text.landing_previous_scene
+        room_prefix: landing
+        extend_timer: timer.landing_motion_extended
+        override_timer: timer.landing_auto_off_override
+        manual_override_boolean: input_boolean.landing_manual_override
+        motion_sensor: binary_sensor.landing_motion
+        automatic_lights_boolean: input_boolean.landing_automatic_lights
+        scenes_select: input_select.landing_scenes
+        illuminance_sensor: sensor.hms_landing_illuminance
+        threshold_number: input_number.landing_lights_on_threshold
+        last_action_text: input_text.landing_last_action
+        auto_mode_boolean: input_boolean.landing_auto_mode_active
+        daytime_script: script.landing_scene_bright
+        nighttime_script: script.landing_scene_relax
+        # While Night Mode is on: straight on at 30%, no bright scene first
+        late_night_lights: [light.landing_ceiling]
+        late_night_brightness: 30
+        late_night_change_script: script.landing_scene_change
+        late_night_scene_name: Relax
+
+  - alias: Landing Lights Auto Off
+    use_blueprint:
+      path: lights/motion_auto_off.yaml
+      input:
+        extend_timer: timer.landing_motion_extended
+        warning_lights:
+          - light.landing_ceiling
+        override_timer: timer.landing_auto_off_override
+        motion_sensor: binary_sensor.landing_motion
+        motion_timeout_number: input_number.landing_motion_timeout
+        automatic_lights_boolean: input_boolean.landing_automatic_lights
+        auto_mode_boolean: input_boolean.landing_auto_mode_active
+        off_script: script.landing_scene_off
+        last_action_text: input_text.landing_last_action
+
+  - alias: Landing Lights Manual Off Detection
+    use_blueprint:
+      path: lights/manual_off_detection.yaml
+      input:
+        manual_override_boolean: input_boolean.landing_manual_override
+        lights_master: light.landing_lights_master
+        scenes_select: input_select.landing_scenes
+        off_script: script.landing_scene_off
+        last_action_text: input_text.landing_last_action
+        auto_mode_boolean: input_boolean.landing_auto_mode_active
+
+  - alias: Landing Scene Select Changed
+    use_blueprint:
+      path: lights/scene_select_changed.yaml
+      input:
+        scenes_select: input_select.landing_scenes
+        scene_changing_boolean: input_boolean.landing_scene_changing
+        room_prefix: landing
+
+script:
+  landing_scene_change:
+    alias: Landing Scene Change
+    description: "Scene change functions"
+    fields:
+      scene_name:
+        description: "The title of the scene"
+        example: "Automatic"
+      scene_duration:
+        description: "The duration of scene change"
+        example: "5"
+    sequence:
+      - action: input_boolean.turn_on
+        data:
+          entity_id: input_boolean.landing_scene_changing
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.landing_previous_scene
+          value: "{{ states('input_select.landing_scenes') | string }}"
+
+      - action: input_text.set_value
+        data:
+          entity_id: input_text.landing_last_action
+          value: "Scene Selected: {{ scene_name }}"
+
+      - action: input_select.select_option
+        data:
+          entity_id: input_select.landing_scenes
+          option: "{{ scene_name }}"
+
+      - action: timer.start
+        data:
+          entity_id: timer.landing_scene_changing
+          duration: "{{ scene_duration | int(0) }}"
+
+      - wait_template: "{{ is_state('timer.landing_scene_changing', 'idle') }}"
+
+      - action: input_boolean.turn_off
+        data:
+          entity_id: input_boolean.landing_scene_changing
+
+  landing_scene_bright:
+    alias: Landing Bright Scene Extras
+    description: "Scene functions beyond light settings"
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.landing_scene_change
+        data:
+          variables:
+            scene_name: "Bright"
+            scene_duration: 2
+      - action: light.turn_on
+        data:
+          entity_id: light.landing_ceiling
+          brightness: 250
+          transition: 2
+
+  landing_scene_relax:
+    alias: Landing Relax Scene Extras
+    description: "Scene functions & light settings"
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.landing_scene_change
+        data:
+          variables:
+            scene_name: "Relax"
+            scene_duration: 5
+      - action: light.turn_on
+        data:
+          entity_id: light.landing_ceiling
+          brightness: 150
+          transition: 5
+
+  landing_scene_quickly_off:
+    alias: Landing Off Scene Quickly
+    description: "Scene functions & light settings"
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.landing_scene_change
+        data:
+          variables:
+            scene_name: "Off"
+            scene_duration: 1
+      - action: light.turn_on
+        data:
+          entity_id: light.landing_ceiling
+          brightness: 0
+          transition: 1
+
+  landing_scene_off:
+    alias: Landing Off Scene
+    description: "Scene functions & light settings"
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id: script.landing_scene_change
+        data:
+          variables:
+            scene_name: "Off"
+            scene_duration: 10
+      - action: light.turn_on
+        data:
+          entity_id: light.landing_ceiling
+          brightness: 0
+          transition: 10

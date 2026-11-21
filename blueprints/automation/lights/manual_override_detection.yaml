@@ -1,0 +1,201 @@
+blueprint:
+  name: Lights - Manual Override Detection
+  description: >-
+    Put a room into Manual Override when its lights are changed from outside
+    Home Assistant (e.g. dimmed or switched in the Hue app). While the
+    override is on, motion won't turn the lights on (motion_auto_on) and,
+    because auto mode is switched off, the motion timeout won't turn them off.
+
+    HA-originated changes are ignored: they carry a user/parent context, and
+    Hue scene activations (which report back without context) fall inside the
+    grace window after the room's scene-change flag moves.
+
+    The override clears when:
+      - a scene is selected in HA or by a switch (any scene script runs the
+        room's scene_change script, which writes "Scene Selected: ..."),
+      - the room's lights have been off for clear_after_off_minutes,
+      - Night Mode ends (Automatic Lights Morning Reset in packages/lights.yaml).
+  domain: automation
+  input:
+    lights:
+      name: Lights to watch (individual lights, not groups)
+      selector:
+        entity:
+          domain: light
+          multiple: true
+    lights_master:
+      name: Lights Master (light group)
+      selector:
+        entity:
+          domain: light
+    manual_boolean:
+      name: Manual Override (input_boolean)
+      selector:
+        entity:
+          domain: input_boolean
+    scene_changing_boolean:
+      name: Scene Change In Progress (input_boolean)
+      selector:
+        entity:
+          domain: input_boolean
+    scenes_select:
+      name: Scenes (input_select)
+      selector:
+        entity:
+          domain: input_select
+    auto_mode_boolean:
+      name: Auto Mode Active (input_boolean)
+      selector:
+        entity:
+          domain: input_boolean
+    last_action_text:
+      name: Last Action (input_text)
+      selector:
+        entity:
+          domain: input_text
+    clear_after_off_minutes:
+      name: Clear override after lights off for (minutes)
+      default: 30
+      selector:
+        number:
+          min: 1
+          max: 240
+          unit_of_measurement: min
+    grace_seconds:
+      name: Ignore light updates for this long after a scene change (seconds)
+      # Was 20. Hue sends one last update 21-45s after a scene recall (seen
+      # on 36 of 39 overrides, 11-18 Nov 2026), which tripped a false
+      # override and paused motion for a median 93 min.
+      default: 60
+      selector:
+        number:
+          min: 5
+          max: 120
+          unit_of_measurement: s
+
+mode: queued
+max: 25
+
+triggers:
+  - trigger: state
+    entity_id: !input lights
+    id: light_changed
+  - trigger: state
+    entity_id: !input lights_master
+    to: "off"
+    for:
+      seconds: 1
+    id: room_off
+  - trigger: state
+    entity_id: !input lights_master
+    to: "off"
+    for:
+      minutes: !input clear_after_off_minutes
+    id: off_timeout
+  - trigger: state
+    entity_id: !input last_action_text
+    id: scene_selected
+
+variables:
+  manual_boolean: !input manual_boolean
+  scene_changing: !input scene_changing_boolean
+  scenes_select: !input scenes_select
+  lights_master: !input lights_master
+  grace: !input grace_seconds
+  manual_on: "{{ is_state(manual_boolean, 'on') }}"
+  last_action_text: !input last_action_text
+  # motion_auto_off dims the room before switching off and restores it if
+  # motion returns - those light changes are HA's own, not a manual tweak
+  automatic_recent: >-
+    {% set la = states[last_action_text] %}
+    {{ la is not none and la.state.startswith('Automatic Mode')
+       and (la.state == 'Automatic Mode: Dimming Before Off'
+            or (now() - la.last_changed).total_seconds() < grace | float(20)) }}
+
+actions:
+  - choose:
+      # A light changed and nothing in HA asked for it
+      - conditions:
+          - condition: template
+            value_template: >-
+              {% set f = trigger.from_state %}{% set t = trigger.to_state %}
+              {{ trigger.id == 'light_changed'
+                 and not manual_on
+                 and f is not none and t is not none
+                 and f.state not in ['unavailable', 'unknown']
+                 and t.state not in ['unavailable', 'unknown']
+                 and not (f.state == 'off' and t.state == 'off')
+                 and t.context.user_id is none
+                 and t.context.parent_id is none
+                 and is_state(scene_changing, 'off')
+                 and (now() - states[scene_changing].last_changed).total_seconds() > grace | float(20)
+                 and not automatic_recent }}
+        sequence:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: !input manual_boolean
+          - action: input_boolean.turn_off
+            target:
+              entity_id: !input auto_mode_boolean
+          - action: input_text.set_value
+            target:
+              entity_id: !input last_action_text
+            data:
+              value: >-
+                {% set t = trigger.to_state %}
+                {{ ('Manual Override: ' ~ t.name ~ ' '
+                    ~ ('turned ' ~ t.state if trigger.from_state.state != t.state else 'adjusted')
+                    ~ ' outside HA')[:100] }}
+
+      # Lights went off while in manual: show the scene as Off without
+      # running the off script (which would count as a scene selection)
+      - conditions:
+          - condition: template
+            value_template: >-
+              {{ trigger.id == 'room_off' and manual_on
+                 and not is_state(scenes_select, 'Off') }}
+        sequence: &quiet_off
+          - action: input_boolean.turn_on
+            target:
+              entity_id: !input scene_changing_boolean
+          - action: input_select.select_option
+            target:
+              entity_id: !input scenes_select
+            data:
+              option: "Off"
+          # Let "Scene Select Changed" see the flag before it drops
+          - delay:
+              seconds: 1
+          - action: input_boolean.turn_off
+            target:
+              entity_id: !input scene_changing_boolean
+
+      # Lights have been off long enough: back to automatic
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'off_timeout' and manual_on }}"
+        sequence:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: !input manual_boolean
+          - action: input_text.set_value
+            target:
+              entity_id: !input last_action_text
+            data:
+              value: "Manual Override Cleared: Lights Off"
+          - if:
+              - condition: template
+                value_template: "{{ not is_state(scenes_select, 'Off') }}"
+            then: *quiet_off
+
+      # A scene was chosen in HA or by a switch
+      - conditions:
+          - condition: template
+            value_template: >-
+              {{ trigger.id == 'scene_selected' and manual_on
+                 and trigger.to_state is not none
+                 and trigger.to_state.state.startswith('Scene Selected:') }}
+        sequence:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: !input manual_boolean

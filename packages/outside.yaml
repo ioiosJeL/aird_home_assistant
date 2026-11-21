@@ -1,0 +1,16 @@
+sensor:
+  - platform: min_max
+    name: Outside Average Temperature
+    unique_id: outside_average_temperature
+    type: min
+    entity_ids:
+      - sensor.homs_patio_temperature
+      - sensor.homs_back_door_temperature
+
+  - platform: min_max
+    name: Outside Average Illuminance
+    unique_id: outside_average_illuminance
+    type: min
+    entity_ids:
+      - sensor.homs_patio_illuminance
+      - sensor.homs_back_door_illuminance

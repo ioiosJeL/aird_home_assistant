@@ -1,0 +1,268 @@
+# Humidity page – dehumidifier progress in the master bedroom + other rooms
+# Colour bands: <40 dry | 40-60 ideal | 60-70 damp | 70-80 high | 80+ very high
+path: humidity
+title: Humidity
+icon: mdi:water-percent
+type: custom:masonry-layout
+layout:
+  width: 350
+  max_width: 5000
+  max_cols: 4
+cards:
+  # ───────────────── MASTER BEDROOM (hero) ─────────────────
+  - type: custom:stack-in-card
+    title: 💧 Master Bedroom · Dehumidifier
+    cards:
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.master_bedroom_average_humidity
+            name: Now
+            unit: "%"
+            min: 20
+            max: 100
+            needle: true
+            segments:
+              - from: 0
+                color: "#f0a030"
+              - from: 40
+                color: "#43a047"
+              - from: 60
+                color: "#fbc02d"
+              - from: 70
+                color: "#fb8c00"
+              - from: 80
+                color: "#e53935"
+          - type: custom:mini-graph-card
+            entities:
+              - sensor.master_bedroom_average_humidity
+            name: Last 24h
+            icon: mdi:water-percent
+            hours_to_show: 24
+            update_interval: 60
+            points_per_hour: 4
+            line_width: 4
+            height: 140
+            lower_bound: 30
+            upper_bound: 100
+            smoothing: true
+            color_thresholds_transition: smooth
+            color_thresholds: &rh_colours
+              - value: 0
+                color: "#f0a030"
+              - value: 40
+                color: "#43a047"
+              - value: 60
+                color: "#fbc02d"
+              - value: 70
+                color: "#fb8c00"
+              - value: 80
+                color: "#e53935"
+            show:
+              fill: fade
+              extrema: true
+              labels: false
+              points: false
+      # Rolling averages – the quickest read on whether it's improving
+      - type: horizontal-stack
+        cards:
+          - type: statistic
+            entity: sensor.master_bedroom_average_humidity
+            name: Today avg
+            icon: mdi:calendar-today
+            stat_type: mean
+            period:
+              calendar:
+                period: day
+          - type: statistic
+            entity: sensor.master_bedroom_average_humidity
+            name: This week
+            icon: mdi:calendar-week
+            stat_type: mean
+            period:
+              calendar:
+                period: week
+          - type: statistic
+            entity: sensor.master_bedroom_average_humidity
+            name: Last week
+            icon: mdi:calendar-arrow-left
+            stat_type: mean
+            period:
+              calendar:
+                period: week
+                offset: -1
+      # 7-day hourly trend, coloured by band
+      - type: custom:mini-graph-card
+        entities:
+          - sensor.master_bedroom_average_humidity
+        name: 7-day trend (hourly avg)
+        icon: mdi:chart-bell-curve-cumulative
+        hours_to_show: 168
+        update_interval: 300
+        group_by: hour
+        aggregate_func: avg
+        line_width: 3
+        height: 160
+        lower_bound: 30
+        upper_bound: 100
+        color_thresholds_transition: smooth
+        color_thresholds: *rh_colours
+        show:
+          fill: fade
+          extrema: true
+          average: true
+          labels: true
+          points: false
+      # 14 daily bars – each bar coloured by that day's average
+      - type: custom:mini-graph-card
+        entities:
+          - sensor.master_bedroom_average_humidity
+        name: Daily average · 14 days
+        icon: mdi:chart-bar
+        hours_to_show: 336
+        update_interval: 300
+        group_by: date
+        aggregate_func: avg
+        height: 120
+        lower_bound: 30
+        upper_bound: 100
+        color_thresholds: *rh_colours
+        show:
+          graph: bar
+          state: false
+          labels: false
+
+  # Long-term statistics – kept forever, beyond the 30-day recorder window
+  - type: statistics-graph
+    title: 📉 Dehumidifier progress · daily min / mean / max (90 days)
+    entities:
+      - entity: sensor.master_bedroom_average_humidity
+        name: Master Bedroom
+    period: day
+    days_to_show: 90
+    stat_types:
+      - min
+      - mean
+      - max
+    chart_type: line
+  - type: statistics-graph
+    title: 📊 Weekly average · Master Bedroom (6 months)
+    entities:
+      - entity: sensor.master_bedroom_average_humidity
+        name: Master Bedroom
+    period: week
+    days_to_show: 182
+    stat_types:
+      - mean
+    chart_type: bar
+    hide_legend: true
+
+  # ───────────────── OTHER ROOMS ─────────────────
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: custom:mini-graph-card
+        entities:
+          - sensor.hall_average_humidity
+        name: Hallway
+        icon: mdi:door
+        hours_to_show: 24
+        update_interval: 60
+        points_per_hour: 2
+        height: 70
+        line_width: 3
+        smoothing: true
+        color_thresholds: *rh_colours
+        show:
+          fill: fade
+          labels: false
+          extrema: false
+      - type: custom:mini-graph-card
+        entities:
+          - sensor.landing_average_humidity
+        name: Landing
+        icon: mdi:stairs
+        hours_to_show: 24
+        update_interval: 60
+        points_per_hour: 2
+        height: 70
+        line_width: 3
+        smoothing: true
+        color_thresholds: *rh_colours
+        show:
+          fill: fade
+          labels: false
+          extrema: false
+      - type: custom:mini-graph-card
+        entities:
+          - sensor.single_bedroom_average_humidity
+        name: Single Bedroom
+        icon: mdi:bed-single
+        hours_to_show: 24
+        update_interval: 60
+        points_per_hour: 2
+        height: 70
+        line_width: 3
+        smoothing: true
+        color_thresholds: *rh_colours
+        show:
+          fill: fade
+          labels: false
+          extrema: false
+      - type: custom:mini-graph-card
+        entities:
+          - sensor.double_bedroom_average_humidity
+        name: Double Bedroom
+        icon: mdi:bed-double
+        hours_to_show: 24
+        update_interval: 60
+        points_per_hour: 2
+        height: 70
+        line_width: 3
+        smoothing: true
+        color_thresholds: *rh_colours
+        show:
+          fill: fade
+          labels: false
+          extrema: false
+
+  # Master bedroom vs the rest – shows whether the dehumidifier is outperforming
+  - type: custom:mini-graph-card
+    name: All rooms · 7 days (hourly avg)
+    icon: mdi:compare-horizontal
+    hours_to_show: 168
+    update_interval: 300
+    group_by: hour
+    aggregate_func: avg
+    height: 180
+    line_width: 2
+    lower_bound: 30
+    upper_bound: 100
+    smoothing: true
+    entities:
+      - entity: sensor.master_bedroom_average_humidity
+        name: Master
+        color: "#1e88e5"
+        show_fill: true
+      - entity: sensor.hall_average_humidity
+        name: Hallway
+        color: "#8e24aa"
+        show_fill: false
+      - entity: sensor.landing_average_humidity
+        name: Landing
+        color: "#00acc1"
+        show_fill: false
+      - entity: sensor.single_bedroom_average_humidity
+        name: Single
+        color: "#7cb342"
+        show_fill: false
+      - entity: sensor.double_bedroom_average_humidity
+        name: Double
+        color: "#f4511e"
+        show_fill: false
+    show:
+      fill: fade
+      legend: true
+      labels: true
+      state: true

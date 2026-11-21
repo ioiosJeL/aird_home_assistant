@@ -1,0 +1,588 @@
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      common: &common
+        package: "WLED"
+
+    light.*_mini_square*:
+      <<: *common
+    switch.*_mini_square*:
+      <<: *common
+    select.*_mini_square*:
+      <<: *common
+    sensor.*_mini_square*:
+      <<: *common
+    number.*_mini_square*:
+      <<: *common
+    button.*_mini_square*:
+      <<: *common
+    update.*_mini_square*:
+      <<: *common
+    device_tracker.mini_square_*:
+      <<: *common
+
+    light.triptych_*:
+      <<: *common
+    switch.triptych_*:
+      <<: *common
+    select.triptych_*:
+      <<: *common
+    sensor.triptych_*:
+      <<: *common
+    number.triptych_*:
+      <<: *common
+    button.triptych_*:
+      <<: *common
+    update.triptych_*:
+      <<: *common
+
+light:
+  - platform: group
+    name: Mini Squares Master
+    entities:
+      - light.living_room_mini_square
+      - light.master_bedroom_mini_square
+      - light.workshop_mini_square
+
+  - platform: group
+    name: Triptych Master
+    entities:
+      - light.triptych_top_main
+      - light.triptych_wow_main
+      - light.triptych_bottom_main
+
+input_boolean:
+  # Master auto mode toggle
+  mini_square_sync:
+    name: Mini Square Master Sync Recieve
+    icon: mdi:sync
+  mini_squares_notify_active:
+    name: Mini Square Notification Active
+    icon: mdi:timer
+
+input_select:
+  mini_squares_presets:
+    name: Mini Squares Preset List
+    options:
+      - Radiation
+      - Saltire
+      - Groovy
+      - Rain Drops
+      - Disco Square
+      - Tartan
+      - Ripples
+      - Rainbow Swirls
+      - Distortion Waves
+    icon: mdi:shape
+
+script:
+  triptych_set_power:
+    alias: Set Triptych Power
+    mode: single
+    fields:
+      turn_on:
+        description: "true to turn the triptych lights on, false to turn them off"
+        example: false
+        selector:
+          boolean:
+    sequence:
+      - action: "light.turn_{{ 'on' if turn_on else 'off' }}"
+        target:
+          entity_id: light.triptych_master
+
+  triptych_sync_receive:
+    alias: Set Triptych Sync Receive
+    mode: queued
+    fields:
+      turn_on:
+        description: "true to turn the sync-receive group on, false to turn it off"
+        example: false
+        selector:
+          boolean:
+    variables:
+      auto_switches: >
+        {{ states.switch
+        | selectattr('entity_id', 'search', '_sync_receive')
+        | selectattr('entity_id', 'search', 'triptych')
+        | map(attribute='entity_id') | list }}
+    sequence:
+      - action: "switch.turn_{{ 'on' if turn_on else 'off' }}"
+        target:
+          entity_id: "{{ auto_switches }}"
+
+  triptych_sync_send:
+    alias: Set Triptych Sync Send
+    mode: queued
+    fields:
+      turn_on:
+        description: "true to turn the sync-send group on, false to turn it off"
+        example: false
+        selector:
+          boolean:
+    variables:
+      auto_switches: >
+        {{ states.switch
+        | selectattr('entity_id', 'search', '_sync_send')
+        | selectattr('entity_id', 'search', 'triptych')
+        | map(attribute='entity_id') | list }}
+    sequence:
+      - action: "switch.turn_{{ 'on' if turn_on else 'off' }}"
+        target:
+          entity_id: "{{ auto_switches }}"
+
+  triptych_sync_disable_all:
+    alias: Disable All Triptych Sync
+    description: "Drop out of sync send/receive before a scene changes presets, so each unit reacts independently"
+    mode: single
+    sequence:
+      - action: script.triptych_sync_receive
+        data:
+          turn_on: false
+      - action: script.triptych_sync_send
+        data:
+          turn_on: false
+
+  triptych_scene_bright:
+    alias: Triptych Scene Bright
+    mode: single
+    sequence:
+      - action: script.triptych_sync_disable_all
+      - delay:
+          seconds: 5
+      - action: select.select_option
+        target:
+          entity_id:
+            - select.triptych_top_playlist
+            - select.triptych_wow_playlist
+            - select.triptych_bottom_playlist
+        data:
+          option: "Gentle Whites"
+
+  triptych_scene_music:
+    alias: Triptych Scene Music
+    mode: single
+    sequence:
+      - action: script.triptych_sync_disable_all
+      - delay:
+          seconds: 2
+      - action: select.select_option
+        target:
+          entity_id: select.triptych_top_preset
+        data:
+          option: "70s"
+      - delay:
+          seconds: 1
+      - action: select.select_option
+        target:
+          entity_id: select.triptych_wow_preset
+        data:
+          option: "Music Dancer"
+      - delay:
+          seconds: 1
+      - action: select.select_option
+        target:
+          entity_id: select.triptych_bottom_preset
+        data:
+          option: "Music Frequency"
+
+  triptych_scene_cosy:
+    alias: Triptych Scene Cosy
+    mode: single
+    sequence:
+      - action: script.triptych_sync_disable_all
+      - action: select.select_option
+        target:
+          entity_id: select.triptych_top_preset
+        data:
+          option: "Frizzles"
+      - delay:
+          seconds: 1
+      - action: select.select_option
+        target:
+          entity_id: select.triptych_wow_preset
+        data:
+          option: "Fire"
+      - delay:
+          seconds: 1
+      - action: select.select_option
+        target:
+          entity_id: select.triptych_bottom_preset
+        data:
+          option: "Flames"
+
+  triptych_scene_relax:
+    alias: Triptych Scene Relax
+    mode: single
+    sequence:
+      - action: script.triptych_sync_disable_all
+      - delay:
+          seconds: 2
+      - action: select.select_option
+        target:
+          entity_id: select.triptych_top_preset
+        data:
+          option: "Raindrops"
+      - delay:
+          seconds: 2
+      - action: select.select_option
+        target:
+          entity_id: select.triptych_wow_preset
+        data:
+          option: "Raindrops"
+      - delay:
+          seconds: 2
+      - action: select.select_option
+        target:
+          entity_id: select.triptych_bottom_preset
+        data:
+          option: "Raindrops"
+
+  triptych_showcase:
+    alias: Showcase Worldofwires Triptych
+    mode: single
+    sequence:
+      - action: script.triptych_sync_disable_all
+      - action: select.select_option
+        target:
+          entity_id:
+            - select.triptych_top_preset
+            - select.triptych_wow_preset
+            - select.triptych_bottom_preset
+        data:
+          option: "White Glitter"
+      - action: script.triptych_set_power
+        data:
+          turn_on: false
+      - delay:
+          seconds: 5
+
+      - action: select.select_option
+        target:
+          entity_id: select.triptych_wow_playlist
+        data:
+          option: "Gentle Whites"
+
+      - delay:
+          milliseconds: 500
+      - action: select.select_option
+        target:
+          entity_id: select.triptych_bottom_playlist
+        data:
+          option: "Gentle Whites"
+
+      - delay:
+          milliseconds: 500
+      - action: select.select_option
+        target:
+          entity_id: select.triptych_top_playlist
+        data:
+          option: "Gentle Whites"
+
+      - delay:
+          seconds: 1
+
+      - action: select.select_option
+        target:
+          entity_id: select.triptych_bottom_preset
+        data:
+          option: "Music Frequency"
+
+      - delay:
+          seconds: 20
+
+      - action: select.select_option
+        target:
+          entity_id: select.triptych_top_preset
+        data:
+          option: "Solid"
+
+      - delay:
+          milliseconds: 500
+      - action: select.select_option
+        target:
+          entity_id: select.triptych_wow_preset
+        data:
+          option: "Solid"
+
+      - delay:
+          milliseconds: 500
+      - action: select.select_option
+        target:
+          entity_id: select.triptych_bottom_preset
+        data:
+          option: "Solid"
+
+      - delay:
+          seconds: 1
+
+      - action: select.select_option
+        target:
+          entity_id: select.triptych_wow_playlist
+        data:
+          option: "Showoff"
+
+      - action: select.select_option
+        target:
+          entity_id: select.triptych_bottom_playlist
+        data:
+          option: "Showoff"
+
+      - action: select.select_option
+        target:
+          entity_id: select.triptych_top_playlist
+        data:
+          option: "Showoff"
+
+      - delay:
+          seconds: 25
+
+      - action: select.select_option
+        target:
+          entity_id: select.triptych_bottom_playlist
+        data:
+          option: "Music Mode"
+
+      - delay:
+          seconds: 15
+
+      - action: select.select_option
+        target:
+          entity_id: select.triptych_wow_playlist
+        data:
+          option: "Gentle Whites"
+
+      - delay:
+          seconds: 8
+
+      - action: select.select_option
+        target:
+          entity_id: select.triptych_wow_preset
+        data:
+          option: "Music Dancer"
+
+      - delay:
+          milliseconds: 7500
+      - action: select.select_option
+        target:
+          entity_id: select.triptych_top_preset
+        data:
+          option: "Solid"
+
+      - delay:
+          milliseconds: 500
+      - action: select.select_option
+        target:
+          entity_id: select.triptych_wow_preset
+        data:
+          option: "Solid"
+
+      - delay:
+          milliseconds: 500
+      - action: select.select_option
+        target:
+          entity_id: select.triptych_bottom_preset
+        data:
+          option: "Solid"
+
+  mini_squares_set_power:
+    alias: Set Mini Squares Power
+    mode: single
+    fields:
+      turn_on:
+        description: "true to turn all mini squares on, false to turn them off"
+        example: false
+        selector:
+          boolean:
+    sequence:
+      - action: "light.turn_{{ 'on' if turn_on else 'off' }}"
+        target:
+          entity_id: light.mini_squares_master
+
+  mini_squares_sync:
+    alias: Set Mini Squares Sync
+    mode: queued
+    fields:
+      turn_on:
+        description: "true to turn the sync group on, false to turn it off"
+        example: false
+        selector:
+          boolean:
+    variables:
+      auto_switches: >
+        {{ states.switch
+        | selectattr('entity_id', 'search', '_sync_receive')
+        | selectattr('entity_id', 'search', 'mini_square')
+        | map(attribute='entity_id') | list }}
+    sequence:
+      - action: "switch.turn_{{ 'on' if turn_on else 'off' }}"
+        target:
+          entity_id: "{{ auto_switches }}"
+
+  mini_squares_set_preset:
+    alias: All Mini Squares To Preset
+    mode: queued
+    variables:
+      auto_presets: >
+        {{ states.select
+        | selectattr('entity_id', 'search', 'mini_square_')
+        | selectattr('entity_id', 'search', '_preset')
+        | map(attribute='entity_id') | list }}
+    fields:
+      preset:
+        description: "The name of the preset"
+        example: "Tartan"
+    sequence:
+      - action: select.select_option
+        target:
+          entity_id: "{{ auto_presets }}"
+        data:
+          option: "{{ preset }}"
+
+  notify_mini_squares_object_detected:
+    alias: Use Mini Squares As Notification
+    mode: single
+    fields:
+      object_type:
+        description: "The type of the object detected"
+        example: "Person"
+    sequence:
+      - action: input_boolean.turn_on
+        data:
+          entity_id: input_boolean.mini_squares_notify_active
+
+      - choose:
+          - conditions: "{{ states('input_boolean.mini_square_sync') == 'on' }}"
+            sequence:
+              - action: script.mini_squares_sync
+                data:
+                  turn_on: false
+              - delay:
+                  seconds: 1
+
+      - choose:
+          - conditions: "{{ object_type == 'Person' }}"
+            sequence:
+              - choose:
+                  - conditions: "{{ states('input_select.mini_squares_presets') == 'Tartan' }}"
+                    sequence:
+                      - action: script.mini_squares_set_preset
+                        data:
+                          preset: "{{ states('input_select.mini_squares_presets') }}"
+                default:
+                  - action: input_select.select_option
+                    data:
+                      entity_id: input_select.mini_squares_presets
+                      option: "Tartan"
+
+          - conditions: "{{ object_type == 'Vehicle' }}"
+            sequence:
+              - choose:
+                  - conditions: "{{ states('input_select.mini_squares_presets') == 'Saltire' }}"
+                    sequence:
+                      - action: script.mini_squares_set_preset
+                        data:
+                          preset: "{{ states('input_select.mini_squares_presets') }}"
+                default:
+                  - action: input_select.select_option
+                    data:
+                      entity_id: input_select.mini_squares_presets
+                      option: "Saltire"
+
+  notify_mini_squares_cnc_status:
+    alias: Use Mini Squares As CNC Status Notification
+    mode: single
+    fields:
+      message:
+        description: "The type of the message"
+        example: "Finished"
+    sequence:
+      - action: input_boolean.turn_on
+        data:
+          entity_id: input_boolean.mini_squares_notify_active
+
+      - choose:
+          - conditions: "{{ states('input_boolean.mini_square_sync') == 'on' }}"
+            sequence:
+              - action: script.mini_squares_sync
+                data:
+                  turn_on: false
+
+      - choose:
+          - conditions: "{{ message == 'Finished' }}"
+            sequence:
+              - choose:
+                  - conditions: "{{ states('input_select.mini_squares_presets') == 'Rain Drops' }}"
+                    sequence:
+                      - action: script.mini_squares_set_preset
+                        data:
+                          preset: "{{ states('input_select.mini_squares_presets') }}"
+                default:
+                  - action: input_select.select_option
+                    data:
+                      entity_id: input_select.mini_squares_presets
+                      option: "Rain Drops"
+
+          - conditions: "{{ message == 'Error' }}"
+            sequence:
+              - choose:
+                  - conditions: "{{ states('input_select.mini_squares_presets') == 'Radiation' }}"
+                    sequence:
+                      - action: script.mini_squares_set_preset
+                        data:
+                          preset: "{{ states('input_select.mini_squares_presets') }}"
+                default:
+                  - action: input_select.select_option
+                    data:
+                      entity_id: input_select.mini_squares_presets
+                      option: "Radiation"
+
+automation:
+  - alias: Mini Square Preset Change
+    mode: single
+    triggers:
+      trigger: state
+      entity_id: input_select.mini_squares_presets
+    actions:
+      - action: script.mini_squares_set_preset
+        data:
+          preset: "{{ states('input_select.mini_squares_presets') }}"
+
+  - alias: Mini Square Notify Time-Out
+    mode: single
+    triggers:
+      trigger: state
+      entity_id: input_boolean.mini_squares_notify_active
+      to: "on"
+      for:
+        seconds: 30
+    actions:
+      - action: input_boolean.turn_off
+        data:
+          entity_id: input_boolean.mini_squares_notify_active
+      - action: script.mini_squares_set_power
+        data:
+          turn_on: false
+
+  - alias: Mini Square Sync On
+    mode: single
+    triggers:
+      trigger: state
+      entity_id: input_boolean.mini_square_sync
+      to: "on"
+    conditions: "{{ states('input_boolean.mini_squares_notify_active') == 'off' }}"
+    actions:
+      action: script.mini_squares_sync
+      data:
+        turn_on: true
+
+  - alias: Mini Square Sync Off
+    mode: single
+    triggers:
+      trigger: state
+      entity_id: input_boolean.mini_square_sync
+      to: "off"
+    conditions: "{{ states('input_boolean.mini_squares_notify_active') == 'off' }}"
+    actions:
+      action: script.mini_squares_sync
+      data:
+        turn_on: false

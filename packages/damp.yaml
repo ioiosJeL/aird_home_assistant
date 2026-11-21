@@ -1,0 +1,358 @@
+# Damp / condensation watch for the workshop, machine room and master
+# bedroom (18 Nov 2026; master bedroom added the same day - a dehumidifier
+# is planned there, which can later be switched on alongside the heater).
+#
+# Dew point: the temperature at which the room's air would start to
+# condense (Magnus formula, from the room's average temperature and
+# humidity). The moisture in the air changes slowly, so tonight's dew point
+# is close to now's - what matters is how cold the room (and the cold metal
+# in it) gets compared with it.
+#
+# Predicted overnight low: the room's lowest temperature in the last 24 h -
+# tonight usually gets about as cold as last night. (It already includes
+# the heater: the workshop drops to a 5 C setpoint when "Send Workshop to
+# Sleep" runs.) After raising a heater setpoint, it catches up within a day.
+#
+# Margins (room temperature minus dew point):
+#   now:       under 3 C  -> condensation likely on cold metal/tools
+#   predicted: under 2 C  -> likely tonight unless the heater setpoint is raised
+#
+# Graph: Garage page (dashboards/admin-pages/garage.yaml), Climate section.
+
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      common: &common
+        package: "Damp"
+    sensor.workshop_dew_point*:
+      <<: *common
+    sensor.machine_room_dew_point*:
+      <<: *common
+    sensor.master_bedroom_dew_point*:
+      <<: *common
+    sensor.*_condensation_margin*:
+      <<: *common
+    sensor.*_predicted_low:
+      <<: *common
+    sensor.*_temperature_low_24h:
+      <<: *common
+    binary_sensor.*_condensation_risk:
+      <<: *common
+
+sensor:
+  # Lowest room temperature in the last 24 h (from recorded history)
+  - platform: statistics
+    name: Workshop Temperature Low 24h
+    unique_id: workshop_temperature_low_24h
+    entity_id: sensor.workshop_average_temperature
+    state_characteristic: value_min
+    max_age:
+      hours: 24
+    sampling_size: 2000
+  - platform: statistics
+    name: Machine Room Temperature Low 24h
+    unique_id: machine_room_temperature_low_24h
+    entity_id: sensor.machine_room_average_temperature
+    state_characteristic: value_min
+    max_age:
+      hours: 24
+    sampling_size: 2000
+  - platform: statistics
+    name: Master Bedroom Temperature Low 24h
+    unique_id: master_bedroom_temperature_low_24h
+    entity_id: sensor.master_bedroom_average_temperature
+    state_characteristic: value_min
+    max_age:
+      hours: 24
+    sampling_size: 2000
+
+template:
+  - sensor:
+      # ---- Dew point (room derived from the entity id) ----
+      - &dew
+        name: Workshop Dew Point
+        default_entity_id: sensor.workshop_dew_point
+        unique_id: workshop_dew_point
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:water-thermometer-outline
+        availability: &dew_avail >-
+          {% set r = this.entity_id.split('.')[1].split('_dew_point')[0] %}
+          {{ states('sensor.' ~ r ~ '_average_temperature') | is_number
+             and states('sensor.' ~ r ~ '_average_humidity') | float(0) > 0 }}
+        state: >-
+          {% set r = this.entity_id.split('.')[1].split('_dew_point')[0] %}
+          {% set t = states('sensor.' ~ r ~ '_average_temperature') | float %}
+          {% set rh = states('sensor.' ~ r ~ '_average_humidity') | float %}
+          {% set g = log(rh / 100) + 17.62 * t / (243.12 + t) %}
+          {{ (243.12 * g / (17.62 - g)) | round(1) }}
+      - <<: *dew
+        name: Machine Room Dew Point
+        default_entity_id: sensor.machine_room_dew_point
+        unique_id: machine_room_dew_point
+      - <<: *dew
+        name: Master Bedroom Dew Point
+        default_entity_id: sensor.master_bedroom_dew_point
+        unique_id: master_bedroom_dew_point
+
+      # ---- Margin now: room temperature minus dew point ----
+      - &margin
+        name: Workshop Condensation Margin
+        default_entity_id: sensor.workshop_condensation_margin
+        unique_id: workshop_condensation_margin
+        unit_of_measurement: "°C"
+        state_class: measurement
+        icon: mdi:arrow-expand-vertical
+        availability: >-
+          {% set r = this.entity_id.split('.')[1].split('_condensation_margin')[0] %}
+          {{ states('sensor.' ~ r ~ '_average_temperature') | is_number
+             and states('sensor.' ~ r ~ '_dew_point') | is_number }}
+        state: >-
+          {% set r = this.entity_id.split('.')[1].split('_condensation_margin')[0] %}
+          {{ (states('sensor.' ~ r ~ '_average_temperature') | float
+              - states('sensor.' ~ r ~ '_dew_point') | float) | round(1) }}
+      - <<: *margin
+        name: Machine Room Condensation Margin
+        default_entity_id: sensor.machine_room_condensation_margin
+        unique_id: machine_room_condensation_margin
+      - <<: *margin
+        name: Master Bedroom Condensation Margin
+        default_entity_id: sensor.master_bedroom_condensation_margin
+        unique_id: master_bedroom_condensation_margin
+
+      # ---- Predicted overnight low ----
+      - &low
+        name: Workshop Predicted Low
+        default_entity_id: sensor.workshop_predicted_low
+        unique_id: workshop_predicted_low
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:thermometer-chevron-down
+        availability: >-
+          {% set r = this.entity_id.split('.')[1].split('_predicted_low')[0] %}
+          {{ states('sensor.' ~ r ~ '_temperature_low_24h') | is_number }}
+        # Tonight gets about as cold as last night: the lowest temperature in
+        # the last 24 h already includes whatever the heater did overnight
+        # (e.g. the workshop's 5 C sleep setpoint), whereas the setpoint
+        # right now can be a daytime one.
+        state: >-
+          {% set r = this.entity_id.split('.')[1].split('_predicted_low')[0] %}
+          {{ states('sensor.' ~ r ~ '_temperature_low_24h') | float | round(1) }}
+        attributes:
+          heater_setpoint_now: >-
+            {% set c = 'climate.' ~ this.entity_id.split('.')[1].split('_predicted_low')[0] %}
+            {{ state_attr(c, 'temperature') if is_state(c, 'heat') else 'off' }}
+      - <<: *low
+        name: Machine Room Predicted Low
+        default_entity_id: sensor.machine_room_predicted_low
+        unique_id: machine_room_predicted_low
+      - <<: *low
+        name: Master Bedroom Predicted Low
+        default_entity_id: sensor.master_bedroom_predicted_low
+        unique_id: master_bedroom_predicted_low
+
+      # ---- Predicted margin: predicted low minus dew point ----
+      - &pmargin
+        name: Workshop Condensation Margin Predicted
+        default_entity_id: sensor.workshop_condensation_margin_predicted
+        unique_id: workshop_condensation_margin_predicted
+        unit_of_measurement: "°C"
+        state_class: measurement
+        icon: mdi:arrow-collapse-vertical
+        availability: >-
+          {% set r = this.entity_id.split('.')[1].split('_condensation_margin')[0] %}
+          {{ states('sensor.' ~ r ~ '_predicted_low') | is_number
+             and states('sensor.' ~ r ~ '_dew_point') | is_number }}
+        state: >-
+          {% set r = this.entity_id.split('.')[1].split('_condensation_margin')[0] %}
+          {{ (states('sensor.' ~ r ~ '_predicted_low') | float
+              - states('sensor.' ~ r ~ '_dew_point') | float) | round(1) }}
+      - <<: *pmargin
+        name: Machine Room Condensation Margin Predicted
+        default_entity_id: sensor.machine_room_condensation_margin_predicted
+        unique_id: machine_room_condensation_margin_predicted
+      - <<: *pmargin
+        name: Master Bedroom Condensation Margin Predicted
+        default_entity_id: sensor.master_bedroom_condensation_margin_predicted
+        unique_id: master_bedroom_condensation_margin_predicted
+
+  - binary_sensor:
+      # On when condensation is likely now (margin < 3 C) or tonight
+      # (predicted margin < 2 C). Attributes say which and how to fix it.
+      - &risk
+        name: Workshop Condensation Risk
+        default_entity_id: binary_sensor.workshop_condensation_risk
+        unique_id: workshop_condensation_risk
+        device_class: moisture
+        icon: mdi:water-alert-outline
+        state: >-
+          {% set r = this.entity_id.split('.')[1].split('_condensation_risk')[0] %}
+          {{ states('sensor.' ~ r ~ '_condensation_margin') | float(99) < 3
+             or states('sensor.' ~ r ~ '_condensation_margin_predicted') | float(99) < 2 }}
+        attributes:
+          level: >-
+            {% set r = this.entity_id.split('.')[1].split('_condensation_risk')[0] %}
+            {% set m = states('sensor.' ~ r ~ '_condensation_margin') | float(99) %}
+            {% set p = states('sensor.' ~ r ~ '_condensation_margin_predicted') | float(99) %}
+            {{ 'Condensing now' if m < 1 else 'High now' if m < 3 else 'Likely tonight' if p < 2 else 'Low' }}
+          advice: >-
+            {% set r = this.entity_id.split('.')[1].split('_condensation_risk')[0] %}
+            {% set m = states('sensor.' ~ r ~ '_condensation_margin') | float(99) %}
+            {% set p = states('sensor.' ~ r ~ '_condensation_margin_predicted') | float(99) %}
+            {% set dp = states('sensor.' ~ r ~ '_dew_point') | float(0) %}
+            {% if m < 3 or p < 2 %}
+              Keep the room above {{ (dp + 3) | round(0) | int }}°C (dew point {{ dp }}°C + 3) or bring the humidity down
+            {% else %}
+              Fine: the room stays at least 2°C above the dew point ({{ dp }}°C)
+            {% endif %}
+      - <<: *risk
+        name: Machine Room Condensation Risk
+        default_entity_id: binary_sensor.machine_room_condensation_risk
+        unique_id: machine_room_condensation_risk
+      - <<: *risk
+        name: Master Bedroom Condensation Risk
+        default_entity_id: binary_sensor.master_bedroom_condensation_risk
+        unique_id: master_bedroom_condensation_risk
+
+# ---------------------------------------------------------------------------
+# Damp protection (18 Nov 2026): at 01:00 raise each room's heater to just
+# above its dew point (dew point + margin, rounded up to the thermostat's
+# 0.5 C steps, within its min/max). Raise only - a higher setpoint or a
+# heater that's off is left alone. At 08:00 the previous setpoint is put
+# back, unless someone has changed it since (e.g. the workshop woken up).
+# input_text.<room>_damp_restore holds "previous|applied" overnight.
+# ---------------------------------------------------------------------------
+input_number:
+  damp_protection_margin:
+    name: Damp Protection Margin
+    icon: mdi:arrow-expand-up
+    min: 0.5
+    max: 5
+    step: 0.5
+    unit_of_measurement: "°C"
+    mode: box
+
+input_text:
+  workshop_damp_restore:
+    name: Workshop Damp Restore
+    max: 20
+  machine_room_damp_restore:
+    name: Machine Room Damp Restore
+    max: 20
+  master_bedroom_damp_restore:
+    name: Master Bedroom Damp Restore
+    max: 20
+
+automation:
+  - id: damp_protection_night
+    alias: "Damp Protection: Raise Heating Overnight"
+    mode: queued
+    triggers:
+      - trigger: time
+        at: "01:00:00"
+        id: night
+      # A setpoint lowered after 1am (e.g. "Send Workshop to Sleep" run late)
+      # gets checked again
+      - trigger: state
+        entity_id:
+          - climate.workshop
+          - climate.machine_room
+          - climate.master_bedroom
+        attribute: temperature
+        id: lowered
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ trigger.id == 'night'
+             or (trigger.to_state.attributes.temperature | float(99)
+                   < trigger.from_state.attributes.temperature | float(-99)
+                 and today_at('01:00') <= now() < today_at('07:30')) }}
+    actions:
+      - repeat:
+          for_each: >-
+            {{ ['workshop', 'machine_room', 'master_bedroom'] if trigger.id == 'night'
+               else [trigger.entity_id.split('.')[1]] }}
+          sequence:
+            - variables:
+                c: "climate.{{ repeat.item }}"
+                dp: "{{ states('sensor.' ~ repeat.item ~ '_dew_point') | float(none) }}"
+                sp: "{{ state_attr(c, 'temperature') | float(none) }}"
+                target: >-
+                  {% if dp is not none %}
+                    {% set t = ((dp + states('input_number.damp_protection_margin') | float(2)) * 2) | round(0, 'ceil') / 2 %}
+                    {{ [[t, state_attr(c, 'min_temp') | float(5)] | max, state_attr(c, 'max_temp') | float(21)] | min }}
+                  {% else %}none{% endif %}
+            - if:
+                - condition: template
+                  value_template: >-
+                    {{ is_state(c, 'heat') and dp is not none and sp is not none and target | float(0) > sp }}
+              then:
+                - action: input_text.set_value
+                  target:
+                    entity_id: "input_text.{{ repeat.item }}_damp_restore"
+                  data:
+                    value: "{{ sp }}|{{ target }}"
+                - action: climate.set_temperature
+                  target:
+                    entity_id: "{{ c }}"
+                  data:
+                    temperature: "{{ target }}"
+                - action: logbook.log
+                  data:
+                    name: "Damp protection"
+                    message: >-
+                      raised {{ state_attr(c, 'friendly_name') }} from {{ sp }}°C to {{ target }}°C
+                      (dew point {{ dp }}°C)
+                    entity_id: "{{ c }}"
+              else:
+                # Only the 1am run starts the night afresh; a later re-check
+                # that doesn't need to raise leaves the saved restore alone
+                - if: "{{ trigger.id == 'night' }}"
+                  then:
+                    - action: input_text.set_value
+                      target:
+                        entity_id: "input_text.{{ repeat.item }}_damp_restore"
+                      data:
+                        value: ""
+
+  - id: damp_protection_morning
+    alias: "Damp Protection: Restore Heating in the Morning"
+    mode: single
+    triggers:
+      - trigger: time
+        at: "08:00:00"
+    actions:
+      - repeat:
+          for_each:
+            - workshop
+            - machine_room
+            - master_bedroom
+          sequence:
+            - variables:
+                c: "climate.{{ repeat.item }}"
+                saved: "{{ states('input_text.' ~ repeat.item ~ '_damp_restore') }}"
+                prev: "{{ saved.split('|')[0] | float(none) if '|' in saved else none }}"
+                applied: "{{ saved.split('|')[1] | float(none) if '|' in saved else none }}"
+            - if:
+                - condition: template
+                  value_template: >-
+                    {{ prev is not none and applied is not none
+                       and state_attr(c, 'temperature') | float(-1) == applied }}
+              then:
+                - action: climate.set_temperature
+                  target:
+                    entity_id: "{{ c }}"
+                  data:
+                    temperature: "{{ prev }}"
+                - action: logbook.log
+                  data:
+                    name: "Damp protection"
+                    message: "put {{ state_attr(c, 'friendly_name') }} back to {{ prev }}°C"
+                    entity_id: "{{ c }}"
+            - action: input_text.set_value
+              target:
+                entity_id: "input_text.{{ repeat.item }}_damp_restore"
+              data:
+                value: ""

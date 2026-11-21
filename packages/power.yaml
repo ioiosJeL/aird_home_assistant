@@ -1,0 +1,137 @@
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      common: &common
+        package: "Power"
+
+    # Template Sensors
+    input_boolean.power_status_*:
+      <<: *common
+
+    automation.shower_turned_*:
+      <<: *common
+
+    sensor.daily_energy*:
+      <<: *common
+      icon: mdi:home-lightning-bolt-outline
+
+    package.node_anchors.utility_meter_daily: &utility_meter_daily
+      cycle: daily
+
+energy:
+
+template:
+  - sensor:
+      - name: Workspace Total Power
+        unique_id: workspace_total_power
+        device_class: power
+        state_class: measurement
+        unit_of_measurement: W
+        state: >
+          {% set cnc = states('sensor.cnc_machine_power') | float(2) %}
+          {% set workshop_heater = states('sensor.workshop_heater_power') | float(2) %}
+          {% set machine_room_heater = states('sensor.machine_room_heater_power') | float(2) %}
+          {% set soldering_iron = states('sensor.soldering_iron_power') | float(2) %}
+          {% set computer = states('sensor.workshop_computer_power') | float(2) %}
+          {% set compressor = states('sensor.garage_air_compressor_power') | float(2) %}
+          {% set vacuum = states('sensor.garage_vacuum_power') | float(2) %}
+          {% set lights = states('sensor.workspace_lights_monitor_power') | float(2) %}
+          {% set it = states('sensor.workshop_it_power') | float(2) %}
+          {{ (cnc + workshop_heater + machine_room_heater + soldering_iron + computer + compressor + vacuum + lights + it) | float(2) }}
+
+      # Today's grid cost. The Energy dashboard's sensor.whole_house_energy_cost
+      # only resets on HA restart, so it isn't a daily figure. Keep the rate in
+      # step with Settings > Dashboards > Energy.
+      - name: Daily Energy Cost
+        unique_id: daily_energy_cost
+        device_class: monetary
+        state_class: total
+        unit_of_measurement: GBP
+        state: "{{ (states('sensor.daily_energy_usage') | float(0) * 0.2604) | round(2) }}"
+        availability: "{{ has_value('sensor.daily_energy_usage') }}"
+
+utility_meter:
+  daily_energy:
+    source: sensor.whole_house_energy
+    name: Daily Energy Usage
+    unique_id: daily_energy_usage
+    <<: *utility_meter_daily
+
+  # Week/month totals for the weekly digest and dashboards (yesterday's
+  # total is already on daily_energy_usage's last_period attribute)
+  weekly_energy:
+    source: sensor.whole_house_energy
+    name: Weekly Energy Usage
+    unique_id: weekly_energy_usage
+    cycle: weekly
+  monthly_energy:
+    source: sensor.whole_house_energy
+    name: Monthly Energy Usage
+    unique_id: monthly_energy_usage
+    cycle: monthly
+
+  daily_dining_room_heater_energy:
+    source: sensor.dining_room_heater_energy
+    name: Daily Dining Room Heater Energy Usage
+    unique_id: daily_dining_room_heater_energy_usage
+    <<: *utility_meter_daily
+
+  daily_living_room_heater_energy:
+    source: sensor.living_room_heater_energy
+    name: Daily Living Room Heater Energy Usage
+    unique_id: daily_living_room_heater_energy_usage
+    <<: *utility_meter_daily
+
+  daily_shower_room_heater_energy:
+    source: sensor.shower_room_heater_energy
+    name: Daily Shower Room Heater Energy Usage
+    unique_id: daily_shower_room_heater_energy_usage
+    <<: *utility_meter_daily
+
+  daily_kitchen_heater_energy:
+    source: sensor.kitchen_heater_energy
+    name: Daily Kitchen Heater Energy Usage
+    unique_id: daily_kitchen_heater_energy_usage
+    <<: *utility_meter_daily
+
+  daily_bathroom_heater_energy:
+    source: sensor.bathroom_heater_energy
+    name: Daily Bathroom Heater Energy Usage
+    unique_id: daily_bathroom_heater_energy_usage
+    <<: *utility_meter_daily
+
+  daily_sunroom_heater_energy:
+    source: sensor.sunroom_heater_energy
+    name: Daily Sunroom Heater Energy Usage
+    unique_id: daily_sunroom_heater_energy_usage
+    <<: *utility_meter_daily
+
+  daily_master_bedroom_heater_energy:
+    source: sensor.master_bedroom_heater_energy
+    name: Daily Master Bedroom Heater Energy Usage
+    unique_id: daily_master_bedroom_heater_energy_usage
+    <<: *utility_meter_daily
+
+  daily_double_bedroom_heater_energy:
+    source: sensor.double_bedroom_heater_energy
+    name: Daily Double Bedroom Heater Energy Usage
+    unique_id: daily_double_bedroom_heater_energy_usage
+    <<: *utility_meter_daily
+
+  daily_workshop_heater_energy:
+    source: sensor.workshop_heater_energy
+    name: Daily Workshop Heater Energy Usage
+    unique_id: daily_workshop_heater_energy_usage
+    <<: *utility_meter_daily
+
+  daily_machine_room_heater_energy:
+    source: sensor.machine_room_heater_energy
+    name: Daily Machine Room Heater Energy Usage
+    unique_id: daily_machine_room_heater_energy_usage
+    <<: *utility_meter_daily
+
+  daily_water_heater_energy:
+    source: sensor.water_heater_energy
+    name: Daily Water Heater Energy Usage
+    unique_id: daily_water_heater_energy_usage
+    <<: *utility_meter_daily

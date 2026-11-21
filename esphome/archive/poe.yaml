@@ -1,0 +1,105 @@
+substitutions:
+  # UNIQUE NAME FOR THE DEVICE
+  deviceName: poe
+  deviceUpper: PoE
+
+  passOTA: !secret passOTA
+  passESPH: !secret passESPH
+  
+  # ESP DECLARATION
+  boardPlatform: ESP32
+  boardName: esp-wrover-kit
+  
+  ###############################################################################
+  # WHOA WHERE ARE YOU GOING? GO STEADY BEYOND HERE, THIS IS THE BREAKABLE BIT! #
+  ###############################################################################
+  
+esphome:
+  name: ${deviceName}
+  platform: ${boardPlatform}
+  board: ${boardName}
+  
+  
+logger:
+ota:
+  safe_mode: True
+  password: ${passOTA}
+    
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+      
+api:
+  password: ${passESPH}
+  
+ethernet:
+  type: LAN8720
+  mdc_pin: GPIO23
+  mdio_pin: GPIO18
+  clk_mode: GPIO17_OUT
+  phy_addr: 0
+  
+i2c:
+  sda: GPIO32
+  scl: GPIO14
+  scan: true
+  id: bus_a
+  
+dallas:
+  - pin: GPIO12
+  
+binary_sensor:
+  - platform: gpio
+    pin: GPIO16
+    name: "PIR R: ${deviceUpper}"
+    device_class: motion   
+  - platform: gpio
+    pin: GPIO34
+    name: "PIR L: ${deviceUpper}"
+    device_class: motion    
+    
+switch:
+  - platform: restart
+    name: "ESP Restart ${deviceUpper}"
+    
+output:
+  - platform: ledc
+    pin: GPIO15
+    id: LED_R 
+  - platform: ledc
+    pin: GPIO2
+    id: LED_G 
+  - platform: ledc
+    pin: GPIO4
+    id: LED_B   
+    
+light:
+  - platform: rgb
+    name: "ESP Indicator ${deviceUpper}"
+    red: LED_R
+    green: LED_G
+    blue: LED_B
+    
+sensor:
+  - platform: dallas
+    address: 0x2a3c01d075ea4a28
+    name: "ESP Watchdog ${deviceUpper}"
+    
+  - platform: bh1750
+    name: "${deviceUpper} Illuminance"
+    address: 0x23
+    measurement_duration: 31
+    update_interval: 5s
+    
+  - platform: dht
+    model: DHT22
+    pin: GPIO33
+    temperature:
+      name: "${deviceUpper} Temperature"
+    humidity:
+      name: "${deviceUpper} Humidity"
+    update_interval: 10s
+    
+  - platform: uptime
+    name: "ESP Uptime ${deviceUpper}"
+    update_interval: 60s

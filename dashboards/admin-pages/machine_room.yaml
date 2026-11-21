@@ -1,0 +1,649 @@
+# CNC / machine room admin page. One section per column so each column
+# sizes independently. CNC stats sensors live in packages/workspace.yaml;
+# value_tile, health_tile, room_card and pill templates in
+# dashboards/button_card_templates.yaml.
+path: machine_room
+title: CNC
+icon: mdi:state-machine
+type: sections
+max_columns: 4
+sections:
+  # =====================================================================
+  # Column 1: CNC machine - live status, controls, stats, history
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: heading
+        heading: CNC Machine
+        icon: mdi:state-machine
+        badges:
+          - type: entity
+            entity: sensor.cnc_machine_state
+            show_icon: true
+          - type: entity
+            entity: sensor.cnc_machine_power
+            show_icon: true
+
+      - type: custom:button-card
+        entity: switch.cnc_machine
+        show_name: false
+        show_icon: false
+        show_state: false
+        triggers_update:
+          - sensor.cnc_machine_state
+          - sensor.cnc_machine_power
+          - sensor.cnc_machine_current
+          - binary_sensor.cnc_machine_cutting
+          - binary_sensor.cnc_machine_finished_cutting
+          - sensor.cnc_machine_contactor_temperature_watchdog
+          - sensor.cnc_last_cut
+        tap_action:
+          action: more-info
+          entity: sensor.cnc_machine_state
+        grid_options:
+          columns: full
+          rows: auto
+        styles:
+          card:
+            - padding: 16px
+            - background: |
+                [[[
+                  const st = states['sensor.cnc_machine_state']?.state;
+                  const c = {'Cutting': 'var(--green-color)', 'Loading...': 'var(--blue-color)', 'Standby': 'var(--amber-color)', 'E-Stopped': 'var(--red-color)'}[st];
+                  const bg = 'var(--ha-card-background, var(--card-background-color))';
+                  return c ? `linear-gradient(160deg, color-mix(in srgb, ${c} 16%, ${bg}) 0%, ${bg} 60%)` : bg;
+                ]]]
+          grid:
+            - grid-template-areas: '"body"'
+            - grid-template-columns: 1fr
+          custom_fields:
+            body:
+              - justify-self: stretch
+              - text-align: left
+        custom_fields:
+          body: |
+            [[[
+              const s = id => states[id];
+              const n = id => { const x = parseFloat(s(id)?.state); return isNaN(x) ? null : x; };
+              const st = s('sensor.cnc_machine_state')?.state || 'unavailable';
+              const look = {
+                'Off':        ['var(--disabled-text-color)', 'mdi:power-off',      'Machine is off'],
+                'E-Stopped':  ['var(--red-color)',           'mdi:alert-octagon',  'Emergency stop is pressed'],
+                'Standby':    ['var(--amber-color)',         'mdi:pause-circle',   'Powered, spindle idle'],
+                'Cutting':    ['var(--green-color)',         'mdi:saw-blade',      'Spindle running'],
+                'Loading...': ['var(--blue-color)',          'mdi:progress-clock', 'Spindle spinning up'],
+              }[st] || ['var(--disabled-text-color)', 'mdi:help-circle-outline', 'No reading'];
+              const [col, icon, desc] = look;
+
+              const since = (iso) => {
+                const t = new Date(iso), m = Math.max(0, Math.round((Date.now() - t) / 60000));
+                const el = m < 60 ? `${m}m` : m < 1440 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${Math.floor(m / 1440)}d`;
+                return `${el} · since ${t.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`;
+              };
+              const cut = s('binary_sensor.cnc_machine_cutting');
+              const pw = s('switch.cnc_machine');
+              let sub = desc;
+              if (cut?.state === 'on') sub = `Cutting for ${since(cut.last_changed)}`;
+              else if (pw?.state === 'on') sub = `Powered for ${since(pw.last_changed)}`;
+              else if (pw) sub = `Off for ${since(pw.last_changed)}`;
+
+              const w = n('sensor.cnc_machine_power'), a = n('sensor.cnc_machine_current');
+              const kw = w === null ? '—' : w >= 1000 ? `${(w / 1000).toFixed(2)}<small>kW</small>` : `${Math.round(w)}<small>W</small>`;
+
+              const chips = [];
+              const ct = n('sensor.cnc_machine_contactor_temperature_watchdog');
+              if (ct !== null) chips.push([ct >= 70 ? 'var(--red-color)' : ct >= 50 ? 'var(--amber-color)' : 'var(--secondary-text-color)', 'mdi:thermometer', `Contactor ${ct.toFixed(0)}°C`]);
+              if (s('binary_sensor.cnc_machine_finished_cutting')?.state === 'on') chips.push(['var(--green-color)', 'mdi:check-circle', 'Finished cutting']);
+              const lc = s('sensor.cnc_last_cut');
+              if (lc && !isNaN(parseFloat(lc.state))) {
+                const m = Math.round(parseFloat(lc.state));
+                const f = lc.attributes.finished ? new Date(lc.attributes.finished) : null;
+                chips.push(['var(--secondary-text-color)', 'mdi:timer-check-outline', `Last cut ${m < 60 ? m + 'm' : Math.floor(m / 60) + 'h ' + (m % 60) + 'm'}${f ? ' · ' + f.toLocaleDateString([], {weekday: 'short'}) + ' ' + f.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : ''}`]);
+              }
+
+              return `
+              <style>
+                .top{display:grid;grid-template-columns:56px 1fr auto;gap:14px;align-items:center}
+                .ic{width:56px;height:56px;border-radius:16px;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,${col} 24%,transparent)}
+                .ic ha-icon{--mdc-icon-size:30px;color:${col}}
+                .st{font-size:1.55rem;font-weight:700;line-height:1.15;color:var(--primary-text-color)}
+                .sb{font-size:.85rem;color:var(--secondary-text-color);margin-top:2px}
+                .pw{text-align:right}
+                .pw .k{font-size:1.55rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.15}
+                .pw small{font-size:.6em;font-weight:500;margin-left:2px}
+                .pw .a{font-size:.85rem;color:var(--secondary-text-color);font-variant-numeric:tabular-nums}
+                .ch{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+                .ch span{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600;background:color-mix(in srgb,var(--primary-text-color) 6%,transparent)}
+                .ch ha-icon{--mdc-icon-size:15px}
+              </style>
+              <div class="top">
+                <div class="ic"><ha-icon icon="${icon}"></ha-icon></div>
+                <div><div class="st">${st === 'Loading...' ? 'Spinning up' : st}</div><div class="sb">${sub}</div></div>
+                <div class="pw"><div class="k">${kw}</div><div class="a">${a === null ? '' : a.toFixed(1) + ' A'}</div></div>
+              </div>
+              ${chips.length ? `<div class="ch">${chips.map(([c, i, t]) => `<span style="color:${c}"><ha-icon icon="${i}"></ha-icon>${t}</span>`).join('')}</div>` : ''}`;
+            ]]]
+
+      - type: grid
+        square: false
+        columns: 3
+        grid_options:
+          columns: full
+          rows: auto
+        cards:
+          - type: custom:button-card
+            template: room_toggle
+            entity: switch.cnc_machine
+            name: CNC power
+            icon: mdi:power
+            variables:
+              color: "var(--red-color)"
+            confirmation:
+              text: "[[[ return `Are you sure you want to do that, Dave?` ]]]"
+          - type: custom:button-card
+            template: room_toggle
+            entity: switch.garage_utilities
+            name: Extraction
+            icon: mdi:fan
+            variables:
+              color: "var(--cyan-color)"
+          - type: custom:button-card
+            template: room_toggle
+            entity: light.machine_room_light
+            name: Light
+            icon: mdi:ceiling-light
+            variables:
+              color: "var(--amber-color)"
+
+      - type: heading
+        heading: Usage
+        heading_style: subtitle
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.cnc_cutting_time_today
+        name: Cutting today
+        icon: mdi:saw-blade
+        variables:
+          format: duration_h
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.cnc_cutting_time_this_week
+        name: Cutting this week
+        icon: mdi:calendar-week
+        variables:
+          format: duration_h
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.cnc_powered_time_today
+        name: Powered today
+        icon: mdi:power
+        variables:
+          format: duration_h
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.cnc_last_cut
+        name: Last cut
+        icon: mdi:timer-check-outline
+        variables:
+          format: duration_min
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.daily_cnc_machine_energy
+        name: Energy today
+        icon: mdi:lightning-bolt
+        variables:
+          format: kwh
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.cnc_energy_cost_today
+        name: Cost today
+        icon: mdi:currency-gbp
+        variables:
+          format: gbp
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.monthly_cnc_machine_energy
+        name: Energy this month
+        icon: mdi:calendar-month
+        variables:
+          format: kwh
+        grid_options:
+          columns: full
+          rows: auto
+
+      - type: heading
+        heading: History
+        heading_style: subtitle
+      - type: history-graph
+        hours_to_show: 24
+        grid_options:
+          columns: full
+          rows: auto
+        entities:
+          - entity: sensor.cnc_machine_state
+            name: State
+          - entity: switch.cnc_machine
+            name: Power
+      - type: custom:mini-graph-card
+        name: Spindle load (6h)
+        icon: mdi:chart-line
+        hours_to_show: 6
+        update_interval: 30
+        points_per_hour: 30
+        line_width: 2
+        decimals: 0
+        grid_options:
+          columns: full
+          rows: auto
+        show:
+          name: true
+          icon: true
+          state: true
+          labels: true
+          legend: true
+        entities:
+          - entity: sensor.cnc_machine_power
+            name: Power
+            color: "#59a14f"
+          - entity: sensor.cnc_machine_current
+            name: Current
+            color: "#4e79a7"
+            y_axis: secondary
+            decimals: 1
+
+  # =====================================================================
+  # Column 2: Cameras
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: heading
+        heading: Cameras
+        icon: mdi:cctv
+      # Snapshots, not live video: tap a camera for the live stream
+      - type: picture-entity
+        entity: camera.machine_room_left_sensor_camera
+        name: Left
+        camera_view: auto
+        show_state: false
+        grid_options:
+          columns: full
+          rows: auto
+      - type: picture-entity
+        entity: camera.machine_room_right_sensor_camera
+        name: Right
+        camera_view: auto
+        show_state: false
+        grid_options:
+          columns: full
+          rows: auto
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: binary_sensor.debug_box_status
+            state: "on"
+        grid_options:
+          columns: full
+          rows: auto
+        card:
+          type: picture-entity
+          entity: camera.debug_box_camera
+          name: Debug camera
+          camera_view: auto
+          show_state: false
+
+  # =====================================================================
+  # Column 3: Machine room climate + extraction
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: heading
+        heading: Machine Room
+        icon: mdi:cog-outline
+      - type: custom:button-card
+        template: room_card
+        name: Machine Room
+        icon: mdi:cog-outline
+        entity: light.machine_room_light
+        grid_options:
+          columns: full
+          rows: auto
+        triggers_update:
+          - sensor.machine_room_average_temperature
+          - climate.machine_room
+          - sensor.machine_room_average_humidity
+          - binary_sensor.machine_room_motion
+        variables:
+          temp: sensor.machine_room_average_temperature
+          climate: climate.machine_room
+          second: sensor.machine_room_average_humidity
+          motion: binary_sensor.machine_room_motion
+        custom_fields:
+          lights:
+            card:
+              type: tile
+              entity: light.machine_room_light
+              name: Light
+          toggles:
+            card:
+              type: grid
+              square: false
+              columns: 2
+              cards:
+                - type: custom:button-card
+                  template: room_toggle
+                  entity: input_boolean.machine_room_automatic_lights
+                  name: Auto lights
+                  icon: mdi:refresh-auto
+                  variables:
+                    color: "var(--blue-color)"
+                - type: custom:button-card
+                  template: room_toggle
+                  entity: switch.machine_room_heater
+                  name: Heater
+                  icon: mdi:radiator
+                  variables:
+                    color: "var(--deep-orange-color)"
+          extra:
+            card:
+              type: vertical-stack
+              cards:
+                - type: tile
+                  entity: climate.machine_room
+                  name: Heating
+                  state_content:
+                    - hvac_action
+                    - current_temperature
+                  features_position: inline
+                  features:
+                    - type: target-temperature
+                - type: tile
+                  entity: input_number.machine_room_motion_timeout
+                  name: Light timeout
+                  features_position: inline
+                  features:
+                    - type: numeric-input
+                      style: buttons
+
+      # Damp warning: bare steel (bed, rails, ballscrews) starts to rust
+      # above ~70 % RH.
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.machine_room_average_humidity
+            above: 70
+        grid_options:
+          columns: full
+          rows: auto
+        card:
+          type: custom:button-card
+          entity: sensor.machine_room_average_humidity
+          icon: mdi:water-alert
+          show_state: false
+          name: |
+            [[[ return `Humidity ${Math.round(parseFloat(entity.state))}% – rust risk`; ]]]
+          label: Bare steel rusts above ~70 %. Run the heater a little warmer, or a dehumidifier.
+          show_label: true
+          tap_action:
+            action: more-info
+          styles:
+            card:
+              - padding: 12px 14px
+              - border-radius: 12px
+              - box-shadow: none
+              - border: none
+              - background: |
+                  [[[ return parseFloat(entity.state) >= 80
+                        ? 'color-mix(in srgb, var(--red-color) 14%, transparent)'
+                        : 'color-mix(in srgb, var(--amber-color) 14%, transparent)'; ]]]
+            grid:
+              - grid-template-areas: '"i n" "i l"'
+              - grid-template-columns: 36px 1fr
+              - column-gap: 10px
+            icon:
+              - width: 26px
+              - color: |
+                  [[[ return parseFloat(entity.state) >= 80 ? 'var(--red-color)' : 'var(--amber-color)'; ]]]
+            name:
+              - justify-self: start
+              - font-weight: 700
+              - font-size: 0.95rem
+            label:
+              - justify-self: start
+              - text-align: left
+              - white-space: normal
+              - font-size: 0.8rem
+              - color: var(--secondary-text-color)
+
+      - type: custom:mini-graph-card
+        name: Climate (7 days)
+        icon: mdi:water-percent
+        hours_to_show: 168
+        update_interval: 300
+        points_per_hour: 1
+        line_width: 2
+        smoothing: true
+        decimals: 0
+        grid_options:
+          columns: full
+          rows: auto
+        show:
+          name: true
+          icon: true
+          state: true
+          labels: true
+          legend: true
+        entities:
+          - entity: sensor.machine_room_average_humidity
+            name: Humidity
+            color: "#4e79a7"
+          - entity: sensor.machine_room_average_temperature
+            name: Temperature
+            color: "#f28e2b"
+            y_axis: secondary
+
+      - type: heading
+        heading: Extraction & Air
+        heading_style: subtitle
+      - type: grid
+        square: false
+        columns: 2
+        grid_options:
+          columns: full
+          rows: auto
+        cards:
+          - type: custom:button-card
+            template: room_toggle
+            entity: switch.garage_utilities
+            name: Utilities
+            icon: mdi:fan
+            variables:
+              color: "var(--cyan-color)"
+          - type: custom:button-card
+            template: room_toggle
+            entity: switch.garage_contactors_switch_1
+            name: Spare contactor
+            icon: mdi:electric-switch
+            variables:
+              color: "var(--purple-color)"
+            confirmation:
+              text: "[[[ return entity.state === 'on' ? 'Turn off the spare contactor?' : 'Turn on the spare contactor?' ]]]"
+      - type: tile
+        entity: sensor.garage_vacuum_power
+        name: Vacuum
+        icon: mdi:vacuum
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: tile
+        entity: sensor.garage_air_compressor_power
+        name: Compressor
+        icon: mdi:air-filter
+        grid_options:
+          columns: 6
+          rows: auto
+
+  # =====================================================================
+  # Column 4: Diagnostics - contactor temps, automations, sensor nodes
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: heading
+        heading: Diagnostics
+        icon: mdi:stethoscope
+      - type: custom:button-card
+        template: health_tile
+        entity: sensor.cnc_machine_contactor_temperature_watchdog
+        name: CNC contactor
+        icon: mdi:thermometer
+        variables:
+          warn: 50
+          crit: 70
+          detail: none
+          ok_text: Normal
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: health_tile
+        entity: sensor.garage_contactors_switch_1_temperature_watchdog
+        name: Spare contactor
+        icon: mdi:thermometer
+        variables:
+          warn: 50
+          crit: 70
+          detail: none
+          ok_text: Normal
+        grid_options:
+          columns: 6
+          rows: auto
+      - type: custom:button-card
+        template: health_tile
+        entity: sensor.garage_power_monitoring_temperature_watchdog
+        name: Sub-board meter
+        icon: mdi:meter-electric
+        variables:
+          warn: 55
+          crit: 70
+          detail: none
+          ok_text: Normal
+        grid_options:
+          columns: 6
+          rows: auto
+
+      - type: heading
+        heading: Automations
+        heading_style: subtitle
+      - type: tile
+        entity: automation.cnc_machine_finished_cutting_notification
+        name: Flash mini squares when a cut finishes
+        icon: mdi:led-strip-variant
+        features_position: inline
+        features:
+          - type: toggle
+        grid_options:
+          columns: full
+          rows: auto
+      - type: tile
+        entity: automation.machine_room_double_push
+        name: Double-push light switch toggles CNC
+        icon: mdi:gesture-double-tap
+        features_position: inline
+        features:
+          - type: toggle
+        grid_options:
+          columns: full
+          rows: auto
+      - type: tile
+        entity: automation.machine_room_lights_auto_on
+        name: Lights on with motion
+        icon: mdi:motion-sensor
+        features_position: inline
+        features:
+          - type: toggle
+        grid_options:
+          columns: full
+          rows: auto
+
+      - type: heading
+        heading: Sensor Nodes
+        heading_style: subtitle
+      - type: entities
+        grid_options:
+          columns: full
+          rows: auto
+        entities:
+          - type: custom:multiple-entity-row
+            name: Machine Room Left
+            entity: binary_sensor.machine_room_left_sensor_motion
+            show_state: false
+            state_color: true
+            secondary_info: last-changed
+            entities:
+              - name: Temp
+                entity: sensor.machine_room_left_sensor_temperature
+                format: precision1
+              - name: Humid
+                entity: sensor.machine_room_left_sensor_humidity
+                format: precision0
+              - name: Signal
+                entity: sensor.machine_room_left_sensor_esp_signal
+              - icon: mdi:restart
+                tap_action:
+                  action: perform-action
+                  perform_action: switch.turn_on
+                  target:
+                    entity_id: switch.machine_room_left_sensor_esp_restart
+          - type: custom:multiple-entity-row
+            name: Machine Room Right
+            entity: binary_sensor.machine_room_right_sensor_motion
+            show_state: false
+            state_color: true
+            secondary_info: last-changed
+            entities:
+              - name: Temp
+                entity: sensor.machine_room_right_sensor_temperature
+                format: precision1
+              - name: Humid
+                entity: sensor.machine_room_right_sensor_humidity
+                format: precision0
+              - name: Signal
+                entity: sensor.machine_room_right_sensor_esp_signal
+              - icon: mdi:restart
+                tap_action:
+                  action: perform-action
+                  perform_action: switch.turn_on
+                  target:
+                    entity_id: switch.machine_room_right_sensor_esp_restart
+          - type: custom:multiple-entity-row
+            name: Debug Box
+            entity: binary_sensor.debug_box_status
+            show_state: false
+            state_color: true
+            secondary_info: last-changed
+            entities:
+              - name: Signal
+                entity: sensor.debug_box_esp_signal
+              - icon: mdi:restart
+                tap_action:
+                  action: perform-action
+                  perform_action: switch.turn_on
+                  target:
+                    entity_id: switch.debug_box_esp_restart

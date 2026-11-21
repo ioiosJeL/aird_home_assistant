@@ -1,0 +1,48 @@
+# Example .gitignore file for your config dir.
+# You can whitelist files/folders with !, these will not be ignored.
+
+*
+!*/
+
+!*.yaml
+!*.md
+!*.jpg
+!*.jpeg
+!*.png
+!*.gif
+!*.ttf
+!*.js
+!*.gz
+!*.map
+
+# Ignore folders.
+.storage/
+.cloud/
+.google.token/
+.androidkeys/
+.cache/
+custom_components/
+tts/
+vacuum/
+www/community/
+
+# Separate nested tool repo (has its own .git) - never tracked here.
+claude-code-ha/
+
+
+
+# Ensure these YAML files are ignored, otherwise your secret data/credentials will leak.
+ip_bans.yaml
+secrets.yaml
+known_devices.yaml
+custom/zones.yaml
+
+# Private / local-only (repo is public):
+# camera snapshots of the property and people
+www/cctv/
+# plain-text OTA/AP passwords
+esphome/archive/camtest.yaml
+# Claude Code session data and local dashboard backups
+.claudecode/
+backups-dashboards-*/
+!tools/*.py

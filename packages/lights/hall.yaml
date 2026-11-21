@@ -1,0 +1,200 @@
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      zoned: &zoned
+        package: "Lights"
+        zone: "Hall"
+
+  customize:
+    input_select.hall_scenes:
+      <<: *zoned
+    input_text.hall_last_action:
+      <<: *zoned
+    input_text.hall_previous_scene:
+      <<: *zoned
+    automation.hall_lights_auto_on:
+      <<: *zoned
+    automation.hall_lights_auto_off:
+      <<: *zoned
+
+input_select:
+  # All Scenes
+  hall_scenes:
+    name: Hall Scenes
+    options:
+      - "Bright"
+      - "Relax"
+      - "Cosy"
+      - "Off"
+
+light:
+  - platform: group
+    name: Hall Lights Master
+    entities:
+      - light.hall
+      - light.front_porch
+
+input_text:
+  # The last action performed
+  hall_last_action:
+    name: "Last Action: Hall"
+    icon: mdi:gesture-tap-button
+    initial: "None: Boot"
+
+  # Previous scene before current
+  hall_previous_scene:
+    name: Previous Hall Scene
+    icon: mdi:palette
+    initial: "Reboot"
+
+input_number:
+  # Lux level below which brings on the auto lights
+  hall_lights_on_threshold:
+    name: Hall Threshold On
+    min: 1
+    max: 70
+
+input_boolean:
+  # On when the lights were changed outside HA (e.g. Hue app); motion
+  # leaves the room alone until it clears (see Manual Override Detection)
+  hall_manual_override:
+    name: Hall Manual Override
+    icon: mdi:hand-back-right
+
+  # Boolean which is on during scene change
+  hall_scene_changing:
+    name: Hall Scene Change In Progress
+    icon: mdi:repeat-once
+    initial: false
+
+  # Boolean which is on when lights are in auto mode
+  hall_auto_mode_active:
+    name: Hall Auto Mode
+    icon: mdi:refresh-auto
+
+  # Auto mode active
+  hall_automatic_lights:
+    name: Hall Automatic Lights Mode
+    icon: mdi:refresh-auto
+
+timer:
+  # Running after the lights went (or nearly went) off on someone who was
+  # still here; the motion timeout is doubled while it runs
+  hall_motion_extended:
+    name: Hall Motion Timeout Extended
+    icon: mdi:timer-plus-outline
+    duration: "00:30:00"
+
+  # Timer set during each scene on script for transitions
+  hall_scene_changing:
+    name: Time For Scene Change
+    icon: mdi:timer-sand-empty
+
+  # Timer to prevent lights from waiting for light sensor to update
+  hall_auto_off_override:
+    name: Timer To Prevent Waiting For Lux Sensor
+    icon: mdi:timer-sand-empty
+
+automation:
+  - alias: Hall Lights Manual Override Detection
+    use_blueprint:
+      path: lights/manual_override_detection.yaml
+      input:
+        lights:
+          - light.hall
+        lights_master: light.hall_lights_master
+        manual_boolean: input_boolean.hall_manual_override
+        scene_changing_boolean: input_boolean.hall_scene_changing
+        scenes_select: input_select.hall_scenes
+        auto_mode_boolean: input_boolean.hall_auto_mode_active
+        last_action_text: input_text.hall_last_action
+
+  - alias: Hall Lights Auto On
+    use_blueprint:
+      path: lights/motion_auto_on.yaml
+      input:
+        previous_scene_text: input_text.hall_previous_scene
+        room_prefix: hall
+        extend_timer: timer.hall_motion_extended
+        manual_override_boolean: input_boolean.hall_manual_override
+        motion_sensor: binary_sensor.hall_motion
+        automatic_lights_boolean: input_boolean.hall_automatic_lights
+        scenes_select: input_select.hall_scenes
+        illuminance_sensor: sensor.hms_hall_illuminance
+        threshold_number: input_number.hall_lights_on_threshold
+        override_timer: timer.hall_auto_off_override
+        last_action_text: input_text.hall_last_action
+        auto_mode_boolean: input_boolean.hall_auto_mode_active
+        daytime_script: script.hall_scene_bright
+        nighttime_script: script.hall_scene_relax
+        # While Night Mode is on: straight on at 30%, no bright scene first
+        late_night_lights: [light.hall]
+        late_night_brightness: 30
+        late_night_change_script: script.hall_scene_change
+        late_night_scene_name: Relax
+
+  - alias: Hall Lights Auto Off
+    use_blueprint:
+      path: lights/motion_auto_off.yaml
+      input:
+        extend_timer: timer.hall_motion_extended
+        warning_lights:
+          - light.hall
+        motion_sensor: binary_sensor.hall_motion
+        motion_timeout_number: input_number.hall_motion_timeout
+        automatic_lights_boolean: input_boolean.hall_automatic_lights
+        auto_mode_boolean: input_boolean.hall_auto_mode_active
+        off_script: script.hall_scene_off
+        last_action_text: input_text.hall_last_action
+        override_timer: timer.hall_auto_off_override
+
+  - alias: Hall Lights Manual Off Detection
+    use_blueprint:
+      path: lights/manual_off_detection.yaml
+      input:
+        manual_override_boolean: input_boolean.hall_manual_override
+        lights_master: light.hall_lights_master
+        scenes_select: input_select.hall_scenes
+        off_script: script.hall_scene_off
+        last_action_text: input_text.hall_last_action
+        auto_mode_boolean: input_boolean.hall_auto_mode_active
+
+  - alias: Hall Scene Select Changed
+    use_blueprint:
+      path: lights/scene_select_changed.yaml
+      input:
+        scenes_select: input_select.hall_scenes
+        scene_changing_boolean: input_boolean.hall_scene_changing
+        room_prefix: hall
+
+  - alias: Hall Light Toggle
+    use_blueprint:
+      path: lights/physical_toggle.yaml
+      input:
+        trigger:
+          - trigger: event
+            event_type: shelly.click
+            event_data:
+              click_type: single
+              device: shellydimmer-F3ED36
+              channel: 2
+        changing_timer: timer.hall_scene_changing
+        scenes_select: input_select.hall_scenes
+        on_script: script.hall_scene_bright
+        off_script: script.hall_scene_off
+        auto_mode_boolean: input_boolean.hall_auto_mode_active
+
+  - alias: Hall Scene Scroll
+    use_blueprint:
+      path: lights/scene_scroll.yaml
+      input:
+        trigger:
+          - trigger: event
+            event_type: shelly.click
+            event_data:
+              click_type: long
+              device: shellydimmer-F3ED36
+              channel: 2
+        changing_timer: timer.hall_scene_changing
+        scroll_script: script.hall_scene_scroll
+        auto_mode_boolean: input_boolean.hall_auto_mode_active

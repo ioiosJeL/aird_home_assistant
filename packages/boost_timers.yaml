@@ -1,0 +1,320 @@
+timer:
+  boost_master_bedroom:
+    name: "Bedroom Heating Boost Time Remaining"
+  boost_bathroom:
+    name: "Bathroom Heating Boost Time Remaining"
+  boost_sunroom:
+    name: "Sunroom Heating Boost Time Remaining"
+  boost_dining_room:
+    name: "Dining Room Heating Boost Time Remaining"
+  boost_shower_room:
+    name: "Shower Room Heating Boost Time Remaining"
+  boost_double_bedroom:
+    name: "Double Bedroom Heating Boost Time Remaining"
+
+input_number:
+  boost_master_bedroom_minutes:
+    name: Master Bedroom Boost Timer Minutes
+    min: 30
+    max: 180
+    mode: slider
+    step: 15
+    unit_of_measurement: min
+    icon: mdi:timer-outline
+  boost_bathroom_minutes:
+    name: Bathroom Boost Timer Minutes
+    min: 30
+    max: 180
+    mode: slider
+    step: 15
+    unit_of_measurement: min
+    icon: mdi:timer-outline
+  boost_sunroom_minutes:
+    name: Sunroom Boost Timer Minutes
+    min: 30
+    max: 180
+    mode: slider
+    step: 15
+    unit_of_measurement: min
+    icon: mdi:timer-outline
+  boost_dining_room_minutes:
+    name: Dining Room Boost Timer Minutes
+    min: 30
+    max: 180
+    mode: slider
+    step: 15
+    unit_of_measurement: min
+    icon: mdi:timer-outline
+  boost_shower_room_minutes:
+    name: Shower Room Boost Timer Minutes
+    min: 30
+    max: 180
+    mode: slider
+    step: 15
+    unit_of_measurement: min
+    icon: mdi:timer-outline
+  boost_double_bedroom_minutes:
+    name: Double Bedroom Boost Timer Minutes
+    min: 30
+    max: 180
+    mode: slider
+    step: 15
+    unit_of_measurement: min
+    icon: mdi:timer-outline
+
+  boost_master_bedroom_value:
+    name: Master Bedroom Boost Value
+    min: 1
+    max: 10
+    mode: slider
+    step: 1
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer-plus
+  boost_bathroom_value:
+    name: Bathroom Boost Value
+    min: 1
+    max: 10
+    mode: slider
+    step: 1
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer-plus
+  boost_sunroom_value:
+    name: Sunroom Boost Value
+    min: 1
+    max: 10
+    mode: slider
+    step: 1
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer-plus
+  boost_dining_room_value:
+    name: Dining Room Boost Value
+    min: 1
+    max: 10
+    mode: slider
+    step: 1
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer-plus
+  boost_shower_room_value:
+    name: Shower Room Boost Value
+    min: 1
+    max: 10
+    mode: slider
+    step: 1
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer-plus
+  boost_double_bedroom_value:
+    name: Double Bedroom Boost Value
+    min: 1
+    max: 10
+    mode: slider
+    step: 1
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer-plus
+
+input_boolean:
+  boost_master_bedroom:
+    name: Master Bedroom Boost Timer Active
+    icon: mdi:timer
+    initial: false
+  boost_bathroom:
+    name: Bathroom Boost Timer Active
+    icon: mdi:timer
+    initial: false
+  boost_sunroom:
+    name: Sunroom Boost Timer Active
+    icon: mdi:timer
+    initial: false
+  boost_dining_room:
+    name: Dining Room Boost Timer Active
+    icon: mdi:timer
+    initial: false
+  boost_shower_room:
+    name: Shower Room Boost Timer Active
+    icon: mdi:timer
+    initial: false
+  boost_double_bedroom:
+    name: Double Bedroom Boost Timer Active
+    icon: mdi:timer
+    initial: false
+
+automation:
+  - alias: Boost Timer Expired Master Bedroom
+    use_blueprint:
+      path: climate/boost_timer_expired.yaml
+      input:
+        boost_timer: timer.boost_master_bedroom
+        boost_active_boolean: input_boolean.boost_master_bedroom
+        climate_entity: climate.master_bedroom
+        boost_value_number: input_number.boost_master_bedroom_value
+
+  - alias: Boost Timer Expired Bathroom
+    use_blueprint:
+      path: climate/boost_timer_expired.yaml
+      input:
+        boost_timer: timer.boost_bathroom
+        boost_active_boolean: input_boolean.boost_bathroom
+        climate_entity: climate.bathroom
+        boost_value_number: input_number.boost_bathroom_value
+
+  - alias: Boost Timer Expired Sunroom
+    use_blueprint:
+      path: climate/boost_timer_expired.yaml
+      input:
+        boost_timer: timer.boost_sunroom
+        boost_active_boolean: input_boolean.boost_sunroom
+        climate_entity: climate.sunroom
+        boost_value_number: input_number.boost_sunroom_value
+
+  - alias: Boost Timer Expired Dining Room
+    use_blueprint:
+      path: climate/boost_timer_expired.yaml
+      input:
+        boost_timer: timer.boost_dining_room
+        boost_active_boolean: input_boolean.boost_dining_room
+        climate_entity: climate.dining_room
+        boost_value_number: input_number.boost_dining_room_value
+
+  - alias: Boost Timer Expired Shower Room
+    use_blueprint:
+      path: climate/boost_timer_expired.yaml
+      input:
+        boost_timer: timer.boost_shower_room
+        boost_active_boolean: input_boolean.boost_shower_room
+        climate_entity: climate.shower_room
+        boost_value_number: input_number.boost_shower_room_value
+
+  - alias: Boost Timer Expired Double Bedroom
+    use_blueprint:
+      path: climate/boost_timer_expired.yaml
+      input:
+        boost_timer: timer.boost_double_bedroom
+        boost_active_boolean: input_boolean.boost_double_bedroom
+        climate_entity: climate.double_bedroom
+        boost_value_number: input_number.boost_double_bedroom_value
+
+script:
+  boost_start_master_bedroom:
+    alias: Start Boost For Master Bedroom
+    use_blueprint:
+      path: climate/boost_start.yaml
+      input:
+        boost_active_boolean: input_boolean.boost_master_bedroom
+        boost_timer: timer.boost_master_bedroom
+        boost_minutes_number: input_number.boost_master_bedroom_minutes
+        climate_entity: climate.master_bedroom
+        boost_value_number: input_number.boost_master_bedroom_value
+
+  boost_start_bathroom:
+    alias: Start Boost For Bathroom
+    use_blueprint:
+      path: climate/boost_start.yaml
+      input:
+        boost_active_boolean: input_boolean.boost_bathroom
+        boost_timer: timer.boost_bathroom
+        boost_minutes_number: input_number.boost_bathroom_minutes
+        climate_entity: climate.bathroom
+        boost_value_number: input_number.boost_bathroom_value
+
+  boost_start_sunroom:
+    alias: Start Boost For Sunroom
+    use_blueprint:
+      path: climate/boost_start.yaml
+      input:
+        boost_active_boolean: input_boolean.boost_sunroom
+        boost_timer: timer.boost_sunroom
+        boost_minutes_number: input_number.boost_sunroom_minutes
+        climate_entity: climate.sunroom
+        boost_value_number: input_number.boost_sunroom_value
+
+  boost_start_dining_room:
+    alias: Start Boost For Dining Room
+    use_blueprint:
+      path: climate/boost_start.yaml
+      input:
+        boost_active_boolean: input_boolean.boost_dining_room
+        boost_timer: timer.boost_dining_room
+        boost_minutes_number: input_number.boost_dining_room_minutes
+        climate_entity: climate.dining_room
+        boost_value_number: input_number.boost_dining_room_value
+
+  boost_start_shower_room:
+    alias: Start Boost For Shower Room
+    use_blueprint:
+      path: climate/boost_start.yaml
+      input:
+        boost_active_boolean: input_boolean.boost_shower_room
+        boost_timer: timer.boost_shower_room
+        boost_minutes_number: input_number.boost_shower_room_minutes
+        climate_entity: climate.shower_room
+        boost_value_number: input_number.boost_shower_room_value
+
+  boost_start_double_bedroom:
+    alias: Start Boost For Double Bedroom
+    use_blueprint:
+      path: climate/boost_start.yaml
+      input:
+        boost_active_boolean: input_boolean.boost_double_bedroom
+        boost_timer: timer.boost_double_bedroom
+        boost_minutes_number: input_number.boost_double_bedroom_minutes
+        climate_entity: climate.double_bedroom
+        boost_value_number: input_number.boost_double_bedroom_value
+
+  boost_cancel_master_bedroom:
+    alias: Cancel Boost For Master Bedroom
+    use_blueprint:
+      path: climate/boost_cancel.yaml
+      input:
+        boost_active_boolean: input_boolean.boost_master_bedroom
+        boost_timer: timer.boost_master_bedroom
+        climate_entity: climate.master_bedroom
+        boost_value_number: input_number.boost_master_bedroom_value
+
+  boost_cancel_bathroom:
+    alias: Cancel Boost For Bathroom
+    use_blueprint:
+      path: climate/boost_cancel.yaml
+      input:
+        boost_active_boolean: input_boolean.boost_bathroom
+        boost_timer: timer.boost_bathroom
+        climate_entity: climate.bathroom
+        boost_value_number: input_number.boost_bathroom_value
+
+  boost_cancel_sunroom:
+    alias: Cancel Boost For Sunroom
+    use_blueprint:
+      path: climate/boost_cancel.yaml
+      input:
+        boost_active_boolean: input_boolean.boost_sunroom
+        boost_timer: timer.boost_sunroom
+        climate_entity: climate.sunroom
+        boost_value_number: input_number.boost_sunroom_value
+
+  boost_cancel_dining_room:
+    alias: Cancel Boost For Dining Room
+    use_blueprint:
+      path: climate/boost_cancel.yaml
+      input:
+        boost_active_boolean: input_boolean.boost_dining_room
+        boost_timer: timer.boost_dining_room
+        climate_entity: climate.dining_room
+        boost_value_number: input_number.boost_dining_room_value
+
+  boost_cancel_shower_room:
+    alias: Cancel Boost For Shower Room
+    use_blueprint:
+      path: climate/boost_cancel.yaml
+      input:
+        boost_active_boolean: input_boolean.boost_shower_room
+        boost_timer: timer.boost_shower_room
+        climate_entity: climate.shower_room
+        boost_value_number: input_number.boost_shower_room_value
+
+  boost_cancel_double_bedroom:
+    alias: Cancel Boost For Double Bedroom
+    use_blueprint:
+      path: climate/boost_cancel.yaml
+      input:
+        boost_active_boolean: input_boolean.boost_double_bedroom
+        boost_timer: timer.boost_double_bedroom
+        climate_entity: climate.double_bedroom
+        boost_value_number: input_number.boost_double_bedroom_value

@@ -1,0 +1,151 @@
+# House shutdown: one action that puts the house to bed. Run from the
+# bedside remotes (hold button 4, packages/lights/master_bedroom.yaml) and
+# callable from anywhere else (dashboards, voice, NFC tags).
+#
+# Steps, in order:
+#   1. Lights: every room through its own Off scene (so each room's scene
+#      selector ends up Off too), then a sweep of anything in the house
+#      still on, plus the triptych and mini squares.
+#   2. Sleep state: Night Mode on, the calling bedroom marked as bedtime
+#      (motion won't switch its lights back on until morning) and House
+#      Mode -> Night Time. End Night Mode (09:30, core.yaml) clears bedtime
+#      and the automation below returns House Mode to Occupied.
+#   3. Security: placeholder for arming an alarm (see the commented step).
+#   4. House asleep: motion-activated lights stay off everywhere except the
+#      dining room, kitchen and utility room (wakes_house in their motion
+#      automations). Motion in one of those wakes the house and every room
+#      works normally again. Also cleared when Night Mode ends (09:30).
+#      The front porch opts out (house_asleep_boolean: "") so it still
+#      lights for night-time arrivals, without waking the house.
+#
+# Deliberately left alone: outdoor/security lighting (patio), the
+# outbuildings (workshop, garage, machine room, shed, greenhouse), network
+# device LEDs and the wall screens.
+
+input_boolean:
+  house_asleep:
+    name: House Asleep
+    icon: mdi:power-sleep
+
+script:
+  house_shutdown:
+    alias: House Shutdown
+    description: Turn every light in the house off and put the house into its night (sleep) state
+    icon: mdi:power-sleep
+    mode: single
+    fields:
+      bedroom:
+        name: Bedroom
+        description: Bedroom to mark as gone to bed (master, double or single). Leave empty for none.
+        example: master
+        selector:
+          select:
+            options: [master, double, single]
+    sequence:
+      # 1. Lights -----------------------------------------------------------
+      - action: script.house_lights_all_off
+        continue_on_error: true
+      - action: script.triptych_set_power
+        data:
+          turn_on: false
+        continue_on_error: true
+      - action: script.mini_squares_set_power
+        data:
+          turn_on: false
+        continue_on_error: true
+      # Give the Off scenes their transitions, then catch anything left on
+      - delay:
+          seconds: 4
+      - variables:
+          stragglers: >-
+            {{ (expand('light.house_lights') | map(attribute='entity_id') | list
+                + ['light.landing_ceiling', 'light.front_porch', 'light.fairy_lights'])
+               | select('is_state', 'on') | list }}
+      - if: "{{ stragglers | count > 0 }}"
+        then:
+          - action: light.turn_off
+            target:
+              entity_id: "{{ stragglers }}"
+
+      # 2. Sleep state ------------------------------------------------------
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.status_nighttime
+      - if: "{{ bedroom is defined and bedroom in ['master', 'double', 'single'] }}"
+        then:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: "input_boolean.status_bedtime_{{ bedroom }}"
+      - if: "{{ not is_state('input_select.house_mode', 'Night Time') }}"
+        then:
+          - action: script.house_mode_night_time
+
+      # Motion lights: only the dining room, kitchen and utility room wake it
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.house_asleep
+
+      # 3. Security (future) ------------------------------------------------
+      # When a real alarm panel is added, arm it here in its night/home
+      # mode, e.g.:
+      #   - action: alarm_control_panel.alarm_arm_night
+      #     target:
+      #       entity_id: alarm_control_panel.house
+      # (The UniFi NVR "alarm manager" is only an away-mode toggle for
+      # smart detections and follows House Mode = Away, so it isn't armed
+      # at night.)
+
+      - action: logbook.log
+        data:
+          name: House Shutdown
+          message: >-
+            put the house to bed{{ ' from the ' ~ bedroom ~ ' bedroom' if bedroom is defined and bedroom else '' }}
+          entity_id: script.house_shutdown
+
+automation:
+  # Night Time is set by House Shutdown; nothing else moves the house out
+  # of it in the morning, so follow End Night Mode back to Occupied.
+  - id: house_shutdown_morning
+    alias: House Shutdown Morning Wake
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.status_nighttime
+        to: "off"
+    conditions:
+      - condition: state
+        entity_id: input_select.house_mode
+        state: Night Time
+    actions:
+      - action: script.house_mode_occupied
+
+  # First motion in a "wake" room after House Shutdown ends the asleep state
+  - id: house_asleep_wake
+    alias: House Asleep Wake On Motion
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id:
+          - binary_sensor.dining_room_motion
+          - binary_sensor.kitchen_motion
+          - binary_sensor.utility_room_motion
+        to: "on"
+      # Fallback so it can't stay asleep all day
+      - trigger: state
+        entity_id: input_boolean.status_nighttime
+        to: "off"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.house_asleep
+        state: "on"
+    actions:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.house_asleep
+      - action: logbook.log
+        data:
+          name: House Shutdown
+          message: >-
+            house woke up{{ ' (motion in the ' ~ trigger.to_state.name | lower | replace(' motion', '') ~ ')'
+                            if trigger.entity_id.endswith('_motion') else ' (morning)' }}
+          entity_id: input_boolean.house_asleep

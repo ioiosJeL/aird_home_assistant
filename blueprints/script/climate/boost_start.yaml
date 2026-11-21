@@ -1,0 +1,52 @@
+blueprint:
+  name: Climate - Boost Start
+  description: >-
+    Start a room's heating boost: mark it active, start the boost timer for
+    the room's configured duration, and raise the thermostat's target
+    temperature by the room's configured boost value.
+  domain: script
+  input:
+    boost_active_boolean:
+      name: Boost Active (input_boolean)
+      selector:
+        entity:
+          domain: input_boolean
+    boost_timer:
+      name: Boost Timer
+      selector:
+        entity:
+          domain: timer
+    boost_minutes_number:
+      name: Boost Duration, Minutes (input_number)
+      selector:
+        entity:
+          domain: input_number
+    climate_entity:
+      name: Climate Entity
+      selector:
+        entity:
+          domain: climate
+    boost_value_number:
+      name: Boost Value, Degrees (input_number)
+      selector:
+        entity:
+          domain: input_number
+
+mode: single
+variables:
+  boost_minutes_number: !input boost_minutes_number
+  climate_entity: !input climate_entity
+  boost_value_number: !input boost_value_number
+
+sequence:
+  - action: input_boolean.turn_on
+    target:
+      entity_id: !input boost_active_boolean
+  - action: timer.start
+    data:
+      entity_id: !input boost_timer
+      duration: "{{ states(boost_minutes_number) | int * 60 }}"
+  - action: climate.set_temperature
+    data:
+      entity_id: "{{ climate_entity }}"
+      temperature: "{{ state_attr(climate_entity, 'temperature') + states(boost_value_number) | int }}"

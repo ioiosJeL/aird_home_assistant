@@ -1,0 +1,326 @@
+# Lights insight (added 17 Nov 2026) - making the automatic lights easy to
+# understand, report and keep healthy.
+#
+# 1. sensor.<room>_lights_why - plain-English "why are the lights like this"
+#    for every room, shown under the room name on each room card (tap it for
+#    the room's history of explanations).
+# 2. script.report_something_odd - "That was weird" button: snapshots every
+#    room (lights, explanation, last action, motion) into sensor.oddity_log
+#    and tells John, so odd behaviour comes with an exact time and context.
+# 3. sensor.lights_health - weekly counters (auto-offs, near-misses, false
+#    offs, overrides, switch-offs by hand, lights dropping off the network,
+#    odd reports). Summarised in the Sunday weekly digest (alerts.yaml) and
+#    reset afterwards.
+
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      common: &common
+        package: "Lights Insight"
+    sensor.*_lights_why:
+      <<: *common
+    sensor.oddity_log:
+      <<: *common
+    sensor.lights_health:
+      <<: *common
+    sensor.lights_unreachable:
+      <<: *common
+    script.report_something_odd:
+      <<: *common
+
+template:
+  # ---------------------------------------------------------------------
+  # 1. Per-room explanations. The room comes from the entity id
+  #    (sensor.dining_room_lights_why -> dining_room), so every room shares
+  #    one template.
+  # ---------------------------------------------------------------------
+  - sensor:
+      - &why
+        name: Dining Room Lights Why
+        default_entity_id: sensor.dining_room_lights_why
+        unique_id: dining_room_lights_why
+        icon: mdi:head-question-outline
+        state: &why_state >-
+          {%- set r = this.entity_id.split('.')[1][:-11] if this.entity_id is defined else '' -%}
+          {%- set la = states['input_text.' ~ r ~ '_last_action'] -%}
+          {%- set master = 'light.' ~ r ~ '_lights_master' -%}
+          {%- set lit = is_state(master, 'on') -%}
+          {%- set a = la.state if la else '' -%}
+          {%- set fmt = '%-I:%M%p' -%}
+          {%- set at = (la.last_changed | as_local).strftime(fmt) | lower if la else '' -%}
+          {%- set on_at = (states[master].last_changed | as_local).strftime(fmt) | lower if states[master] else at -%}
+          {%- set mins = states('input_number.' ~ r ~ '_motion_timeout') | int(0) -%}
+          {%- set ext = is_state('timer.' ~ r ~ '_motion_extended', 'active') -%}
+          {%- set auto = states('input_boolean.' ~ r ~ '_automatic_lights') != 'off' -%}
+          {%- set auto_active = is_state('input_boolean.' ~ r ~ '_auto_mode_active', 'on') -%}
+          {%- set override = is_state('input_boolean.' ~ r ~ '_manual_override', 'on') -%}
+          {%- set beds = {'master_bedroom': 'master', 'double_bedroom': 'double', 'single_bedroom': 'single'} -%}
+          {%- set bed = r in beds and is_state('input_boolean.status_bedtime_' ~ beds[r], 'on') -%}
+          {%- set lux = states('sensor.hms_' ~ r ~ '_illuminance') | int(-1) -%}
+          {%- set thr = states('input_number.' ~ r ~ '_lights_on_threshold') | int(0) -%}
+          {%- set off_note = 'Goes off after ' ~ (mins * 2 if ext else mins) ~ ' min with nobody here'
+                ~ (' (longer today, they went off on someone earlier)' if ext else '') if mins > 0 else '' -%}
+          {%- if not la -%}
+            No automatic lights in this room
+          {%- elif not auto -%}
+            Motion control is switched off here{{ ', lights stay as you set them' if lit }}
+          {%- elif override -%}
+            Paused since {{ at }}: changed outside HA (Hue app or similar). Back to automatic when a scene is picked or the lights are off for 30 min
+          {%- elif a == 'Automatic Mode: Dimming Before Off' -%}
+            Dimming before switching off, move to keep them on
+          {%- elif lit and a == 'Automatic Mode: Motion Returned' -%}
+            Back on at {{ at }}: you moved as they were dimming, so it'll wait longer now
+          {%- elif lit and auto_active -%}
+            On since {{ on_at }} because you came in. {{ off_note }}
+          {%- elif lit -%}
+            {{ (a[16:] ~ ' since ' ~ at) if a.startswith('Scene Selected:') else ('On since ' ~ on_at) }}, set by hand. Stays on until switched off
+          {%- elif bed -%}
+            Bedtime: motion won't switch the lights on until morning
+          {%- elif is_state('input_boolean.house_asleep', 'on') and r not in ['dining_room', 'kitchen', 'utility_room', 'front_porch'] -%}
+            House is shut down: motion here stays off until someone moves in the dining room, kitchen or utility room
+          {%- elif lux >= 0 and lux > thr -%}
+            Motion won't switch them on: it's bright enough ({{ lux }} lx, needs {{ thr }} or less)
+          {%- elif a == 'Automatic Mode: Lights Off' -%}
+            Off at {{ at }}: nobody here for a while. Motion switches them back on
+          {%- elif a in ['Manual Override: Lights Off', 'Scene Selected: Off'] -%}
+            Switched off at {{ at }}. Motion switches them back on
+          {%- else -%}
+            Off. Motion switches them on when it's dark enough
+          {%- endif -%}
+      - <<: *why
+        name: Living Room Lights Why
+        default_entity_id: sensor.living_room_lights_why
+        unique_id: living_room_lights_why
+      - <<: *why
+        name: Kitchen Lights Why
+        default_entity_id: sensor.kitchen_lights_why
+        unique_id: kitchen_lights_why
+      - <<: *why
+        name: Sunroom Lights Why
+        default_entity_id: sensor.sunroom_lights_why
+        unique_id: sunroom_lights_why
+      - <<: *why
+        name: Utility Room Lights Why
+        default_entity_id: sensor.utility_room_lights_why
+        unique_id: utility_room_lights_why
+      - <<: *why
+        name: Hall Lights Why
+        default_entity_id: sensor.hall_lights_why
+        unique_id: hall_lights_why
+      - <<: *why
+        name: Front Porch Lights Why
+        default_entity_id: sensor.front_porch_lights_why
+        unique_id: front_porch_lights_why
+      - <<: *why
+        name: Landing Lights Why
+        default_entity_id: sensor.landing_lights_why
+        unique_id: landing_lights_why
+      - <<: *why
+        name: Bathroom Lights Why
+        default_entity_id: sensor.bathroom_lights_why
+        unique_id: bathroom_lights_why
+      - <<: *why
+        name: Shower Room Lights Why
+        default_entity_id: sensor.shower_room_lights_why
+        unique_id: shower_room_lights_why
+      - <<: *why
+        name: Master Bedroom Lights Why
+        default_entity_id: sensor.master_bedroom_lights_why
+        unique_id: master_bedroom_lights_why
+      - <<: *why
+        name: Double Bedroom Lights Why
+        default_entity_id: sensor.double_bedroom_lights_why
+        unique_id: double_bedroom_lights_why
+      - <<: *why
+        name: Single Bedroom Lights Why
+        default_entity_id: sensor.single_bedroom_lights_why
+        unique_id: single_bedroom_lights_why
+
+      # Lights that can't be reached right now (feeds the health counters)
+      - name: Lights Unreachable
+        default_entity_id: sensor.lights_unreachable
+        unique_id: lights_unreachable
+        icon: mdi:lightbulb-off-outline
+        state: >-
+          {{ expand('light.house_lights', 'light.landing_lights_master', 'light.front_porch_lights_master')
+             | selectattr('state', 'eq', 'unavailable') | list | count }}
+        attributes:
+          lights: >-
+            {{ expand('light.house_lights', 'light.landing_lights_master', 'light.front_porch_lights_master')
+               | selectattr('state', 'eq', 'unavailable') | map(attribute='name') | list }}
+
+  # ---------------------------------------------------------------------
+  # 2. "That was weird" log - last 20 reports, kept in attributes
+  # ---------------------------------------------------------------------
+  - triggers:
+      - trigger: event
+        event_type: lights_oddity_reported
+        id: report
+      # Fire this event to empty the log
+      - trigger: event
+        event_type: oddity_log_clear
+        id: clear
+    sensor:
+      - name: Oddity Log
+        default_entity_id: sensor.oddity_log
+        unique_id: oddity_log
+        icon: mdi:alert-circle-check-outline
+        state: "{{ now().isoformat(timespec='seconds') }}"
+        attributes:
+          log: >-
+            {% if trigger.id == 'clear' %}[]{% else %}
+            {% set entry = {'t': now().isoformat(timespec='seconds'),
+                            'who': trigger.event.data.who | default('someone'),
+                            'note': trigger.event.data.note | default(''),
+                            'recent': trigger.event.data.recent | default([]),
+                            'rooms': trigger.event.data.rooms | default([])} %}
+            {{ ([entry] + (this.attributes.log | default([])))[:20] }}
+            {% endif %}
+
+  # ---------------------------------------------------------------------
+  # 3. Weekly health counters. Trigger-based: only does work when a room's
+  #    last action changes, a light drops off, or something odd is reported.
+  # ---------------------------------------------------------------------
+  - triggers:
+      - trigger: state
+        entity_id:
+          - input_text.dining_room_last_action
+          - input_text.living_room_last_action
+          - input_text.kitchen_last_action
+          - input_text.sunroom_last_action
+          - input_text.utility_room_last_action
+          - input_text.hall_last_action
+          - input_text.front_porch_last_action
+          - input_text.landing_last_action
+          - input_text.bathroom_last_action
+          - input_text.shower_room_last_action
+          - input_text.master_bedroom_last_action
+          - input_text.double_bedroom_last_action
+          - input_text.single_bedroom_last_action
+        id: action
+      - trigger: state
+        entity_id: sensor.lights_unreachable
+        id: unreachable
+      - trigger: event
+        event_type: lights_oddity_reported
+        id: odd
+      - trigger: event
+        event_type: lights_health_reset
+        id: reset
+    sensor:
+      - name: Lights Health
+        default_entity_id: sensor.lights_health
+        unique_id: lights_health
+        icon: mdi:heart-pulse
+        # State: number of things worth a look this week
+        state: >-
+          {% set rooms = this.attributes.get('rooms', {}) if trigger.id != 'reset' else {} %}
+          {{ (rooms.values() | map(attribute='false_offs') | sum)
+             + (rooms.values() | map(attribute='overrides') | sum) }}
+        attributes:
+          since: >-
+            {{ now().isoformat(timespec='seconds') if trigger.id == 'reset' or 'since' not in this.attributes
+               else this.attributes.since }}
+          rooms: >-
+            {% set rooms = dict(this.attributes.get('rooms', {})) if trigger.id != 'reset' else {} %}
+            {% if trigger.id == 'action' and trigger.to_state is not none and trigger.from_state is not none %}
+              {% set r = trigger.entity_id[11:-12] %}
+              {% set c = dict({'offs': 0, 'rescued': 0, 'false_offs': 0, 'overrides': 0, 'manual_offs': 0}, **rooms.get(r, {})) %}
+              {% set a = trigger.to_state.state %}
+              {% set prev = trigger.from_state.state %}
+              {% set gap = (trigger.to_state.last_changed - trigger.from_state.last_changed).total_seconds() %}
+              {% if a == 'Automatic Mode: Lights Off' %}
+                {% set c = dict(c, offs=c.offs + 1) %}
+              {% elif a == 'Automatic Mode: Motion Returned' %}
+                {% set c = dict(c, rescued=c.rescued + 1) %}
+              {% elif a == 'Automatic Mode: Lights On' and prev == 'Automatic Mode: Lights Off' and gap < 180 %}
+                {% set c = dict(c, false_offs=c.false_offs + 1) %}
+              {% elif a == 'Manual Override: Lights Off' %}
+                {% set c = dict(c, manual_offs=c.manual_offs + 1) %}
+              {% elif a.startswith('Manual Override:') %}
+                {% set c = dict(c, overrides=c.overrides + 1) %}
+              {% endif %}
+              {% set rooms = dict(rooms, **{r: c}) %}
+            {% endif %}
+            {{ rooms }}
+          drops: >-
+            {% set ns = namespace(d=dict(this.attributes.get('drops', {})) if trigger.id != 'reset' else {}) %}
+            {% if trigger.id == 'unreachable' and trigger.to_state is not none %}
+              {% set before = trigger.from_state.attributes.get('lights', []) if trigger.from_state else [] %}
+              {% for n in trigger.to_state.attributes.get('lights', []) if n not in before %}
+                {% set ns.d = dict(ns.d, **{n: ns.d.get(n, 0) + 1}) %}
+              {% endfor %}
+            {% endif %}
+            {{ ns.d }}
+          odd_reports: >-
+            {{ 0 if trigger.id == 'reset'
+               else this.attributes.get('odd_reports', 0) + (1 if trigger.id == 'odd' else 0) }}
+
+script:
+  report_something_odd:
+    alias: Report Something Odd
+    description: >-
+      "That was weird" button: snapshot every room and tell John, so odd
+      behaviour can be looked into with the exact time and what each room
+      was doing.
+    icon: mdi:alert-circle-check-outline
+    mode: queued
+    fields:
+      note:
+        description: Optional note (what seemed wrong)
+        example: Kitchen lights went off while I was cooking
+    sequence:
+      - variables:
+          who: >-
+            {% set uid = this.context.user_id if this is defined and this.context is defined else none %}
+            {% set p = states.person | selectattr('attributes.user_id', 'eq', uid) | list if uid else [] %}
+            {{ p[0].name.split(' ')[0] if p else 'Someone' }}
+          room_ids: >-
+            {{ ['dining_room', 'living_room', 'kitchen', 'sunroom', 'utility_room', 'hall', 'front_porch',
+                'landing', 'bathroom', 'shower_room', 'master_bedroom', 'double_bedroom', 'single_bedroom'] }}
+          rooms: >-
+            {% set ns = namespace(out=[]) %}
+            {% for r in room_ids %}
+              {% set la = states['input_text.' ~ r ~ '_last_action'] %}
+              {% set m = states['binary_sensor.' ~ r ~ '_motion'] %}
+              {% set ns.out = ns.out + [{
+                  'room': r | replace('_', ' ') | title,
+                  'lights': states('light.' ~ r ~ '_lights_master'),
+                  'why': states('sensor.' ~ r ~ '_lights_why'),
+                  'last_action': la.state if la else '',
+                  'last_action_min_ago': ((now() - la.last_changed).total_seconds() / 60) | round(1) if la else none,
+                  'motion': m.state if m else 'n/a',
+                  'motion_changed_min_ago': ((now() - m.last_changed).total_seconds() / 60) | round(1) if m else none}] %}
+            {% endfor %}
+            {{ ns.out }}
+          # Rooms where something happened in the last 15 minutes
+          recent: >-
+            {{ rooms | selectattr('last_action_min_ago', 'ne', none)
+               | selectattr('last_action_min_ago', 'lt', 15)
+               | rejectattr('last_action', 'search', '^None')
+               | map(attribute='room') | list }}
+      - event: lights_oddity_reported
+        event_data:
+          who: "{{ who }}"
+          note: "{{ note | default('') }}"
+          recent: "{{ recent }}"
+          rooms: "{{ rooms }}"
+      - action: logbook.log
+        data:
+          name: "{{ who }}"
+          message: >-
+            reported something odd{{ ': ' ~ note if note | default('') else '' }}{{
+            ' (recent changes: ' ~ recent | join(', ') ~ ')' if recent else '' }}
+      - action: script.notify_dispatch
+        data:
+          event: oddity_report
+          title: "{{ who }} reported something odd"
+          message: >-
+            {{ who }} tapped "That was weird" at {{ now().strftime('%-I:%M%p') | lower }}{{
+            ': "' ~ note ~ '"' if note | default('') else '' }}.
+            {% for r in rooms if r.room in recent %}
+            {{ r.room }}: {{ r.why }}
+            {% else %}
+            No room changed in the last 15 minutes.
+            {% endfor %}
+            Full snapshot saved in the Oddity Log.

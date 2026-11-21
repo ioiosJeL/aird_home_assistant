@@ -1,0 +1,19 @@
+substitutions:
+  deviceName: machine_room_left_sensor
+  deviceUpper: Machine Room Left Sensor
+  ipAddress: 192.168.40.7
+  
+  # WIFI AND OTHER CREDENTIALS. USE SECRETS WHERE POSSIBLE
+  wifiPass: !secret wifiPassESP
+  wifiSSID: !secret wifiSSIDESP
+  passOTA: !secret passOTA
+  
+  # ESP DECLARATION
+  boardName: esp32dev
+  
+  # PIN MAPPING.
+  i2cData: GPIO13
+  i2cClock: GPIO15
+  pirPin: GPIO014
+
+<<: !include includes/sensor_cam.yaml

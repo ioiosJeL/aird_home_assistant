@@ -1,0 +1,145 @@
+# Bin collections (Nov 2026). Replaces the empty Bins local calendar.
+#
+# Collection is Wednesday morning (taken as 07:00) on a fixed rotation:
+#   black (general waste)    every 2 weeks, from Wed 11 Nov 2026
+#   green (metal & plastics) every 4 weeks, from Wed 4 Nov 2026
+#   blue  (paper & card)     every 4 weeks, from Wed 18 Nov 2026
+# so every Wednesday is black, then green or blue on alternate weeks.
+# Bank-holiday shifts are not handled: move an anchor date here if the
+# council changes the rotation.
+#
+# - sensor.<colour>_bin_next_collection: next collection (timestamp). Rolls
+#   over to the following one at noon on collection day.
+# - binary_sensor.<colour>_bin_due: on from 30 h before collection until it
+#   rolls over.
+# - input_boolean.bin_ack_<colour>: "bin is out" acknowledgement; tapping the
+#   Home view card sets it, and it resets each time that bin becomes due.
+# - Notification at 19:00 the evening before (script.notify_dispatch, event
+#   bin_reminder), skipped for bins already acknowledged.
+#
+# Home view cards: dashboards/lovelace/home.yaml.
+
+homeassistant:
+  customize_glob:
+    package.node_anchors:
+      common: &common
+        package: "Bins"
+    input_boolean.bin_ack_*:
+      <<: *common
+
+input_boolean:
+  bin_ack_black:
+    name: "Black bin out"
+    icon: mdi:trash-can
+  bin_ack_green:
+    name: "Green bin out"
+    icon: mdi:recycle
+  bin_ack_blue:
+    name: "Blue bin out"
+    icon: mdi:newspaper-variant-outline
+
+template:
+  - sensor:
+      - name: Black bin next collection
+        unique_id: bin_black_next_collection
+        icon: mdi:trash-can
+        device_class: timestamp
+        variables:
+          anchor: "2026-11-11"
+          period: 14
+        state: &next_collection >-
+          {% set t = now() %}
+          {% set today = t.date() %}
+          {% set off = (today - as_datetime(anchor).date()).days % period %}
+          {% set days = (period - off) % period %}
+          {% set days = period if days == 0 and t.hour >= 12 else days %}
+          {% set d = today + timedelta(days=days) %}
+          {{ as_datetime(d.isoformat() ~ 'T07:00:00').replace(tzinfo=t.tzinfo).isoformat() }}
+      - name: Green bin next collection
+        unique_id: bin_green_next_collection
+        icon: mdi:recycle
+        device_class: timestamp
+        variables:
+          anchor: "2026-11-04"
+          period: 28
+        state: *next_collection
+      - name: Blue bin next collection
+        unique_id: bin_blue_next_collection
+        icon: mdi:newspaper-variant-outline
+        device_class: timestamp
+        variables:
+          anchor: "2026-11-18"
+          period: 28
+        state: *next_collection
+
+    binary_sensor:
+      - name: Black bin due
+        unique_id: bin_black_due
+        icon: mdi:trash-can
+        variables:
+          next: sensor.black_bin_next_collection
+        state: &due >-
+          {% set n = states(next) | as_datetime %}
+          {{ n is not none and (n - now()).total_seconds() < 30 * 3600 }}
+      - name: Green bin due
+        unique_id: bin_green_due
+        icon: mdi:recycle
+        variables:
+          next: sensor.green_bin_next_collection
+        state: *due
+      - name: Blue bin due
+        unique_id: bin_blue_due
+        icon: mdi:newspaper-variant-outline
+        variables:
+          next: sensor.blue_bin_next_collection
+        state: *due
+
+automation:
+  # Clear the "bin is out" acknowledgement each time a bin becomes due.
+  - id: "bin_ack_reset"
+    alias: "Bins: Reset Acknowledgement When Due"
+    mode: queued
+    triggers:
+      - trigger: state
+        entity_id:
+          - binary_sensor.black_bin_due
+          - binary_sensor.green_bin_due
+          - binary_sensor.blue_bin_due
+        from: "off"
+        to: "on"
+    actions:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: "{{ 'input_boolean.bin_ack_' ~ trigger.entity_id.split('.')[1].split('_')[0] }}"
+
+  # Evening-before reminder (was driven by the Bins calendar, which had no
+  # events, so it never fired). Same id/alias so the entity is kept.
+  - id: "bin_reminder"
+    alias: "Bin Collection Reminder"
+    description: "Reminds at 19:00 the evening before a bin collection, for bins not yet put out."
+    mode: single
+    triggers:
+      - trigger: time
+        at: "19:00:00"
+    variables:
+      bins: >-
+        {% set names = {'black': 'black bin (general waste)', 'green': 'green bin (metal & plastics)', 'blue': 'blue bin (paper & card)'} %}
+        {% set ns = namespace(out=[]) %}
+        {% for c in ['black', 'green', 'blue'] %}
+          {% set n = states('sensor.' ~ c ~ '_bin_next_collection') | as_datetime %}
+          {% if n and (n | as_local).date() == (now() + timedelta(days=1)).date()
+                and is_state('input_boolean.bin_ack_' ~ c, 'off') %}
+            {% set ns.out = ns.out + [names[c]] %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.out }}
+    conditions:
+      - condition: template
+        value_template: "{{ bins | count > 0 }}"
+    actions:
+      - action: script.notify_dispatch
+        data:
+          event: bin_reminder
+          message: >-
+            Bin reminder: {{ bins | join(' and ') }} collection is tomorrow
+            morning - put {{ 'it' if bins | count == 1 else 'them' }} out tonight.

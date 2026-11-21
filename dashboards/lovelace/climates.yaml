@@ -1,0 +1,547 @@
+path: climates
+title: Climates
+type: custom:masonry-layout
+layout:
+  width: 350
+  max_width: 5000
+  max_cols: 4
+cards:
+  - type: custom:stack-in-card
+    mode: vertical
+    cards:
+      - type: tile
+        entity: climate.dining_room
+        name: Dining Room
+        icon: mdi:silverware-fork-knife
+        content_layout: vertical
+        tap_action:
+          action: more-info
+      - type: horizontal-stack
+        cards:
+          - type: custom:button-card
+            template: room_pill
+            icon: mdi:thermometer-minus
+            show_name: false
+            variables:
+              active: true
+              color: var(--blue-color)
+            tap_action:
+              action: perform-action
+              perform_action: script.climate_decrement
+              data:
+                entity: climate.dining_room
+                step: 1
+          - type: custom:button-card
+            template: room_pill
+            entity: climate.dining_room
+            icon: mdi:thermometer
+            triggers_update:
+              - climate.dining_room
+              - switch.dining_room_heater
+            name: '[[[ const t = parseFloat(entity?.attributes.temperature); return isNaN(t) ? ''—'' : `${t.toFixed(1)}°C`; ]]]'
+            variables:
+              color: var(--orange-color)
+              active: '[[[ return states[''switch.dining_room_heater'']?.state === ''on''; ]]]'
+            tap_action:
+              action: more-info
+            hold_action:
+              action: more-info
+          - type: custom:button-card
+            template: room_pill
+            icon: mdi:thermometer-plus
+            show_name: false
+            variables:
+              active: true
+              color: var(--orange-color)
+            tap_action:
+              action: perform-action
+              perform_action: script.climate_increment
+              data:
+                entity: climate.dining_room
+                step: 1
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.daily_dining_room_heater_energy_usage
+        name: Today
+        icon: mdi:lightning-bolt
+        triggers_update:
+          - sensor.daily_dining_room_heater_energy_usage
+          - switch.dining_room_heater
+        variables:
+          format: kwh
+        styles:
+          icon:
+            - color: '[[[ return states[''switch.dining_room_heater'']?.state === ''on'' ? ''var(--orange-color)'' : ''var(--secondary-text-color)''; ]]]'
+        tap_action:
+          action: none
+      - type: custom:mini-graph-card
+        entities:
+          - entity: sensor.dining_room_average_temperature
+            name: Average
+        hours_to_show: 2
+        update_interval: 30
+        points_per_hour: 30
+        line_width: 3
+        align_state: center
+        name: Temperature Data
+        show:
+          name: false
+          icon: false
+          state: false
+          labels: true
+  - type: custom:stack-in-card
+    mode: vertical
+    cards:
+      - type: tile
+        entity: climate.living_room
+        name: Living Room
+        icon: mdi:sofa
+        content_layout: vertical
+        tap_action:
+          action: more-info
+      - type: horizontal-stack
+        cards:
+          - type: custom:button-card
+            template: room_pill
+            icon: mdi:thermometer-minus
+            show_name: false
+            variables:
+              active: true
+              color: var(--blue-color)
+            tap_action:
+              action: perform-action
+              perform_action: script.climate_decrement
+              data:
+                entity: climate.living_room
+                step: 1
+          - type: custom:button-card
+            template: room_pill
+            entity: climate.living_room
+            icon: mdi:thermometer
+            triggers_update:
+              - climate.living_room
+              - switch.living_room_heater
+            name: '[[[ const t = parseFloat(entity?.attributes.temperature); return isNaN(t) ? ''—'' : `${t.toFixed(1)}°C`; ]]]'
+            variables:
+              color: var(--orange-color)
+              active: '[[[ return states[''switch.living_room_heater'']?.state === ''on''; ]]]'
+            tap_action:
+              action: more-info
+            hold_action:
+              action: more-info
+          - type: custom:button-card
+            template: room_pill
+            icon: mdi:thermometer-plus
+            show_name: false
+            variables:
+              active: true
+              color: var(--orange-color)
+            tap_action:
+              action: perform-action
+              perform_action: script.climate_increment
+              data:
+                entity: climate.living_room
+                step: 1
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.daily_living_room_heater_energy_usage
+        name: Today
+        icon: mdi:lightning-bolt
+        triggers_update:
+          - sensor.daily_living_room_heater_energy_usage
+          - switch.living_room_heater
+        variables:
+          format: kwh
+        styles:
+          icon:
+            - color: '[[[ return states[''switch.living_room_heater'']?.state === ''on'' ? ''var(--orange-color)'' : ''var(--secondary-text-color)''; ]]]'
+        tap_action:
+          action: none
+      - type: custom:mini-graph-card
+        entities:
+          - entity: sensor.living_room_average_temperature
+            name: Average
+        hours_to_show: 2
+        update_interval: 30
+        points_per_hour: 30
+        line_width: 3
+        align_state: center
+        name: Temperature Data
+        show:
+          name: false
+          icon: false
+          state: false
+          labels: true
+  - type: custom:stack-in-card
+    mode: vertical
+    cards:
+      - type: tile
+        entity: climate.bathroom
+        name: Bathroom
+        icon: mdi:shower
+        content_layout: vertical
+        tap_action:
+          action: more-info
+      - type: horizontal-stack
+        cards:
+          - type: custom:button-card
+            template: room_pill
+            icon: mdi:thermometer-minus
+            show_name: false
+            variables:
+              active: true
+              color: var(--blue-color)
+            tap_action:
+              action: perform-action
+              perform_action: script.climate_decrement
+              data:
+                entity: climate.bathroom
+                step: 1
+          - type: custom:button-card
+            template: room_pill
+            entity: climate.bathroom
+            icon: mdi:thermometer
+            triggers_update:
+              - climate.bathroom
+              - switch.bathroom_heater
+            name: '[[[ const t = parseFloat(entity?.attributes.temperature); return isNaN(t) ? ''—'' : `${t.toFixed(1)}°C`; ]]]'
+            variables:
+              color: var(--orange-color)
+              active: '[[[ return states[''switch.bathroom_heater'']?.state === ''on''; ]]]'
+            tap_action:
+              action: more-info
+            hold_action:
+              action: more-info
+          - type: custom:button-card
+            template: room_pill
+            icon: mdi:thermometer-plus
+            show_name: false
+            variables:
+              active: true
+              color: var(--orange-color)
+            tap_action:
+              action: perform-action
+              perform_action: script.climate_increment
+              data:
+                entity: climate.bathroom
+                step: 1
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.daily_bathroom_heater_energy_usage
+        name: Today
+        icon: mdi:lightning-bolt
+        triggers_update:
+          - sensor.daily_bathroom_heater_energy_usage
+          - switch.bathroom_heater
+        variables:
+          format: kwh
+        styles:
+          icon:
+            - color: '[[[ return states[''switch.bathroom_heater'']?.state === ''on'' ? ''var(--orange-color)'' : ''var(--secondary-text-color)''; ]]]'
+        tap_action:
+          action: none
+      - type: custom:mini-graph-card
+        entities:
+          - entity: sensor.bathroom_average_temperature
+            name: Average
+        hours_to_show: 2
+        update_interval: 30
+        points_per_hour: 30
+        line_width: 3
+        align_state: center
+        name: Temperature Data
+        show:
+          name: false
+          icon: false
+          state: false
+          labels: true
+  - type: custom:stack-in-card
+    mode: vertical
+    cards:
+      - type: tile
+        entity: climate.master_bedroom
+        name: Master Bedroom
+        icon: mdi:bed-king
+        content_layout: vertical
+        tap_action:
+          action: more-info
+      - type: horizontal-stack
+        cards:
+          - type: custom:button-card
+            template: room_pill
+            icon: mdi:thermometer-minus
+            show_name: false
+            variables:
+              active: true
+              color: var(--blue-color)
+            tap_action:
+              action: perform-action
+              perform_action: script.climate_decrement
+              data:
+                entity: climate.master_bedroom
+                step: 1
+          - type: custom:button-card
+            template: room_pill
+            entity: climate.master_bedroom
+            icon: mdi:thermometer
+            triggers_update:
+              - climate.master_bedroom
+              - switch.master_bedroom_heater
+            name: '[[[ const t = parseFloat(entity?.attributes.temperature); return isNaN(t) ? ''—'' : `${t.toFixed(1)}°C`; ]]]'
+            variables:
+              color: var(--orange-color)
+              active: '[[[ return states[''switch.master_bedroom_heater'']?.state === ''on''; ]]]'
+            tap_action:
+              action: more-info
+            hold_action:
+              action: more-info
+          - type: custom:button-card
+            template: room_pill
+            icon: mdi:thermometer-plus
+            show_name: false
+            variables:
+              active: true
+              color: var(--orange-color)
+            tap_action:
+              action: perform-action
+              perform_action: script.climate_increment
+              data:
+                entity: climate.master_bedroom
+                step: 1
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.daily_master_bedroom_heater_energy_usage
+        name: Today
+        icon: mdi:lightning-bolt
+        triggers_update:
+          - sensor.daily_master_bedroom_heater_energy_usage
+          - switch.master_bedroom_heater
+        variables:
+          format: kwh
+        styles:
+          icon:
+            - color: '[[[ return states[''switch.master_bedroom_heater'']?.state === ''on'' ? ''var(--orange-color)'' : ''var(--secondary-text-color)''; ]]]'
+        tap_action:
+          action: none
+      - type: custom:mini-graph-card
+        entities:
+          - entity: sensor.master_bedroom_average_temperature
+            name: Average
+        hours_to_show: 2
+        update_interval: 30
+        points_per_hour: 30
+        line_width: 3
+        align_state: center
+        name: Temperature Data
+        show:
+          name: false
+          icon: false
+          state: false
+          labels: true
+  - type: custom:stack-in-card
+    mode: vertical
+    cards:
+      - type: tile
+        entity: climate.kitchen
+        name: Kitchen
+        icon: mdi:chef-hat
+        content_layout: vertical
+        tap_action:
+          action: more-info
+      - type: horizontal-stack
+        cards:
+          - type: custom:button-card
+            template: room_pill
+            icon: mdi:thermometer-minus
+            show_name: false
+            variables:
+              active: true
+              color: var(--blue-color)
+            tap_action:
+              action: perform-action
+              perform_action: script.climate_decrement
+              data:
+                entity: climate.kitchen
+                step: 1
+          - type: custom:button-card
+            template: room_pill
+            entity: climate.kitchen
+            icon: mdi:thermometer
+            triggers_update:
+              - climate.kitchen
+              - switch.kitchen_heater
+            name: '[[[ const t = parseFloat(entity?.attributes.temperature); return isNaN(t) ? ''—'' : `${t.toFixed(1)}°C`; ]]]'
+            variables:
+              color: var(--orange-color)
+              active: '[[[ return states[''switch.kitchen_heater'']?.state === ''on''; ]]]'
+            tap_action:
+              action: more-info
+            hold_action:
+              action: more-info
+          - type: custom:button-card
+            template: room_pill
+            icon: mdi:thermometer-plus
+            show_name: false
+            variables:
+              active: true
+              color: var(--orange-color)
+            tap_action:
+              action: perform-action
+              perform_action: script.climate_increment
+              data:
+                entity: climate.kitchen
+                step: 1
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.daily_kitchen_heater_energy_usage
+        name: Today
+        icon: mdi:lightning-bolt
+        triggers_update:
+          - sensor.daily_kitchen_heater_energy_usage
+          - switch.kitchen_heater
+        variables:
+          format: kwh
+        styles:
+          icon:
+            - color: '[[[ return states[''switch.kitchen_heater'']?.state === ''on'' ? ''var(--orange-color)'' : ''var(--secondary-text-color)''; ]]]'
+        tap_action:
+          action: none
+      - type: custom:mini-graph-card
+        entities:
+          - entity: sensor.kitchen_average_temperature
+            name: Average
+        hours_to_show: 2
+        update_interval: 30
+        points_per_hour: 30
+        line_width: 3
+        align_state: center
+        name: Temperature Data
+        show:
+          name: false
+          icon: false
+          state: false
+          labels: true
+  - type: custom:stack-in-card
+    mode: vertical
+    cards:
+      - type: tile
+        entity: climate.sunroom
+        name: Sunroom
+        icon: mdi:weather-sunny
+        content_layout: vertical
+        tap_action:
+          action: more-info
+      - type: horizontal-stack
+        cards:
+          - type: custom:button-card
+            template: room_pill
+            icon: mdi:thermometer-minus
+            show_name: false
+            variables:
+              active: true
+              color: var(--blue-color)
+            tap_action:
+              action: perform-action
+              perform_action: script.climate_decrement
+              data:
+                entity: climate.sunroom
+                step: 1
+          - type: custom:button-card
+            template: room_pill
+            entity: climate.sunroom
+            icon: mdi:thermometer
+            triggers_update:
+              - climate.sunroom
+              - switch.sunroom_heater
+            name: '[[[ const t = parseFloat(entity?.attributes.temperature); return isNaN(t) ? ''—'' : `${t.toFixed(1)}°C`; ]]]'
+            variables:
+              color: var(--orange-color)
+              active: '[[[ return states[''switch.sunroom_heater'']?.state === ''on''; ]]]'
+            tap_action:
+              action: more-info
+            hold_action:
+              action: more-info
+          - type: custom:button-card
+            template: room_pill
+            icon: mdi:thermometer-plus
+            show_name: false
+            variables:
+              active: true
+              color: var(--orange-color)
+            tap_action:
+              action: perform-action
+              perform_action: script.climate_increment
+              data:
+                entity: climate.sunroom
+                step: 1
+      - type: custom:button-card
+        template: value_tile
+        entity: sensor.daily_sunroom_heater_energy_usage
+        name: Today
+        icon: mdi:lightning-bolt
+        triggers_update:
+          - sensor.daily_sunroom_heater_energy_usage
+          - switch.sunroom_heater
+        variables:
+          format: kwh
+        styles:
+          icon:
+            - color: '[[[ return states[''switch.sunroom_heater'']?.state === ''on'' ? ''var(--orange-color)'' : ''var(--secondary-text-color)''; ]]]'
+        tap_action:
+          action: none
+      - type: custom:mini-graph-card
+        entities:
+          - entity: sensor.sunroom_average_temperature
+            name: Average
+        hours_to_show: 2
+        update_interval: 30
+        points_per_hour: 30
+        line_width: 3
+        align_state: center
+        name: Temperature Data
+        show:
+          name: false
+          icon: false
+          state: false
+          labels: true
+  - type: custom:scheduler-card
+    title: Heating Schedules
+    discover_existing: false
+    customize:
+      input_boolean.boost_master_bedroom:
+        states:
+          - 'on'
+          - 'off'
+      input_boolean.boost_bathroom:
+        states:
+          - 'on'
+          - 'off'
+      input_boolean.boost_dining_room:
+        states:
+          - 'on'
+          - 'off'
+      input_boolean.boost_sunroom:
+        states:
+          - 'on'
+          - 'off'
+      climate.dining_room:
+        name: Dining Room
+      climate.master_bedroom:
+        name: Master Bedroom
+      climate.double_bedroom:
+        name: Double Bedroom
+      climate.living_room:
+        name: Living Room
+      climate.sunroom:
+        name: Sunroom
+      climate.kitchen:
+        name: Kitchen
+      climate.bathroom:
+        name: Bathroom
+  - type: custom:scheduler-card
+    title: Other Schedules
+    discover_existing: false
+    customize:
+      switch.shower_room_heater:
+        name: Shower Room
+        icon: thermometer

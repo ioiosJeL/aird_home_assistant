@@ -1,0 +1,44 @@
+blueprint:
+  name: Lights - Scene Select Changed
+  description: >-
+    When a room's scene input_select is changed directly (e.g. from the
+    dashboard or voice), run the matching "script.<room>_scene_<option>"
+    script, unless a scene transition is already in progress.
+  domain: automation
+  input:
+    scenes_select:
+      name: Scenes (input_select)
+      selector:
+        entity:
+          domain: input_select
+    scene_changing_boolean:
+      name: Scene Change In Progress (input_boolean)
+      selector:
+        entity:
+          domain: input_boolean
+    room_prefix:
+      name: Room Script Prefix
+      description: >-
+        The entity_id prefix used by this room's scene scripts, e.g.
+        "dining_room" for script.dining_room_scene_bright.
+      selector:
+        text: {}
+
+mode: single
+triggers:
+  - trigger: state
+    entity_id: !input scenes_select
+
+variables:
+  scene_changing_boolean: !input scene_changing_boolean
+  scenes_select: !input scenes_select
+  room_prefix: !input room_prefix
+
+conditions:
+  - condition: template
+    value_template: "{{ is_state(scene_changing_boolean, 'off') }}"
+
+actions:
+  - action: script.turn_on
+    target:
+      entity_id: "script.{{ room_prefix }}_scene_{{ states(scenes_select) | lower }}"
