@@ -312,7 +312,9 @@ sections:
               const k = (i, c, t) => `<span><b style="background:color-mix(in srgb, var(--${c}-color) 22%, transparent);color:var(--${c}-color)"><ha-icon icon="${i}"></ha-icon></b>${t}</span>`;
               return k('mdi:cellphone', 'green', "John's iPhone + iPad") +
                 k('mdi:cellphone-text', 'pink', "Elizabeth's phone") + k('mdi:speaker-message', 'amber', 'Kitchen speaker') +
-                k('mdi:bell-sleep', 'red', 'Mute for an hour') + k('mdi:bell-off', 'red', 'Silence repeats until it clears');
+                k('mdi:bell-sleep', 'red', 'Mute for an hour') + k('mdi:bell-off', 'red', 'Silence repeats until it clears') +
+                k('mdi:bell-ring-outline', 'green', 'Camera type on/off') + k('mdi:numeric-1-circle-outline', 'red', 'Mute 1 h') +
+                k('mdi:numeric-4-circle-outline', 'red', 'Mute 4 h') + k('mdi:weather-sunset-up', 'red', 'Mute till 7:30am');
             ]]]
         styles:
           card:
@@ -351,19 +353,19 @@ sections:
         mode: vertical
         cards:
           - type: custom:button-card
-            template: camera_alert_type
+            template: camera_alert_type_compact
             name: People
             icon: mdi:walk
             variables:
               kind: person
           - type: custom:button-card
-            template: camera_alert_type
+            template: camera_alert_type_compact
             name: Vehicles
             icon: mdi:car
             variables:
               kind: vehicle
           - type: custom:button-card
-            template: camera_alert_type
+            template: camera_alert_type_compact
             name: Animals
             icon: mdi:paw
             variables:

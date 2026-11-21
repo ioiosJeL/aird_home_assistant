@@ -1235,7 +1235,7 @@ camera_alert_type:
         if (variables.muted) return `<span style="color:var(--red-color);font-weight:600">Muted until ${new Date(variables.until).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true })}</span>`;
         return '<span style="color:var(--green-color)">Alerting</span>';
       ]]]
-    on:
+    tg:
       card:
         type: custom:button-card
         template: room_pill
@@ -1302,7 +1302,7 @@ camera_alert_type:
       - padding: 8px 10px
       - cursor: default
     grid:
-      - grid-template-areas: '"i n on h1 h4 am" "i sub on h1 h4 am"'
+      - grid-template-areas: '"i n tg h1 h4 am" "i sub tg h1 h4 am"'
       - grid-template-columns: 26px 1fr 50px 50px 50px 50px
       - column-gap: 6px
     icon:
@@ -1316,6 +1316,88 @@ camera_alert_type:
       sub:
         - justify-self: start
         - font-size: 0.75rem
+
+# Compact camera alert row for the Notifications page: same switches and
+# timers as camera_alert_type, but as 38px dots so the row matches
+# notify_row's height (the labelled pills doubled it). Hold a dot for info.
+camera_alert_type_compact:
+  template: camera_alert_type
+  custom_fields:
+    tg:
+      card:
+        type: custom:button-card
+        template: notify_dot
+        entity: "[[[ return `input_boolean.camera_alerts_${variables.kind}`; ]]]"
+        icon: "[[[ return entity?.state === 'on' ? 'mdi:bell-ring-outline' : 'mdi:bell-off-outline'; ]]]"
+        variables:
+          color: var(--green-color)
+    h1:
+      card:
+        type: custom:button-card
+        template: notify_dot
+        icon: mdi:numeric-1-circle-outline
+        tap_action:
+          action: perform-action
+          perform_action: script.notify_mute
+          data:
+            event: "[[[ return `camera_${variables.kind}`; ]]]"
+            minutes: 60
+        hold_action:
+          action: none
+    h4:
+      card:
+        type: custom:button-card
+        template: notify_dot
+        icon: mdi:numeric-4-circle-outline
+        tap_action:
+          action: perform-action
+          perform_action: script.notify_mute
+          data:
+            event: "[[[ return `camera_${variables.kind}`; ]]]"
+            minutes: 240
+        hold_action:
+          action: none
+    am:
+      card:
+        type: custom:button-card
+        template: notify_dot
+        icon: "[[[ return variables.muted ? 'mdi:bell-cancel-outline' : 'mdi:weather-sunset-up'; ]]]"
+        tap_action:
+          action: perform-action
+          perform_action: script.notify_mute
+          data:
+            event: "[[[ return `camera_${variables.kind}`; ]]]"
+            minutes: |
+              [[[
+                if (variables.muted) return 0;
+                const n = new Date(), t = new Date(n);
+                t.setHours(7, 30, 0, 0);
+                if (t <= n) t.setDate(t.getDate() + 1);
+                return Math.round((t - n) / 60000);
+              ]]]
+        hold_action:
+          action: none
+        styles:
+          card:
+            - background: |
+                [[[ return variables.muted
+                      ? 'color-mix(in srgb, var(--red-color) 22%, transparent)'
+                      : 'color-mix(in srgb, var(--primary-text-color) 5%, transparent)'; ]]]
+          icon:
+            - color: "[[[ return variables.muted ? 'var(--red-color)' : 'var(--secondary-text-color)'; ]]]"
+  styles:
+    card:
+      - padding: 8px 10px
+      - box-shadow: none
+      - border: none
+      - border-radius: 0
+      - background: none
+    grid:
+      - grid-template-columns: 26px minmax(0, 1fr) 38px 38px 38px 38px
+    icon:
+      - width: 20px
+    name:
+      - font-size: 0.88rem
 
 # Mute dot: mutes one alert for an hour (sensor.notify_mutes via
 # script.notify_mute); red while muted, tap again to unmute.
