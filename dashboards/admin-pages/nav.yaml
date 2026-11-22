@@ -19,5 +19,6 @@ views:
   - !include hue.yaml
   - !include shelly.yaml
   - !include network.yaml
+  - !include bluetooth.yaml
   - !include ../lovelace/light_control.yaml
   - !include notifications.yaml

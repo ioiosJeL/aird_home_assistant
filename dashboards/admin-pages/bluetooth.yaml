@@ -1,0 +1,164 @@
+# Bluetooth admin: the Shelly devices that act as Bluetooth proxies, a live
+# radar of everything they hear, the BLU H&T sensors and bedside remotes
+# (BTHome) and their batteries. The live views are
+# www/cards/bluetooth-live-card.js, fed straight from HA's Bluetooth
+# websocket API (no extra entities); the history graphs use the Bermuda
+# global counters.
+path: bluetooth
+title: Bluetooth
+icon: mdi:bluetooth
+type: sections
+max_columns: 3
+sections:
+  # =====================================================================
+  # Column 1: at a glance, radar, live activity
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: heading
+        heading: Bluetooth
+        icon: mdi:bluetooth
+        badges:
+          - type: entity
+            entity: sensor.bermuda_global_visible_device_count
+            name: Visible
+            show_name: true
+            show_state: true
+            show_icon: true
+            color: blue
+          - type: entity
+            entity: sensor.bermuda_global_total_device_count
+            name: Ever seen
+            show_name: true
+            show_state: true
+            show_icon: true
+            color: grey
+      - type: custom:bluetooth-live-card
+        view: stats
+      - type: heading
+        heading: Radar
+        icon: mdi:radar
+      - type: custom:bluetooth-live-card
+        view: radar
+      - type: heading
+        heading: Live activity
+        icon: mdi:pulse
+      - type: custom:bluetooth-live-card
+        view: feed
+
+  # =====================================================================
+  # Column 2: proxies, what's around, history
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: heading
+        heading: Proxies
+        icon: mdi:access-point-network
+        badges:
+          - type: entity
+            entity: sensor.bermuda_global_active_proxy_count
+            name: Active
+            show_name: true
+            show_state: true
+            show_icon: true
+            color: green
+      - type: custom:bluetooth-live-card
+        view: proxies
+      - type: heading
+        heading: What's around
+        icon: mdi:devices
+      - type: custom:bluetooth-live-card
+        view: makers
+      - type: custom:mini-graph-card
+        grid_options:
+          columns: full
+          rows: auto
+        name: Devices in range · 24h
+        icon: mdi:chart-bell-curve-cumulative
+        hours_to_show: 24
+        points_per_hour: 4
+        line_width: 2
+        update_interval: 300
+        animate: true
+        entities:
+          - entity: sensor.bermuda_global_visible_device_count
+            name: Visible
+            color: var(--blue-color)
+        show:
+          fill: fade
+          legend: false
+          labels: false
+      - type: custom:mini-graph-card
+        grid_options:
+          columns: full
+          rows: auto
+        name: Proxies active · 7 days
+        icon: mdi:access-point-network
+        hours_to_show: 168
+        points_per_hour: 1
+        line_width: 2
+        update_interval: 900
+        lower_bound: 0
+        upper_bound: 12
+        entities:
+          - entity: sensor.bermuda_global_active_proxy_count
+            name: Active
+            color: var(--green-color)
+          - entity: sensor.bermuda_global_total_proxy_count
+            name: Total
+            color: var(--disabled-text-color)
+        show:
+          fill: false
+          legend: true
+          labels: false
+
+  # =====================================================================
+  # Column 3: sensors and batteries
+  # =====================================================================
+  - type: grid
+    cards:
+      - type: heading
+        heading: Sensors
+        icon: mdi:thermometer-bluetooth
+      - type: custom:bluetooth-live-card
+        view: sensors
+      - type: heading
+        heading: Batteries
+        icon: mdi:battery-bluetooth-variant
+      - type: custom:bluetooth-live-card
+        view: batteries
+      - type: custom:mini-graph-card
+        grid_options:
+          columns: full
+          rows: auto
+        name: Lowest batteries · 30 days
+        icon: mdi:battery-charging-wireless-outline
+        hours_to_show: 720
+        points_per_hour: 0.1
+        line_width: 2
+        update_interval: 3600
+        upper_bound: 100
+        entities:
+          - entity: sensor.bluht_shed_battery
+            name: Shed
+            color: var(--red-color)
+          - entity: sensor.bluht_greenhouse_battery
+            name: Greenhouse
+            color: var(--amber-color)
+          - entity: sensor.bluht_sunroom_battery
+            name: Sunroom
+            color: var(--blue-color)
+        show:
+          fill: false
+          legend: true
+          labels: false
+      - type: markdown
+        grid_options:
+          columns: full
+          rows: auto
+        text_only: true
+        content: >-
+          <small>Live views fill in while this page is open: the radar and
+          proxy sparklines build up over the first few minutes. A sensor
+          card turns amber after 10 minutes without a reading and red after
+          30. The bedside remotes only transmit when pressed.</small>

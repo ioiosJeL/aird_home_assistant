@@ -33,6 +33,9 @@ lovelace:
       type: module
     - url: /local/community/lovelace-horizon-card/lovelace-horizon-card.js
       type: module
+    # Our own card (www/cards): live Bluetooth views, Admins > Bluetooth
+    - url: /local/cards/bluetooth-live-card.js?v=1
+      type: module
 
   dashboards:
     lovelace:
